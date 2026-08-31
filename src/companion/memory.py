@@ -23,11 +23,17 @@ class MemoryStore(ABC):
 class ChromaMemoryStore(MemoryStore):
     """v1 backend: local Chroma collection, Chroma's built-in embedding model."""
 
-    def __init__(self, path: str = "data/memory_db", collection_name: str = "kyra_memory"):
+    def __init__(
+        self,
+        path: str = "data/memory_db",
+        collection_name: str = "kyra_memory",
+        embedding_function=None,
+    ):
         import chromadb
 
         self._client = chromadb.PersistentClient(path=path)
-        self._collection = self._client.get_or_create_collection(collection_name)
+        kwargs = {"embedding_function": embedding_function} if embedding_function else {}
+        self._collection = self._client.get_or_create_collection(collection_name, **kwargs)
         self._next_id = self._collection.count()
 
     def add(self, text: str, metadata: dict | None = None) -> None:

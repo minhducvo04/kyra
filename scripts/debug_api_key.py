@@ -46,8 +46,12 @@ try:
         max_tokens=50,
         messages=[{"role": "user", "content": "Say hi in 5 words or less."}],
     )
+    # response.content is a list of blocks - with extended thinking on, a
+    # ThinkingBlock can come before the TextBlock, so this filters for the
+    # actual text block(s) instead of assuming content[0] is the reply.
+    reply_text = "".join(b.text for b in response.content if b.type == "text")
     print("SUCCESS")
-    print(response.content[0].text)
+    print(reply_text)
 
 except APIStatusError as e:
     print(f"FAILED - HTTP {e.status_code} ({type(e).__name__})")

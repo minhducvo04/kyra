@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from anthropic import Anthropic
 
+from companion.llm_utils import extract_text
 from companion.memory import MemoryStore
 from companion.persona import Persona
 
@@ -47,7 +48,7 @@ class ConversationManager:
             system=system,
             messages=messages,
         )
-        reply = response.content[0].text
+        reply = extract_text(response)
 
         # 4. store this exchange as memory + session history
         self.memory.add(f"Duc said: {user_input}", {"role": "user"})

@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from anthropic import Anthropic
 
 from companion.config import require_api_key
+from companion.llm_utils import extract_text
 
 
 def main() -> None:
@@ -21,7 +22,7 @@ def main() -> None:
             }
         ],
     )
-    print(response.content[0].text)
+    print(extract_text(response))
 
 
 if __name__ == "__main__":
