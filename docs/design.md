@@ -64,3 +64,21 @@ This is the class every future agentic tool plugs into later (Feature Backlog #1
 ## Out of scope for v1
 
 Tools, voice, animation, multi-agent orchestration, evals — see Feature Backlog in the Prep Roadmap.
+
+## Voice I/O (Feature Backlog #2)
+
+Kyra can now listen and speak, not just read and write. Same architectural trick as memory: two more interfaces, each with a swappable local/open-source backend.
+
+**`SpeechToText`** (`src/companion/voice.py`) - one method, `transcribe(audio) -> str`. Backend: `FasterWhisperSTT`, a CTranslate2-optimized reimplementation of OpenAI's Whisper, running entirely on-device.
+
+**`TextToSpeech`** (`src/companion/voice.py`) - one method, `speak(text) -> (audio, sample_rate)`. Backend: `KokoroTTS`, an 82M-parameter open-source model (Apache 2.0) small enough to run comfortably on a laptop CPU.
+
+**`ListenMode`** (`src/companion/listening.py`) - one method, `listen() -> audio`, blocks until a full spoken utterance is captured. Two backends:
+- `PushToTalkListener`: press Enter, speak, press Enter again.
+- `VoiceActivityListener`: hands-free - Silero VAD scores each ~32ms chunk of live mic audio as speech or silence, auto-starting the capture when it hears you and auto-stopping after a pause. Selected as the default per Duc's "hands free while working" preference; push-to-talk stays available via `--mode ptt`.
+
+**Why local models instead of a cloud API (ElevenLabs/OpenAI/Deepgram)?** Cost and iteration speed, mainly: this project gets tested a lot, and $0 per turn means never watching a meter while iterating. It's also strictly more of the hands-on AI-pipeline experience the project is for - running real inference locally, not just calling someone else's endpoint. The interface boundary makes this a reversible choice: an `ElevenLabsTTS(TextToSpeech)` backend later, if a polished demo wants maximum expressiveness, is a new class, not a rewrite.
+
+**Why sequential turn-taking, not always-listening-while-she-talks?** Simpler, and it sidesteps Kyra hearing and responding to her own voice through the speakers (the classic voice-assistant echo problem) without needing real echo cancellation. `voice_chat.py`'s loop only calls `listener.listen()` again after her reply has finished playing (`sd.wait()` blocks until then). Interrupting her mid-sentence ("barge-in") is a real feature real assistants have, but it's a Backlog upgrade, not v1.
+
+**What's verified vs. not (as of this writing):** `KokoroTTS` was tested end-to-end - model loads, synthesizes real audio, correct shape/dtype/sample rate. `VoiceActivityListener`'s VAD scoring was tested on synthetic audio chunks (correctly scores silence/noise low). `FasterWhisperSTT` is API-verified (exact method signature confirmed) but its live transcription wasn't run in dev, since the STT model download was network-blocked in the sandbox it was built in. Nothing involving an actual microphone or speaker has been tested by anyone yet - that needs a real machine with real audio hardware, which is Duc's Mac.

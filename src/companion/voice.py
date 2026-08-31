@@ -1,0 +1,85 @@
+"""Voice I/O for the companion: speech-to-text and text-to-speech, each
+behind a swappable interface - the same Strategy pattern as MemoryStore
+in memory.py, applied to a second subsystem.
+
+Both concrete backends here are local and open-source: no network call
+per use, no per-minute/per-character cost, audio never leaves this
+machine. Model weights download once (see scripts/setup_voice_models.py
+for Kokoro; faster-whisper fetches its own automatically on first use).
+"""
+from abc import ABC, abstractmethod
+from pathlib import Path
+
+import numpy as np
+
+SAMPLE_RATE = 16000  # the sample rate SpeechToText backends expect audio in
+
+
+class SpeechToText(ABC):
+    """Interface: swap the STT backend without touching anything that uses it."""
+
+    @abstractmethod
+    def transcribe(self, audio: np.ndarray) -> str:
+        """audio: mono float32 samples at SAMPLE_RATE (16kHz)."""
+        ...
+
+
+class TextToSpeech(ABC):
+    """Interface: swap the TTS backend without touching anything that uses it."""
+
+    @abstractmethod
+    def speak(self, text: str) -> tuple[np.ndarray, int]:
+        """Returns (mono float32 audio, sample_rate) - the backend picks its own rate."""
+        ...
+
+
+class FasterWhisperSTT(SpeechToText):
+    """Local STT via faster-whisper (a CTranslate2-optimized reimplementation
+    of OpenAI's Whisper). "small" is a good speed/accuracy balance on a
+    laptop CPU - step up to "medium"/"large-v3" for more accuracy at the
+    cost of speed, or down to "base"/"tiny" for more speed.
+    """
+
+    def __init__(self, model_size: str = "small", device: str = "cpu", compute_type: str = "int8"):
+        from faster_whisper import WhisperModel
+
+        self._model = WhisperModel(model_size, device=device, compute_type=compute_type)
+
+    def transcribe(self, audio: np.ndarray) -> str:
+        if audio.size == 0:
+            return ""
+        segments, _info = self._model.transcribe(audio.astype(np.float32), beam_size=5)
+        return " ".join(segment.text.strip() for segment in segments).strip()
+
+
+class KokoroTTS(TextToSpeech):
+    """Local TTS via Kokoro (82M params, Apache 2.0 license) - "rivals much
+    larger models" despite being tiny enough to run comfortably on CPU.
+
+    Needs two model files downloaded once - run
+    `python3 scripts/setup_voice_models.py` before using this.
+    """
+
+    def __init__(
+        self,
+        model_path: str = "data/voice_models/kokoro-v1.0.onnx",
+        voices_path: str = "data/voice_models/voices-v1.0.bin",
+        voice: str = "af_heart",
+    ):
+        from kokoro_onnx import Kokoro
+
+        missing = [p for p in (model_path, voices_path) if not Path(p).exists()]
+        if missing:
+            raise FileNotFoundError(
+                f"Kokoro model file(s) not found: {missing}. "
+                "Run `python3 scripts/setup_voice_models.py` first."
+            )
+        self._kokoro = Kokoro(model_path, voices_path)
+        self._voice = voice
+
+    def list_voices(self) -> list[str]:
+        return self._kokoro.get_voices()
+
+    def speak(self, text: str) -> tuple[np.ndarray, int]:
+        audio, sample_rate = self._kokoro.create(text, voice=self._voice)
+        return audio, sample_rate
