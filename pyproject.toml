@@ -1,0 +1,16 @@
+[project]
+name = "companion"
+version = "0.1.0"
+description = "A personal AI companion: persona, long-term memory (RAG), agentic tools, voice, and animation."
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.40.0",
+    "python-dotenv>=1.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
