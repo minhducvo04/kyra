@@ -8,9 +8,12 @@ Built as a hands-on learning project for AI pipeline / LLM / agentic RAG experie
 
 Early scaffolding (Phase 0). Design doc lands in Phase 1.
 
-## Setup
+## Setup (run in your own Terminal, not through Claude)
 
-1. `python3 -m venv .venv && source .venv/bin/activate`
-2. `pip install -e .`
-3. `cp .env.example .env` and fill in your Anthropic API key
-4. `python3 scripts/smoke_test.py` to confirm everything's wired up
+1. `cd` into this folder (drag the folder into Terminal to avoid typing the path).
+2. `python3 -m venv .venv`
+3. `source .venv/bin/activate`
+4. `pip install -r requirements.txt`
+5. Open `.env` and replace the placeholder with your real Anthropic API key.
+6. `python3 scripts/smoke_test.py` — should print a one-line greeting.
+   If it fails, run `python3 scripts/debug_api_key.py` instead — it prints the actual error from Anthropic's API instead of a generic message.

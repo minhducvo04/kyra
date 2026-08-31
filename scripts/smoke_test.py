@@ -1,4 +1,9 @@
 """Quick smoke test: confirms the API key works and the package is wired up."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
 from anthropic import Anthropic
 
 from companion.config import require_api_key
