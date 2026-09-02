@@ -29,16 +29,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 import sounddevice as sd
 
 from companion.conversation import ConversationManager
+from companion.default_tools import default_tool_registry
 from companion.keybindings import Keybindings, read_key
 from companion.listening import PushToTalkListener, VoiceActivityListener
 from companion.llm import LazyBackends, build_llm
 from companion.memory import ChromaMemoryStore
-from companion.news import TechNewsTool
 from companion.persona import KYRA
-from companion.reminders import reminder_tools
 from companion.router import TurnRouter, route_and_answer
 from companion.router_log import log_turn
-from companion.tools import ToolRegistry
 from companion.voice import FasterWhisperSTT, KokoroTTS
 
 
@@ -94,7 +92,7 @@ def main() -> None:
     router = None
     registry = None
     if args.backend == "auto":
-        registry = ToolRegistry(reminder_tools() + [TechNewsTool()])
+        registry = default_tool_registry()
         router = TurnRouter(registry)
         backends = LazyBackends(claude=claude)
     elif args.backend == "local":

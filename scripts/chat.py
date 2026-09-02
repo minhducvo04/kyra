@@ -17,13 +17,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from companion.conversation import ConversationManager
+from companion.default_tools import default_tool_registry
 from companion.llm import LazyBackends, build_llm
 from companion.memory import ChromaMemoryStore
-from companion.news import TechNewsTool
 from companion.persona import KYRA
-from companion.reminders import reminder_tools
 from companion.router import TurnRouter, route_and_answer
-from companion.tools import ToolRegistry
 
 
 def main() -> None:
@@ -51,7 +49,7 @@ def main() -> None:
             print(f"{KYRA.name}: {conversation.handle_turn(user_input)}\n")
         return
 
-    registry = ToolRegistry(reminder_tools() + [TechNewsTool()])
+    registry = default_tool_registry()
     router = TurnRouter(registry)
     backends = LazyBackends(claude=claude)  # local loads lazily, only if the router actually picks it
 

@@ -11,4 +11,6 @@ mlx-lm>=0.31.0  # --backend local; Apple Silicon only (used the exact repos benc
 fastapi>=0.115.0  # web UI (scripts/web_ui.py)
 uvicorn>=0.30.0   # web UI server
 python-multipart>=0.0.9  # web UI voice upload (/api/voice)
+pypdf>=4.0.0     # book-reading pipeline (scripts/summarize_book.py) - PDF text extraction
+ebooklib>=0.18   # book-reading pipeline - EPUB text extraction
 sentence-transformers>=3.0.0  # memory retrieval embedding model (see docs/design.md)

@@ -29,8 +29,8 @@ Two real bugs found and fixed while building this, not just theoretical risks:
 | 4 | Job Application Auto | Claude (drafting only) | Hard boundary: no auto-submission, ever. Tracker/draft scoping needs Duc's pick. |
 | 5 | Daily Tech News | Local | Building tonight — RSS-based, not scraped |
 | 6 | Quick question | Router, per-question | No build needed — already works via `chat.py`/`voice_chat.py` |
-| 7 | Learning reels / book summaries | Claude | Designed, not built — spaced-repetition review loop |
-| 8 | Science facts | Local | Designed, not built — same shape as news |
+| 7 | Learning reels / book summaries | Claude | Built (2026-09-02) — spaced-repetition review loop |
+| 8 | Science facts | Local | Built (2026-09-02) — RSS, same shape as news |
 
 ### 1. Work coordination — Claude Code / Codex handoff
 Draft-only per Duc's choice: Kyra composes a structured task brief (goal, context, constraints, acceptance criteria) from the conversation + memory, saves it to `handoff/latest_task.md`, and copies it to the clipboard (`pbcopy`) for Duc to paste into Claude Code himself. No execution. Actually launching a `claude` session is a later step that needs explicit guardrail decisions first (confirmation before running, how output gets back to Kyra).
@@ -53,11 +53,13 @@ Not scraping NYTimes — fragile, ToS-risk, paywalled. RSS instead: NYT Technolo
 ### 6. Quick question
 Already works today — this is purely a `TurnRouter` decision (trivia → local, anything relied-on → Claude), not a new subsystem.
 
-### 7. Learning reels / book summaries
-Claude for the summary itself (structured synthesis is where local's biggest gap was: 1.6–3.0 vs 4.25–5.0 on the benchmark's reasoning tasks). "Remember and apply" = spaced repetition, same mechanism as Anki: resurface each learned item at 1/3/7 days. Reward system starts as a plain streak Kyra mentions conversationally — hold off on visible gamification until the core loop's been used for a week.
+### 7. Learning reels / book summaries — built
+Claude for the summary itself (structured synthesis is where local's biggest gap was: 1.6–3.0 vs 4.25–5.0 on the benchmark's reasoning tasks) — and the summary is never tool-generated content, it's just Claude answering normally; the tool (`learning.py`) only persists and schedules what Claude wrote. "Remember and apply" = spaced repetition, same mechanism as Anki: resurface each learned item at 1/3/7 days after the last *successful* review, reset to 1 day on a forgotten one. Streak counts once per calendar day (reviewing 5 things today isn't 5x streak), verified with a real Claude tool-call session that summarized the CAP theorem correctly and saved it with a genuinely useful key takeaway. Reward system stays a plain streak Kyra can mention conversationally — visible gamification deliberately not built yet.
 
-### 8. Science facts
-Same shape as Daily News — a science RSS feed, or model-generated facts with a quick verification pass so it doesn't confidently invent one.
+**Extended, 2026-09-02: reading whole books.** `scripts/summarize_book.py` + `book_reader.py` - point it at a PDF or EPUB, it extracts the text, Claude writes a structured summary + key takeaway (300-500 words, whole-book context - Sonnet 5's 1M-token window fits nearly any real book in one call, no chunking needed), and it saves straight into the same spaced-repetition store. A standalone script, not a conversational tool - summarizing a whole book has a real cost and shouldn't be one ambiguous voice command away. Verified end-to-end on a real public-domain book (Project Gutenberg, both EPUB and PDF extraction paths) - accurate summary, correct key takeaway, correct scheduling. Sourcing the book file itself is entirely Duc's call - legitimate options (university library O'Reilly access, Perlego, public library apps, Internet Archive) discussed inline in chat, not reproduced here.
+
+### 8. Science facts — built
+Same shape as Daily News, and literally shares its fetch/parse code now (`feeds.py`, extracted from `news.py`) — RSS from NYT Science, ScienceDaily, Phys.org, NASA, all verified live. Not model-generated facts, to avoid the "confidently invents one" risk called out originally.
 
 ## Q1 — Which tasks go to which model?
 

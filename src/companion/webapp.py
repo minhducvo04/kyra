@@ -17,13 +17,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from companion.conversation import ConversationManager
+from companion.default_tools import default_tool_registry
 from companion.llm import LazyBackends, build_llm
 from companion.memory import ChromaMemoryStore
-from companion.news import TechNewsTool
 from companion.persona import KYRA
-from companion.reminders import reminder_tools
 from companion.router import TurnRouter, route_and_answer_verbose
-from companion.tools import ToolRegistry
 from companion.voice import FasterWhisperSTT, KokoroTTS, decode_uploaded_audio, encode_wav_bytes
 
 WEB_DIR = Path(__file__).resolve().parent.parent.parent / "web"
@@ -35,7 +33,7 @@ _memory = ChromaMemoryStore()
 _claude = build_llm("claude")
 _conversation = ConversationManager(persona=KYRA, memory=_memory, llm=_claude)
 _backends = LazyBackends(claude=_claude)
-_registry = ToolRegistry(reminder_tools() + [TechNewsTool()])
+_registry = default_tool_registry()
 _router = TurnRouter(_registry)
 _current_backend = "auto"  # "claude" | "local" | "auto" - auto (the router) is the default now that it exists
 _stt = FasterWhisperSTT()
