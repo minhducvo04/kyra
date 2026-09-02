@@ -7,6 +7,7 @@ per use, no per-minute/per-character cost, audio never leaves this
 machine. Model weights download once (see scripts/setup_voice_models.py
 for Kokoro; faster-whisper fetches its own automatically on first use).
 """
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -40,8 +41,13 @@ class FasterWhisperSTT(SpeechToText):
     cost of speed, or down to "base"/"tiny" for more speed.
     """
 
-    def __init__(self, model_size: str = "small", device: str = "cpu", compute_type: str = "int8"):
+    def __init__(self, model_size: str | None = None, device: str = "cpu", compute_type: str = "int8"):
         from faster_whisper import WhisperModel
+
+        # KYRA_STT_MODEL lets you try "medium"/"large-v3" for accuracy on
+        # quiet/short utterances without a code change - slower on CPU,
+        # worth it if "small" keeps mishearing things. See docstring above.
+        model_size = model_size or os.environ.get("KYRA_STT_MODEL", "small")
 
         self._model = WhisperModel(model_size, device=device, compute_type=compute_type)
 
