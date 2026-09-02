@@ -60,6 +60,8 @@ Available tools:
 Examples:
 - "remind me to call mom tomorrow" -> {{"path": "tool", "backend": "claude", "reason": "add a reminder"}}
 - "what's on my list" -> {{"path": "tool", "backend": "claude", "reason": "list reminders"}}
+- "mark the milk reminder as done" -> {{"path": "tool", "backend": "claude", "reason": "complete a reminder"}}
+- "push that reminder back to next week" -> {{"path": "tool", "backend": "claude", "reason": "snooze/reschedule a reminder"}}
 - "what's happening in tech today" -> {{"path": "tool", "backend": "claude", "reason": "fetch tech news"}}
 - "any tech news" -> {{"path": "tool", "backend": "claude", "reason": "fetch tech news"}}
 - "give me a science fact" -> {{"path": "tool", "backend": "claude", "reason": "fetch science facts"}}
