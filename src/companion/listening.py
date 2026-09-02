@@ -4,9 +4,11 @@ MemoryStore and SpeechToText/TextToSpeech, applied a third time.
 
 Sequential turn-taking by design: Kyra listens, then speaks, then listens
 again - never both at once, so she can't hear and respond to herself.
-(Interrupting her mid-reply - "barge-in" - is a real feature, but a
-Backlog upgrade, not v1.)
+Keypress barge-in (voice_chat.py's speak_interruptibly()) lets you cut her
+off early; true concurrent listen-while-speaking still isn't implemented
+(see docs/design.md).
 """
+import sys
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -28,21 +30,45 @@ class ListenMode(ABC):
 
 
 class PushToTalkListener(ListenMode):
-    """Press Enter, speak, press Enter again to stop. Simple and reliable -
+    """Press a key, speak, press it again to stop. Simple and reliable -
     no false triggers, no extra model, works everywhere.
+
+    The key is a single raw keypress (see companion.keybindings.read_key),
+    not a line you type and hit Enter on - press-and-done, not press-then-
+    confirm. Defaults to Enter, same as the original hardcoded behavior;
+    override via KYRA_PTT_KEY (see companion.keybindings docstring).
     """
+
+    def __init__(self, key: str | None = None):
+        from companion.keybindings import ENTER, Keybindings
+
+        self._key = key or Keybindings.from_env().ptt_key
+        self._key_label = "Enter" if self._key == ENTER else repr(self._key)
 
     def listen(self) -> np.ndarray:
         import sounddevice as sd
 
-        input("  [press Enter, then speak] ")
+        from companion.keybindings import read_key
+
+        if not sys.stdin.isatty():
+            # read_key() returns None (not a hang) on non-interactive stdin -
+            # without this check, "while read_key() != self._key" would spin
+            # in a tight, silent, CPU-burning loop forever instead of
+            # failing the way input() used to (EOFError, caught by callers).
+            raise EOFError("stdin is not an interactive terminal - can't read a keypress")
+
+        print(f"  [press {self._key_label}, then speak]")
+        while read_key() != self._key:
+            pass
         frames: list[np.ndarray] = []
 
         def callback(indata, frame_count, time_info, status):
             frames.append(indata.copy())
 
         with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32", callback=callback):
-            input("  [recording - press Enter to stop] ")
+            print(f"  [recording - press {self._key_label} to stop]")
+            while read_key() != self._key:
+                pass
 
         if not frames:
             return np.zeros(0, dtype=np.float32)

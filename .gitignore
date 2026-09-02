@@ -15,6 +15,9 @@ data/
 *.sqlite3
 chroma_db/
 
+# Claude Code handoff drafts - can contain private conversation context
+handoff/
+
 # OS
 .DS_Store
 

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kyra-web-ui",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["scripts/web_ui.py", "--port", "8420"],
+      "port": 8420
+    }
+  ]
+}

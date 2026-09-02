@@ -83,3 +83,39 @@ class KokoroTTS(TextToSpeech):
     def speak(self, text: str) -> tuple[np.ndarray, int]:
         audio, sample_rate = self._kokoro.create(text, voice=self._voice)
         return audio, sample_rate
+
+
+def decode_uploaded_audio(file) -> np.ndarray:
+    """Decode a browser mic recording (webm/opus, ogg, wav, whatever
+    MediaRecorder produced) into mono float32 at SAMPLE_RATE, ready for
+    SpeechToText.transcribe(). `file`: a file-like object (e.g. FastAPI's
+    UploadFile.file) or a path.
+
+    faster-whisper already bundles PyAV (ffmpeg bindings) to decode
+    arbitrary input formats for its own file-path input mode - this reuses
+    that exact utility instead of adding a new audio dependency or writing
+    format-sniffing code ourselves.
+    """
+    from faster_whisper.audio import decode_audio
+
+    return decode_audio(file, sampling_rate=SAMPLE_RATE)
+
+
+def encode_wav_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
+    """Mono float32 [-1, 1] audio -> 16-bit PCM WAV bytes, for handing TTS
+    output back to a browser <audio> element. stdlib-only (wave + numpy,
+    both already dependencies) - no new audio-encoding library needed for
+    something this simple.
+    """
+    import io
+    import wave
+
+    pcm16 = np.clip(audio, -1.0, 1.0)
+    pcm16 = (pcm16 * 32767).astype(np.int16)
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)  # 16-bit
+        w.setframerate(sample_rate)
+        w.writeframes(pcm16.tobytes())
+    return buf.getvalue()

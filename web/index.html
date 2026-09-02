@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en" data-backend="claude">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KYRA</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <header class="hud-header">
+    <div class="wordmark">
+      <span class="wordmark-mark" aria-hidden="true">◈</span>
+      <span class="wordmark-text">KYRA</span>
+      <span class="wordmark-sub">COMPANION&nbsp;SYSTEM</span>
+    </div>
+    <div class="header-controls">
+      <div class="backend-toggle" role="group" aria-label="Model backend">
+        <button class="backend-btn is-active" data-backend="auto" id="btn-auto" type="button">
+          <span class="dot"></span>AUTO
+        </button>
+        <button class="backend-btn" data-backend="claude" id="btn-claude" type="button">
+          <span class="dot"></span>CLAUDE
+        </button>
+        <button class="backend-btn" data-backend="local" id="btn-local" type="button">
+          <span class="dot"></span>LOCAL
+        </button>
+      </div>
+      <div class="status">
+        <span class="status-dot"></span>
+        <span id="status-text">ONLINE</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="core-wrap" id="core-wrap">
+      <svg class="core" viewBox="0 0 240 240" aria-hidden="true">
+        <circle class="ring ring-outer" cx="120" cy="120" r="108"></circle>
+        <circle class="ring ring-tick" cx="120" cy="120" r="108"></circle>
+        <circle class="ring ring-mid" cx="120" cy="120" r="84"></circle>
+        <circle class="ring ring-inner" cx="120" cy="120" r="58"></circle>
+        <circle class="ring ring-core" cx="120" cy="120" r="34"></circle>
+        <circle class="core-dot" cx="120" cy="120" r="5"></circle>
+      </svg>
+      <div class="core-readout">
+        <div class="core-label" id="core-label">STANDBY</div>
+        <div class="core-sub" id="core-sub">awaiting input</div>
+      </div>
+    </div>
+
+    <section class="transcript" id="transcript" aria-live="polite">
+      <div class="line line-kyra">
+        <span class="line-tag">KYRA</span>
+        <span class="line-text">Systems online. What are we working on, Duc?</span>
+      </div>
+    </section>
+  </main>
+
+  <footer class="input-bar">
+    <div class="voice-mode-toggle" role="group" aria-label="Voice input mode">
+      <button class="voice-mode-btn is-active" data-mode="ptt" id="btn-ptt" type="button">PTT</button>
+      <button class="voice-mode-btn" data-mode="handsfree" id="btn-handsfree" type="button">HANDS-FREE</button>
+    </div>
+    <div class="mic-wrap">
+      <button id="mic" type="button" class="mic-btn" data-state="idle" aria-label="Voice input" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" fill="currentColor"/>
+          <path d="M6 11a1 1 0 0 0-2 0 8 8 0 0 0 7 7.94V21H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-2.06A8 8 0 0 0 20 11a1 1 0 0 0-2 0 6 6 0 0 1-12 0Z" fill="currentColor"/>
+        </svg>
+      </button>
+      <span class="mic-label" id="mic-label">MIC OFF</span>
+    </div>
+    <div class="input-frame">
+      <span class="bracket" aria-hidden="true">&#91;</span>
+      <input id="input" type="text" autocomplete="off" spellcheck="false" placeholder="type your command&hellip;" />
+      <span class="bracket" aria-hidden="true">&#93;</span>
+    </div>
+    <button id="send" type="button" aria-label="Send">
+      <span>SEND</span>
+    </button>
+  </footer>
+
+  <audio id="reply-audio" hidden></audio>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
