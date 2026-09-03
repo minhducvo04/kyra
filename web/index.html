@@ -59,7 +59,8 @@
         <span>Material</span>
         <select id="draft-material-type">
           <option value="cover_letter">Cover letter</option>
-          <option value="resume_bullet">Resume bullet</option>
+          <option value="full_resume">Full resume, optimized (PDF)</option>
+          <option value="resume_bullet">Single resume bullet</option>
           <option value="other">Other</option>
         </select>
       </label>
@@ -104,6 +105,7 @@
           <span>DRAFT</span>
           <button class="jobs-copy" id="draft-copy" type="button">copy</button>
         </div>
+        <a id="draft-pdf-link" class="jobs-btn" href="#" hidden style="display: block; text-align: center; text-decoration: none; margin: 0.7rem;">Download PDF</a>
         <pre id="draft-text"></pre>
       </div>
     </section>

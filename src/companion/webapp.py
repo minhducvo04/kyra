@@ -22,7 +22,7 @@ from companion.config import require_api_key
 from companion.conversation import ConversationManager
 from companion.default_tools import default_tool_registry
 from companion.doc_text import UnsupportedDocumentType, extract_text
-from companion.job_applications import VALID_STATUSES, JobApplicationStore, draft_application_material
+from companion.job_applications import VALID_STATUSES, JobApplicationStore, draft_application_material, optimize_full_resume
 from companion.job_autofill import GreenhouseAutofillEngine
 from companion.job_documents import JobDocumentStore
 from companion.learning import LearningStore
@@ -33,6 +33,9 @@ from companion.news import TechNewsTool
 from companion.persona import KYRA
 from companion.profile import load_profile, save_profile
 from companion.reminders import RemindersStore
+from companion.resume_format import ResumeFormatError
+from companion.resume_pdf import OUTPUT_DIR as RESUME_PDF_DIR
+from companion.resume_pdf import render_pdf
 from companion.router import TurnRouter, route_and_answer_verbose
 from companion.science import ScienceFactsTool
 from companion.voice import FasterWhisperSTT, KokoroTTS, decode_uploaded_audio, encode_wav_bytes
@@ -62,6 +65,11 @@ _job_store = JobApplicationStore()
 # reasoning as default_tools.py::default_tool_registry(draft_backend=...):
 # a draft plus a critique pass needs more room than plain chat's default.
 _draft_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=2500)
+# A full resume rewrite is a genuinely long document, not a paragraph -
+# a 3000-token budget silently truncated mid-document in testing.
+# Separate instance/budget from _draft_llm, which stays sized for
+# cover letters/bullets (already verified clean at 2500).
+_resume_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=6000)
 _autofill_engine = GreenhouseAutofillEngine()
 _job_documents = JobDocumentStore()
 _memory_notes = MarkdownMemoryNotesStore()
@@ -178,6 +186,28 @@ class DraftOut(BaseModel):
     background_chars: int
     style_chars: int
     warnings: list[str] = []
+    pdf_url: str | None = None  # set only for material_type == "full_resume"
+
+
+def _resume_doc_preview(doc) -> str:
+    """Flattens a ResumeDoc into readable plain text for the UI's text
+    preview - the PDF is the real deliverable, this is just so the
+    existing output box shows something meaningful instead of nothing.
+    """
+    lines = [doc.name]
+    if doc.contact:
+        lines.append(doc.contact)
+    for section in doc.sections:
+        lines.append(f"\n{section.title.upper()}")
+        for entry in section.entries:
+            header = " | ".join(p for p in (entry.heading, entry.date) if p)
+            if header:
+                lines.append(header)
+            if entry.subheading:
+                lines.append(entry.subheading)
+            for bullet in entry.bullets:
+                lines.append(f"- {bullet}")
+    return "\n".join(lines)
 
 
 def _get_or_add_document(
@@ -221,6 +251,67 @@ def _extract_upload(upload: UploadFile | None) -> tuple[str, bytes | None, str |
         return "", None, f"{upload.filename}: couldn't read file ({e})"
 
 
+def _full_resume_draft(
+    job_context: str, background_text: str, background_document_ids: str, resume: UploadFile | None
+) -> DraftOut:
+    warnings: list[str] = []
+
+    # Exactly one clean source of truth, in priority order - a one-off
+    # upload (also saved to the library, same dedup as the other path),
+    # then a single selected resume-kind document, then pasted text.
+    resume_text, resume_bytes, warn = _extract_upload(resume)
+    if warn:
+        warnings.append(warn)
+    if resume_text:
+        saved, is_new = _get_or_add_document(
+            label=resume.filename, kind="resume", text=resume_text, source_filename=resume.filename, file_bytes=resume_bytes
+        )
+        if is_new:
+            warnings.append(f"saved '{saved.label}' to your document library (PROFILE tab → Document Library) for reuse")
+    else:
+        doc_ids = [i.strip() for i in background_document_ids.split(",") if i.strip()]
+        picked = _job_documents.get_many(doc_ids)
+        resumes = [d for d in picked if d.kind == "resume"]
+        if resumes:
+            if len(resumes) > 1:
+                warnings.append(f"multiple resumes selected - using '{resumes[0].label}', the others were ignored")
+            resume_text = resumes[0].text
+        elif background_text.strip():
+            resume_text = background_text.strip()
+
+    if not resume_text:
+        return DraftOut(
+            draft="", background_chars=0, style_chars=0,
+            warnings=["nothing to optimize - upload a resume, pick one from your document library, or paste its text in Extra background"],
+        )
+
+    try:
+        doc = optimize_full_resume(_resume_llm, resume_text, job_context)
+    except ResumeFormatError as e:
+        return DraftOut(draft="", background_chars=len(resume_text), style_chars=0, warnings=[str(e)])
+
+    pdf_path = render_pdf(doc)
+    pdf_filename = Path(pdf_path).name
+    preview = _resume_doc_preview(doc)
+    return DraftOut(
+        draft=preview, background_chars=len(resume_text), style_chars=0,
+        warnings=warnings, pdf_url=f"/api/job/resume-pdf/{pdf_filename}",
+    )
+
+
+@app.get("/api/job/resume-pdf/{filename}")
+def get_resume_pdf(filename: str):
+    # filename comes straight from the URL path - reject anything that
+    # isn't a bare generated-uuid.pdf name before touching the filesystem,
+    # so this can't be used to read arbitrary files (e.g. "../../.env").
+    if "/" in filename or "\\" in filename or not filename.endswith(".pdf"):
+        return {"error": "invalid filename"}
+    path = RESUME_PDF_DIR / filename
+    if not path.is_file():
+        return {"error": "not found"}
+    return FileResponse(path, media_type="application/pdf", filename="optimized_resume.pdf")
+
+
 @app.post("/api/job/draft", response_model=DraftOut)
 def job_draft(
     material_type: str = Form(...),
@@ -237,7 +328,18 @@ def job_draft(
     documents picked from the library, typed-in text, and a one-off
     upload (which also gets saved into the library so it's there next
     time - the old flow lost every upload the moment the request ended).
+
+    material_type == "full_resume" is a genuinely different path, not
+    a variant of the paragraph-drafting flow above: it needs exactly
+    one clean original resume as ground truth, not several sources
+    blended together, and it returns a rendered PDF rather than text
+    for the output box to display.
     """
+    if material_type == "full_resume":
+        return _full_resume_draft(
+            job_context, background_text, background_document_ids, resume
+        )
+
     warnings: list[str] = []
 
     background_parts = []

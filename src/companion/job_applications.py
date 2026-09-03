@@ -17,7 +17,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from companion.llm import AnthropicLLM
+from companion.llm import AnthropicLLM, TRUNCATION_MARKER
+from companion.resume_format import ResumeDoc, ResumeFormatError, parse_resume_text
 from companion.tools import Tool
 
 DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "job_applications.db"
@@ -250,6 +251,100 @@ def draft_application_material(
         system=CRITIQUE_SYSTEM, history=[],
         user_input=CRITIQUE_PROMPT.format(draft=draft, voice_instruction=voice_instruction, style_block=critique_style_block),
     )
+
+
+# --- Full resume optimization (not a couple of bullets - a complete
+# rewrite of the whole document, rendered to an actual PDF via
+# resume_pdf.py). Duc's direct feedback (2026-09-03) was that the
+# resume_bullet material_type produced "2-liners," not what someone
+# means by "optimize my resume" - this is the real thing, gated on
+# actually having a full original resume to work from (nothing to
+# optimize without one).
+FULL_RESUME_SYSTEM = (
+    "You rewrite and optimize resumes. You reorganize emphasis, tighten wording, and strengthen verbs - you "
+    "never invent a new achievement, number, date, title, or skill that isn't already in the original resume "
+    "given to you. If a bullet is weak, make it clearer and more specific using only what's actually there, "
+    "don't pad it with invented detail."
+)
+
+FORMAT_INSTRUCTIONS = """Output the resume in EXACTLY this line-tagged format - no markdown, no extra commentary, nothing before NAME: or after the last ENDSECTION:
+
+NAME: Full Name
+CONTACT: phone | email | linkedin.com/in/... | github.com/...
+
+SECTION: Education
+ENTRY
+HEADING: School Name
+SUBHEADING: Degree, honors, GPA if given
+DATE: Month Year - Month Year
+BULLET: relevant coursework or detail, only if it was in the original
+ENDENTRY
+ENDSECTION
+
+SECTION: Experience
+ENTRY
+HEADING: Company Name
+SUBHEADING: Job Title
+DATE: Month Year - Month Year
+BULLET: one strengthened bullet per real accomplishment from the original
+BULLET: another one
+ENDENTRY
+ENDSECTION
+
+SECTION: Projects
+ENTRY
+HEADING: Project Name
+SUBHEADING: Tech stack / tools used, comma-separated - NEVER put the tech stack in HEADING, keep HEADING to just the project name
+DATE: Month Year
+BULLET: one strengthened bullet per real accomplishment from the original
+ENDENTRY
+ENDSECTION
+
+(repeat SECTION/ENTRY blocks for Skills or whatever other sections the original resume actually has - a Skills \
+section can be a single ENTRY with one BULLET listing everything, no HEADING/SUBHEADING/DATE needed for it)"""
+
+FULL_RESUME_PROMPT = """Rewrite and optimize this resume - reorder/emphasize what's most relevant if a job is given below, \
+tighten and strengthen every bullet's wording, use strong action verbs - but every fact, number, date, title, \
+and skill must trace back to the original resume. Don't invent anything, even something plausible-sounding.
+
+=== Job / role context (optional - if blank, optimize generally rather than invent a target) ===
+{job_context}
+
+=== Original resume (the only source of truth for facts) ===
+{original_resume}
+
+{format_instructions}"""
+
+
+def optimize_full_resume(llm: AnthropicLLM, original_resume: str, job_context: str = "") -> ResumeDoc:
+    """The full-resume path: one generation call (no separate critique
+    pass - resume bullets are already terse/action-verb-driven by
+    convention, not prose with the chatbot-ish tells the cover-letter
+    critique pass targets; a second full rewrite pass would also risk
+    corrupting the strict line-tagged format this needs to parse
+    cleanly). `llm` needs real room - a full resume rewrite is a long
+    document, not a paragraph; caught for real with a 3000-token budget
+    silently truncating mid-document (see webapp.py for the budget this
+    is actually called with).
+
+    Raises ResumeFormatError if the model's output doesn't parse, or if
+    it was genuinely cut off (llm.TRUNCATION_MARKER) - a truncated
+    resume must never be silently parsed and handed back as if it were
+    complete; the caller should surface this as a real failure, not
+    quietly ship a document missing its last bullet.
+    """
+    job_context = job_context.strip() or "(none given - optimize generally)"
+    text = llm.respond(
+        system=FULL_RESUME_SYSTEM, history=[],
+        user_input=FULL_RESUME_PROMPT.format(
+            job_context=job_context, original_resume=original_resume, format_instructions=FORMAT_INSTRUCTIONS
+        ),
+    )
+    if text.endswith(TRUNCATION_MARKER):
+        raise ResumeFormatError(
+            "the optimized resume got cut off before finishing - try again, or shorten the original resume/job context"
+        )
+    return parse_resume_text(text)
 
 
 class DraftApplicationMaterialTool(Tool):

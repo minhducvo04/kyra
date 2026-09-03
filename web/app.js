@@ -460,6 +460,13 @@ draftGenerateBtn.addEventListener("click", async () => {
       draftWarnings.hidden = false;
     }
     draftText.textContent = data.draft;
+    const pdfLink = document.getElementById("draft-pdf-link");
+    if (data.pdf_url) {
+      pdfLink.href = data.pdf_url;
+      pdfLink.hidden = false;
+    } else {
+      pdfLink.hidden = true;
+    }
     draftOutput.hidden = false;
   } catch (err) {
     draftWarnings.textContent = `draft failed — ${err.message}`;

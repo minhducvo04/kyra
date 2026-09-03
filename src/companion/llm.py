@@ -18,6 +18,13 @@ from companion.llm_utils import extract_text
 # tokens/sec, which matters more here since voice replies are read out loud.
 DEFAULT_LOCAL_MODEL = "mlx-community/Qwen2.5-14B-Instruct-4bit"
 
+# A named constant, not just an inline string, so callers that need to
+# tell a genuinely truncated response apart from a complete one (e.g.
+# job_applications.py's optimize_full_resume, which must never silently
+# try to parse a cut-off document) can check for it reliably instead of
+# re-typing/matching the marker text themselves.
+TRUNCATION_MARKER = "\n\n[cut off - ran out of room, try again or ask for something shorter]"
+
 # Local LLM weights are large (GBs) and reproducible - keep them out of the
 # default ~/.cache/huggingface and in this project's own gitignored data/
 # dir, same convention as data/voice_models. Separate from
@@ -78,7 +85,7 @@ class AnthropicLLM(LLMBackend):
             # Caught for real via job_applications.py's draft tool cutting
             # a cover letter off mid-word with the default budget.
             text = extract_text(response)
-            return text + "\n\n[cut off - ran out of room, try again or ask for something shorter]"
+            return text + TRUNCATION_MARKER
         return extract_text(response)
 
     def respond_with_tools(
