@@ -385,6 +385,7 @@ btnHandsfree.addEventListener("click", () => setVoiceMode("handsfree"));
     /* server not reachable yet on first paint - defaults stay as rendered */
   }
   input.focus();
+  loadDraftDocPickers().catch(() => {}); // Draft tab is open by default - populate its doc picker up front
 })();
 
 /* ---------------- jobs panel ---------------- */
@@ -415,6 +416,8 @@ document.querySelectorAll(".jobs-tab").forEach((tab) => {
       p.classList.toggle("is-active", p.dataset.tabPanel === tab.dataset.tab);
     });
     if (tab.dataset.tab === "tracker") loadTrackerList();
+    if (tab.dataset.tab === "profile") { loadProfile(); loadDocumentList(); }
+    if (tab.dataset.tab === "draft") loadDraftDocPickers();
   });
 });
 
@@ -441,6 +444,10 @@ draftGenerateBtn.addEventListener("click", async () => {
     form.append("material_type", draftMaterialType.value);
     form.append("job_context", draftJobContext.value);
     form.append("background_text", draftBackground.value);
+    const checkedDocIds = Array.from(document.querySelectorAll("#draft-background-docs input[type=checkbox]:checked")).map((c) => c.value);
+    form.append("background_document_ids", checkedDocIds.join(","));
+    const styleDocSelect = document.getElementById("draft-style-doc");
+    form.append("style_document_id", styleDocSelect.value);
     if (draftResume.files[0]) form.append("resume", draftResume.files[0]);
     if (draftStyle.files[0]) form.append("style_sample", draftStyle.files[0]);
 
@@ -626,5 +633,192 @@ autofillRunBtn.addEventListener("click", async () => {
   } finally {
     autofillRunBtn.disabled = false;
     autofillRunBtn.textContent = "Fill it in";
+  }
+});
+
+/* -- document library (shared by draft picker + profile tab) -- */
+
+const KIND_LABEL = { resume: "RESUME", style_sample: "STYLE", note: "NOTE" };
+
+async function fetchDocuments() {
+  const res = await fetch("/api/job/documents");
+  const data = await res.json();
+  return data.documents || [];
+}
+
+async function loadDraftDocPickers() {
+  const picker = document.getElementById("draft-background-docs");
+  const styleSelect = document.getElementById("draft-style-doc");
+  const docs = await fetchDocuments().catch(() => []);
+
+  picker.innerHTML = "";
+  if (docs.length === 0) {
+    picker.innerHTML = '<span class="jobs-hint">no saved documents yet — add some in PROFILE</span>';
+  } else {
+    for (const doc of docs) {
+      const row = document.createElement("label");
+      row.className = "jobs-doc-picker-item";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = doc.id;
+      const badge = document.createElement("span");
+      badge.className = "doc-kind-badge";
+      badge.textContent = KIND_LABEL[doc.kind] || doc.kind;
+      const label = document.createElement("span");
+      label.textContent = doc.label;
+      row.append(cb, badge, label);
+      picker.appendChild(row);
+    }
+  }
+
+  const prevStyleValue = styleSelect.value;
+  styleSelect.innerHTML = '<option value="">(none)</option>';
+  for (const doc of docs.filter((d) => d.kind === "style_sample")) {
+    const opt = document.createElement("option");
+    opt.value = doc.id;
+    opt.textContent = doc.label;
+    styleSelect.appendChild(opt);
+  }
+  styleSelect.value = prevStyleValue;
+}
+
+/* -- profile -- */
+
+const PROFILE_FIELDS = [
+  "first_name", "last_name", "email", "phone", "country", "current_company",
+  "linkedin_url", "github_url", "portfolio_url", "twitter_url", "preferred_name", "pronouns",
+  "eeo_gender_identity", "eeo_race_ethnicity", "eeo_hispanic_latino", "eeo_veteran_status", "eeo_disability_status",
+];
+
+async function loadProfile() {
+  try {
+    const res = await fetch("/api/profile");
+    const data = await res.json();
+    for (const f of PROFILE_FIELDS) {
+      const el = document.getElementById(`profile-${f}`);
+      if (el) el.value = data.profile[f] || "";
+    }
+    document.getElementById("profile-raw").textContent = JSON.stringify(data.profile, null, 2);
+  } catch (err) {
+    addLine("error", `couldn't load profile — ${err.message}`);
+  }
+}
+
+const profileSaveBtn = document.getElementById("profile-save");
+const profileWarnings = document.getElementById("profile-warnings");
+
+profileSaveBtn.addEventListener("click", async () => {
+  profileSaveBtn.disabled = true;
+  profileSaveBtn.textContent = "Saving…";
+  profileWarnings.hidden = true;
+  try {
+    const body = {};
+    for (const f of PROFILE_FIELDS) {
+      const el = document.getElementById(`profile-${f}`);
+      if (el) body[f] = el.value;
+    }
+    const res = await fetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    document.getElementById("profile-raw").textContent = JSON.stringify(data.profile, null, 2);
+    if (data.missing_for_autofill && data.missing_for_autofill.length) {
+      profileWarnings.textContent = `still missing for autofill: ${data.missing_for_autofill.join(", ")}`;
+      profileWarnings.hidden = false;
+    }
+  } catch (err) {
+    profileWarnings.textContent = `save failed — ${err.message}`;
+    profileWarnings.hidden = false;
+  } finally {
+    profileSaveBtn.disabled = false;
+    profileSaveBtn.textContent = "Save profile";
+  }
+});
+
+/* -- document library management (profile tab) -- */
+
+async function loadDocumentList() {
+  const list = document.getElementById("profile-doc-list");
+  list.textContent = "loading…";
+  try {
+    const docs = await fetchDocuments();
+    list.innerHTML = "";
+    if (docs.length === 0) {
+      list.textContent = "no documents yet";
+      return;
+    }
+    for (const doc of docs) {
+      const item = document.createElement("div");
+      item.className = "jobs-doc-item";
+      const left = document.createElement("div");
+      const label = document.createElement("div");
+      label.className = "jobs-doc-item-label";
+      label.textContent = `${doc.label} `;
+      const badge = document.createElement("span");
+      badge.className = "doc-kind-badge";
+      badge.textContent = KIND_LABEL[doc.kind] || doc.kind;
+      label.appendChild(badge);
+      const meta = document.createElement("div");
+      meta.className = "jobs-doc-item-meta";
+      meta.textContent = `added ${doc.added_at.slice(0, 10)} · ${doc.text.length} chars`;
+      left.append(label, meta);
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "jobs-doc-delete";
+      delBtn.type = "button";
+      delBtn.textContent = "delete";
+      delBtn.addEventListener("click", async () => {
+        delBtn.disabled = true;
+        try {
+          await fetch(`/api/job/documents/${doc.id}`, { method: "DELETE" });
+          await loadDocumentList();
+        } catch (err) {
+          addLine("error", `couldn't delete document — ${err.message}`);
+          delBtn.disabled = false;
+        }
+      });
+
+      item.append(left, delBtn);
+      list.appendChild(item);
+    }
+  } catch (err) {
+    list.textContent = `couldn't load — ${err.message}`;
+  }
+}
+
+const docAddBtn = document.getElementById("doc-add");
+docAddBtn.addEventListener("click", async () => {
+  const label = document.getElementById("doc-label").value.trim();
+  const kind = document.getElementById("doc-kind").value;
+  const text = document.getElementById("doc-text").value.trim();
+  const fileInput = document.getElementById("doc-file");
+  if (!text && !fileInput.files[0]) return;
+
+  docAddBtn.disabled = true;
+  docAddBtn.textContent = "Adding…";
+  try {
+    const form = new FormData();
+    form.append("label", label);
+    form.append("kind", kind);
+    form.append("text", text);
+    if (fileInput.files[0]) form.append("file", fileInput.files[0]);
+
+    const res = await fetch("/api/job/documents", { method: "POST", body: form });
+    const data = await res.json();
+    if (data.error) {
+      addLine("error", `couldn't add document — ${data.error}`);
+    } else {
+      document.getElementById("doc-label").value = "";
+      document.getElementById("doc-text").value = "";
+      fileInput.value = "";
+      await loadDocumentList();
+    }
+  } catch (err) {
+    addLine("error", `couldn't add document — ${err.message}`);
+  } finally {
+    docAddBtn.disabled = false;
+    docAddBtn.textContent = "Add to library";
   }
 });

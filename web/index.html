@@ -48,6 +48,7 @@
 
     <div class="jobs-tabs" role="tablist">
       <button class="jobs-tab is-active" data-tab="draft" type="button">DRAFT</button>
+      <button class="jobs-tab" data-tab="profile" type="button">PROFILE</button>
       <button class="jobs-tab" data-tab="tracker" type="button">TRACKER</button>
       <button class="jobs-tab" data-tab="autofill" type="button">AUTOFILL</button>
     </div>
@@ -66,17 +67,35 @@
         <textarea id="draft-job-context" rows="4" placeholder="Paste the job posting, or describe the role. Leave blank for general-purpose material."></textarea>
       </label>
       <label class="jobs-field">
-        <span>Background (optional if you upload a resume below)</span>
-        <textarea id="draft-background" rows="3" placeholder="Any extra background/achievements not in your resume"></textarea>
+        <span>Extra background (optional — anything not already in a saved document)</span>
+        <textarea id="draft-background" rows="3" placeholder="Any extra background/achievements"></textarea>
       </label>
-      <label class="jobs-field">
-        <span>Resume (pdf / docx / txt) — used as background facts</span>
-        <input id="draft-resume" type="file" accept=".pdf,.docx,.txt,.md">
-      </label>
-      <label class="jobs-field">
-        <span>Style sample (optional) — a resume/letter whose tone to match, not its facts</span>
-        <input id="draft-style" type="file" accept=".pdf,.docx,.txt,.md">
-      </label>
+
+      <div class="jobs-field">
+        <span>Background documents — check any to include as facts (manage these in PROFILE)</span>
+        <div class="jobs-doc-picker" id="draft-background-docs">
+          <span class="jobs-hint">no saved documents yet</span>
+        </div>
+      </div>
+      <div class="jobs-field">
+        <span>Style sample — pick one whose tone to match (not its facts)</span>
+        <select id="draft-style-doc">
+          <option value="">(none)</option>
+        </select>
+      </div>
+
+      <details class="jobs-details">
+        <summary>Quick one-off upload (also saved to your library)</summary>
+        <label class="jobs-field">
+          <span>Resume (pdf / docx / txt)</span>
+          <input id="draft-resume" type="file" accept=".pdf,.docx,.txt,.md">
+        </label>
+        <label class="jobs-field">
+          <span>Style sample file</span>
+          <input id="draft-style" type="file" accept=".pdf,.docx,.txt,.md">
+        </label>
+      </details>
+
       <button class="jobs-btn" id="draft-generate" type="button">Generate draft</button>
       <div class="jobs-warnings" id="draft-warnings" hidden></div>
       <div class="jobs-output" id="draft-output" hidden>
@@ -85,6 +104,58 @@
           <button class="jobs-copy" id="draft-copy" type="button">copy</button>
         </div>
         <pre id="draft-text"></pre>
+      </div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tab-panel="profile">
+      <p class="jobs-hint">This is what Kyra has on file for autofill and drafting. Nothing here leaves your machine except into a form you asked her to fill.</p>
+
+      <div class="jobs-profile-grid">
+        <label class="jobs-field"><span>First name</span><input id="profile-first_name" type="text"></label>
+        <label class="jobs-field"><span>Last name</span><input id="profile-last_name" type="text"></label>
+        <label class="jobs-field"><span>Email</span><input id="profile-email" type="text"></label>
+        <label class="jobs-field"><span>Phone</span><input id="profile-phone" type="text"></label>
+        <label class="jobs-field"><span>Country</span><input id="profile-country" type="text"></label>
+        <label class="jobs-field"><span>Current company</span><input id="profile-current_company" type="text"></label>
+        <label class="jobs-field"><span>LinkedIn</span><input id="profile-linkedin_url" type="text" placeholder="https://linkedin.com/in/..."></label>
+        <label class="jobs-field"><span>GitHub</span><input id="profile-github_url" type="text" placeholder="https://github.com/..."></label>
+        <label class="jobs-field"><span>Portfolio</span><input id="profile-portfolio_url" type="text"></label>
+        <label class="jobs-field"><span>Twitter</span><input id="profile-twitter_url" type="text"></label>
+        <label class="jobs-field"><span>Preferred name</span><input id="profile-preferred_name" type="text"></label>
+        <label class="jobs-field"><span>Pronouns</span><input id="profile-pronouns" type="text"></label>
+      </div>
+
+      <details class="jobs-details">
+        <summary>Voluntary self-identification (EEO) — defaults to declining, edit only if you want real answers on file</summary>
+        <label class="jobs-field"><span>Gender identity</span><input id="profile-eeo_gender_identity" type="text"></label>
+        <label class="jobs-field"><span>Race/ethnicity</span><input id="profile-eeo_race_ethnicity" type="text"></label>
+        <label class="jobs-field"><span>Hispanic/Latino</span><input id="profile-eeo_hispanic_latino" type="text"></label>
+        <label class="jobs-field"><span>Veteran status</span><input id="profile-eeo_veteran_status" type="text"></label>
+        <label class="jobs-field"><span>Disability status</span><input id="profile-eeo_disability_status" type="text"></label>
+      </details>
+
+      <button class="jobs-btn" id="profile-save" type="button">Save profile</button>
+      <div class="jobs-warnings" id="profile-warnings" hidden></div>
+
+      <details class="jobs-details">
+        <summary>View raw record (transparency)</summary>
+        <pre class="jobs-raw" id="profile-raw"></pre>
+      </details>
+
+      <div class="jobs-panel-subhead">DOCUMENT LIBRARY</div>
+      <p class="jobs-hint">Resumes, style samples, and notes you've added — reused across every draft.</p>
+      <div class="jobs-doc-list" id="profile-doc-list"></div>
+
+      <div class="jobs-doc-add">
+        <input id="doc-label" type="text" placeholder="Label (e.g. Backend resume 2026)">
+        <select id="doc-kind">
+          <option value="resume">Resume</option>
+          <option value="style_sample">Style sample</option>
+          <option value="note">Note (e.g. summary of a past project)</option>
+        </select>
+        <textarea id="doc-text" rows="3" placeholder="Paste text directly (e.g. a project summary) — or attach a file below instead"></textarea>
+        <input id="doc-file" type="file" accept=".pdf,.docx,.txt,.md">
+        <button class="jobs-btn" id="doc-add" type="button">Add to library</button>
       </div>
     </section>
 
