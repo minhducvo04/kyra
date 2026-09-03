@@ -180,6 +180,27 @@ class DraftOut(BaseModel):
     warnings: list[str] = []
 
 
+def _get_or_add_document(
+    label: str, kind: str, text: str, source_filename: str | None = None, file_bytes: bytes | None = None
+):
+    """Avoids creating a duplicate library entry when the exact same
+    content was already saved - caught for real when the same resume
+    file was dropped into both the "Resume" and "Style sample file"
+    quick-upload slots in one draft request, silently creating two
+    redundant entries (one per slot) for the same document. Matching on
+    exact text, regardless of kind - if the content's already there as
+    a resume, re-saving it as a style sample too is (almost certainly)
+    not what was intended.
+    """
+    for existing in _job_documents.list():
+        if existing.text == text:
+            return existing, False  # False = reused, not newly created
+    return (
+        _job_documents.add(label=label, kind=kind, text=text, source_filename=source_filename, file_bytes=file_bytes),
+        True,
+    )
+
+
 def _extract_upload(upload: UploadFile | None) -> tuple[str, bytes | None, str | None]:
     """Returns (text, raw_bytes, warning). raw_bytes is what actually gets
     saved to disk for a resume (see JobDocumentStore.add(file_bytes=...)) -
@@ -235,11 +256,14 @@ def job_draft(
     if warn:
         warnings.append(warn)
     if resume_text:
-        saved = _job_documents.add(
+        saved, is_new = _get_or_add_document(
             label=resume.filename, kind="resume", text=resume_text, source_filename=resume.filename, file_bytes=resume_bytes
         )
         background_parts.append(f"[{saved.label}]\n{resume_text}")
-        warnings.append(f"saved '{saved.label}' to your document library for reuse")
+        if is_new:
+            warnings.append(f"saved '{saved.label}' to your document library (PROFILE tab → Document Library) for reuse")
+        else:
+            warnings.append(f"'{saved.label}' matches something already in your document library - reused it, not duplicated")
 
     background = "\n\n".join(background_parts)
     if not background:
@@ -256,12 +280,15 @@ def job_draft(
     if warn:
         warnings.append(warn)
     if style_upload_text:
-        saved = _job_documents.add(
+        saved, is_new = _get_or_add_document(
             label=style_sample.filename, kind="style_sample", text=style_upload_text,
             source_filename=style_sample.filename, file_bytes=style_upload_bytes,
         )
         style_text = style_text or style_upload_text
-        warnings.append(f"saved '{saved.label}' to your document library for reuse")
+        if is_new:
+            warnings.append(f"saved '{saved.label}' to your document library (PROFILE tab → Document Library) for reuse")
+        else:
+            warnings.append(f"'{saved.label}' matches something already in your document library - reused it, not duplicated")
 
     draft = draft_application_material(
         _draft_llm, material_type=material_type, job_context=job_context, background=background, style_sample=style_text
@@ -310,10 +337,12 @@ def add_job_document(
     if not body_text:
         return {"error": "no text or file content given"}
     try:
-        doc = _job_documents.add(label=label, kind=kind, text=body_text, source_filename=filename, file_bytes=file_bytes)
+        doc, is_new = _get_or_add_document(label=label, kind=kind, text=body_text, source_filename=filename, file_bytes=file_bytes)
     except ValueError as e:
         return {"error": str(e)}
-    return asdict(doc)
+    result = asdict(doc)
+    result["reused_existing"] = not is_new
+    return result
 
 
 @app.delete("/api/job/documents/{doc_id}")
