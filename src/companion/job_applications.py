@@ -36,13 +36,38 @@ DRAFT_PROMPT = """Draft a {material_type} tailored to this job, using only the b
 Write it directly - just the {material_type} text, no preamble, no "Here's a draft:" framing."""
 
 CRITIQUE_SYSTEM = "You edit text to remove things that make it read as obviously AI-generated, without changing its meaning or adding any new claims."
-CRITIQUE_PROMPT = """Review this draft for common signs of AI-generated writing and rewrite it to remove them, while keeping every factual claim exactly as given - don't add or invent anything.
+# Pattern list adapted from github.com/blader/humanizer (MIT license) - its
+# skill compiles 35 AI-writing markers from Wikipedia's WikiProject AI
+# Cleanup research. Reorganized/reworded here for job-application material
+# specifically, not copied verbatim, but the categories and the four-step
+# process (identify, preserve claims, match voice, sanity-check) are the
+# same methodology the repo documents.
+CRITIQUE_PROMPT = """Review this draft against the AI-writing patterns below and rewrite it to remove every one you find, while keeping every factual claim exactly as given - don't add, invent, or soften any name, number, date, or achievement.
 
-Signs to check for and fix:
-- Overused AI words/phrases: "delve", "boasts", "tapestry", "furthermore", "moreover", "in today's fast-paced world", "it's important to note", "I'm excited to", generic superlatives ("game-changing", "cutting-edge", "passionate")
-- Formulaic structure: rule-of-three lists, perfectly symmetric sentences, forced parallelism
-- Hedging/inflated language, vague claims that don't say anything specific
-- Overly polished, no natural variation in sentence length or rhythm
+Content patterns:
+- Inflated importance ("pivotal moment", "marks a turning point"), vague sourcing ("industry reports show"), name-dropping without substance
+- Sales language ("vibrant", "cutting-edge", "passionate") standing in for a specific detail
+
+Language and grammar patterns:
+- Overused AI words: "delve", "boasts", "tapestry", "showcase", "crucial", "landscape" used abstractly
+- Avoiding plain verbs: "serves as" instead of "is", "boasts" instead of "has"
+- "Not just X, but Y" constructions and clipped negations
+- Forced groups of three, synonym-cycling, or every sentence opening the same way
+- False "from X to Y" ranges implying a progression that wasn't actually described
+- Passive voice that hides who did the thing ("was responsible for delivering" instead of "delivered")
+- Excessive bold, em-dashes, or title-case headers where plain text would read naturally
+
+Chatbot/hedging patterns:
+- Chatbot closings ("I hope this helps", "let me know if you'd like more") - a cover letter/resume isn't a chat reply
+- Hedging ("could potentially", "might arguably"), filler ("in order to", "due to the fact that")
+- Generic upbeat endings that don't say anything specific to this role or company
+- Fake-candid openings ("Honestly," "The thing is,") or announcing the next point instead of just stating it
+
+Process:
+1. Identify which patterns above actually appear in the draft.
+2. Rewrite only what needs it - preserve every claim, keep specific details specific, don't flatten voice into something blander.
+3. Match a natural, direct written voice - varied sentence length, no forced symmetry, no over-polish.
+4. Before finishing, check yourself: does anything here still sound AI? Did any fact, name, number, or date change from the draft? If a fact changed, that's a bug - fix it back.
 
 === Draft ===
 {draft}
