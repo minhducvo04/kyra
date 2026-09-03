@@ -14,3 +14,4 @@ python-multipart>=0.0.9  # web UI voice upload (/api/voice)
 pypdf>=4.0.0     # book-reading pipeline (scripts/summarize_book.py) - PDF text extraction
 ebooklib>=0.18   # book-reading pipeline - EPUB text extraction
 sentence-transformers>=3.0.0  # memory retrieval embedding model (see docs/design.md)
+playwright>=1.47.0  # job application autofill (scripts/setup_playwright.py runs `playwright install chromium` once)

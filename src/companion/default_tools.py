@@ -6,6 +6,7 @@ was constructed three times with the same tool list typed out separately
 in each file.
 """
 from companion.job_applications import job_application_tools
+from companion.job_autofill import job_autofill_tools
 from companion.learning import learning_tools
 from companion.llm import AnthropicLLM
 from companion.memory_notes import memory_note_tools
@@ -33,6 +34,7 @@ def default_tool_registry(draft_backend: AnthropicLLM | None = None) -> ToolRegi
         reminder_tools()
         + learning_tools()
         + job_application_tools(llm=draft_backend)
+        + job_autofill_tools()
         + memory_note_tools()
         + [TechNewsTool(), ScienceFactsTool()]
     )
