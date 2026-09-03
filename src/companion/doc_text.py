@@ -31,7 +31,12 @@ def extract_text(filename: str, data: bytes) -> str:
         doc = Document(BytesIO(data))
         return "\n".join(p.text for p in doc.paragraphs).strip()
 
-    if suffix in ("txt", "md"):
+    if suffix in ("txt", "md", "tex"):
+        # .tex is already plain text - no parsing needed, and reading the
+        # LaTeX source directly sidesteps the PDF-extraction fidelity
+        # issues a compiled LaTeX PDF can have (dropped ligature
+        # characters, spurious spaces around superscripts like ordinal
+        # "th") - see job_applications.py's optimize_latex_resume.
         return data.decode("utf-8", errors="replace").strip()
 
-    raise UnsupportedDocumentType(f"unsupported file type: .{suffix or '?'} (supported: pdf, docx, txt, md)")
+    raise UnsupportedDocumentType(f"unsupported file type: .{suffix or '?'} (supported: pdf, docx, txt, md, tex)")

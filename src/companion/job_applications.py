@@ -347,6 +347,57 @@ def optimize_full_resume(llm: AnthropicLLM, original_resume: str, job_context: s
     return parse_resume_text(text)
 
 
+# --- LaTeX resume optimization: edits Duc's own .tex source directly and
+# hands back valid LaTeX for him to compile himself, rather than going
+# through resume_format.py's parser + resume_pdf.py's HTML/CSS render.
+# Built the same day as the PDF path, once real testing on Duc's actual
+# PDF surfaced genuine text-extraction fidelity issues on LaTeX-typeset
+# output (dropped underscores in inline code, spurious spaces around
+# ordinal superscripts like "27th") - editing the LaTeX source directly
+# sidesteps extraction loss entirely, since there's nothing to extract.
+LATEX_RESUME_SYSTEM = (
+    "You edit LaTeX resume source code. You preserve the document's structure, packages, commands, and "
+    "formatting exactly - you only edit the content inside it (wording, bullet text, emphasis/ordering). You "
+    "never invent a new achievement, number, date, title, or skill that isn't already in the original. Output "
+    "only valid, complete LaTeX source - no commentary, no markdown code fences, nothing before or after it."
+)
+
+LATEX_RESUME_PROMPT = """Edit this LaTeX resume's content to optimize it - reorder/emphasize what's most relevant if a \
+job is given below, tighten and strengthen bullet wording, use strong action verbs. Every fact, number, date, \
+title, and skill must trace back to the original - don't invent anything, even something plausible-sounding.
+
+Keep the LaTeX structure, packages, and commands exactly as given - only touch the content. Where you rewrite a \
+bullet, try to keep it roughly the same length as the original (not drastically longer or shorter) - this \
+document has a fixed layout, and a bullet that's much longer than before risks overflowing the template when \
+compiled. If a rewrite genuinely needs to be shorter or longer to stay accurate, that's fine - just don't pad \
+or over-compress purely to hit a length target.
+
+=== Job / role context (optional - if blank, optimize generally rather than invent a target) ===
+{job_context}
+
+=== Original LaTeX source (the only source of truth for facts and structure) ===
+{original_latex}
+
+Output the complete, edited LaTeX source now - nothing else."""
+
+
+def optimize_latex_resume(llm: AnthropicLLM, original_latex: str, job_context: str = "") -> str:
+    """Returns raw LaTeX text - Duc compiles it himself (Overleaf, local
+    pdflatex, whatever he already uses), so this never touches PDF
+    rendering at all. Raises ValueError if the response was cut off
+    (llm.TRUNCATION_MARKER) - same reasoning as optimize_full_resume:
+    never hand back a truncated document as if it were complete.
+    """
+    job_context = job_context.strip() or "(none given - optimize generally)"
+    text = llm.respond(
+        system=LATEX_RESUME_SYSTEM, history=[],
+        user_input=LATEX_RESUME_PROMPT.format(job_context=job_context, original_latex=original_latex),
+    )
+    if text.endswith(TRUNCATION_MARKER):
+        raise ValueError("the optimized LaTeX got cut off before finishing - try again, or shorten the original source")
+    return text.strip()
+
+
 class DraftApplicationMaterialTool(Tool):
     name = "draft_application_material"
     description = (

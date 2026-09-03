@@ -22,7 +22,15 @@ from companion.config import require_api_key
 from companion.conversation import ConversationManager
 from companion.default_tools import default_tool_registry
 from companion.doc_text import UnsupportedDocumentType, extract_text
-from companion.job_applications import VALID_STATUSES, JobApplicationStore, draft_application_material, optimize_full_resume
+from companion.github_profile import extract_username as extract_github_username
+from companion.github_profile import fetch_github_projects
+from companion.job_applications import (
+    VALID_STATUSES,
+    JobApplicationStore,
+    draft_application_material,
+    optimize_full_resume,
+    optimize_latex_resume,
+)
 from companion.job_autofill import GreenhouseAutofillEngine
 from companion.job_documents import JobDocumentStore
 from companion.learning import LearningStore
@@ -251,14 +259,34 @@ def _extract_upload(upload: UploadFile | None) -> tuple[str, bytes | None, str |
         return "", None, f"{upload.filename}: couldn't read file ({e})"
 
 
-def _full_resume_draft(
-    job_context: str, background_text: str, background_document_ids: str, resume: UploadFile | None
-) -> DraftOut:
-    warnings: list[str] = []
+def _fetch_github_context() -> tuple[str, list[str]]:
+    """Pulls real public repo data from Duc's GitHub, per his profile's
+    github_url - never invented, and only fetched when explicitly asked
+    for on a given draft (a checkbox, not automatic every time), since
+    it's a real network call. Returns (text, warnings); text is "" if
+    nothing usable came back, with a warning explaining why.
+    """
+    profile = load_profile()
+    if not profile.github_url:
+        return "", ["GitHub inclusion requested but no github_url is set in PROFILE"]
+    username = extract_github_username(profile.github_url)
+    if not username:
+        return "", [f"couldn't parse a GitHub username out of {profile.github_url!r}"]
+    text, warnings = fetch_github_projects(username)
+    if text:
+        return f"[Duc's real public GitHub projects, from github.com/{username} - use if genuinely relevant, don't force it]\n{text}", warnings
+    return "", warnings
 
-    # Exactly one clean source of truth, in priority order - a one-off
-    # upload (also saved to the library, same dedup as the other path),
-    # then a single selected resume-kind document, then pasted text.
+
+def _pick_resume_source(
+    background_text: str, background_document_ids: str, resume: UploadFile | None
+) -> tuple[str, list[str]]:
+    """Shared by the full-resume and LaTeX-resume paths - exactly one
+    clean source of truth, in priority order: a one-off upload (also
+    saved to the library, same dedup as the paragraph-drafting path),
+    then a single selected resume-kind document, then pasted text.
+    """
+    warnings: list[str] = []
     resume_text, resume_bytes, warn = _extract_upload(resume)
     if warn:
         warnings.append(warn)
@@ -268,27 +296,42 @@ def _full_resume_draft(
         )
         if is_new:
             warnings.append(f"saved '{saved.label}' to your document library (PROFILE tab → Document Library) for reuse")
-    else:
-        doc_ids = [i.strip() for i in background_document_ids.split(",") if i.strip()]
-        picked = _job_documents.get_many(doc_ids)
-        resumes = [d for d in picked if d.kind == "resume"]
-        if resumes:
-            if len(resumes) > 1:
-                warnings.append(f"multiple resumes selected - using '{resumes[0].label}', the others were ignored")
-            resume_text = resumes[0].text
-        elif background_text.strip():
-            resume_text = background_text.strip()
+        return resume_text, warnings
+
+    doc_ids = [i.strip() for i in background_document_ids.split(",") if i.strip()]
+    picked = _job_documents.get_many(doc_ids)
+    resumes = [d for d in picked if d.kind == "resume"]
+    if resumes:
+        if len(resumes) > 1:
+            warnings.append(f"multiple resumes selected - using '{resumes[0].label}', the others were ignored")
+        return resumes[0].text, warnings
+    if background_text.strip():
+        return background_text.strip(), warnings
+    return "", warnings
+
+
+def _full_resume_draft(
+    job_context: str, background_text: str, background_document_ids: str, resume: UploadFile | None,
+    include_github: bool = False,
+) -> DraftOut:
+    resume_text, warnings = _pick_resume_source(background_text, background_document_ids, resume)
 
     if not resume_text:
         return DraftOut(
             draft="", background_chars=0, style_chars=0,
-            warnings=["nothing to optimize - upload a resume, pick one from your document library, or paste its text in Extra background"],
+            warnings=warnings + ["nothing to optimize - upload a resume, pick one from your document library, or paste its text in Extra background"],
         )
+
+    if include_github:
+        github_text, github_warnings = _fetch_github_context()
+        warnings.extend(github_warnings)
+        if github_text:
+            resume_text = f"{resume_text}\n\n{github_text}"
 
     try:
         doc = optimize_full_resume(_resume_llm, resume_text, job_context)
     except ResumeFormatError as e:
-        return DraftOut(draft="", background_chars=len(resume_text), style_chars=0, warnings=[str(e)])
+        return DraftOut(draft="", background_chars=len(resume_text), style_chars=0, warnings=warnings + [str(e)])
 
     pdf_path = render_pdf(doc)
     pdf_filename = Path(pdf_path).name
@@ -297,6 +340,46 @@ def _full_resume_draft(
         draft=preview, background_chars=len(resume_text), style_chars=0,
         warnings=warnings, pdf_url=f"/api/job/resume-pdf/{pdf_filename}",
     )
+
+
+def _latex_resume_draft(
+    job_context: str, background_text: str, background_document_ids: str, resume: UploadFile | None,
+    include_github: bool = False,
+) -> DraftOut:
+    """Edits Duc's own LaTeX source directly and hands the text back -
+    no PDF rendering here at all, he compiles it himself. Exists
+    because real testing on his actual PDF surfaced genuine text-
+    extraction fidelity issues (dropped underscores, spurious spaces
+    around ordinal superscripts) that are inherent to reading a
+    compiled LaTeX PDF back out as text - editing the source directly
+    sidesteps that class of problem entirely.
+    """
+    latex_text, warnings = _pick_resume_source(background_text, background_document_ids, resume)
+
+    if not latex_text:
+        return DraftOut(
+            draft="", background_chars=0, style_chars=0,
+            warnings=warnings + ["nothing to optimize - upload your .tex file, pick one from your document library, or paste it in Extra background"],
+        )
+    if "\\begin{document}" not in latex_text and "\\documentclass" not in latex_text:
+        warnings.append("this doesn't look like LaTeX source (no \\documentclass/\\begin{document} found) - results may be off")
+
+    extra_context = ""
+    if include_github:
+        github_text, github_warnings = _fetch_github_context()
+        warnings.extend(github_warnings)
+        if github_text:
+            extra_context = (
+                "\n\n=== Additional real project data (context only - use if relevant, don't paste this "
+                f"section into the LaTeX output) ===\n{github_text}"
+            )
+
+    try:
+        optimized = optimize_latex_resume(_resume_llm, latex_text + extra_context, job_context)
+    except ValueError as e:
+        return DraftOut(draft="", background_chars=len(latex_text), style_chars=0, warnings=warnings + [str(e)])
+
+    return DraftOut(draft=optimized, background_chars=len(latex_text), style_chars=0, warnings=warnings)
 
 
 @app.get("/api/job/resume-pdf/{filename}")
@@ -321,6 +404,7 @@ def job_draft(
     style_document_id: str = Form(""),
     resume: UploadFile | None = File(None),
     style_sample: UploadFile | None = File(None),
+    include_github: bool = Form(False),
 ) -> DraftOut:
     """Pulls background from, in order: anything Kyra already durably
     knows about Duc (memory_notes.py - so a draft benefits from facts
@@ -337,7 +421,11 @@ def job_draft(
     """
     if material_type == "full_resume":
         return _full_resume_draft(
-            job_context, background_text, background_document_ids, resume
+            job_context, background_text, background_document_ids, resume, include_github
+        )
+    if material_type == "latex_resume":
+        return _latex_resume_draft(
+            job_context, background_text, background_document_ids, resume, include_github
         )
 
     warnings: list[str] = []
@@ -346,6 +434,12 @@ def job_draft(
     notes_block = _memory_notes.render()
     if notes_block and notes_block != "(no saved notes yet)":
         background_parts.append(f"[What Kyra already knows about Duc]\n{notes_block}")
+
+    if include_github:
+        github_text, github_warnings = _fetch_github_context()
+        warnings.extend(github_warnings)
+        if github_text:
+            background_parts.append(github_text)
 
     doc_ids = [i.strip() for i in background_document_ids.split(",") if i.strip()]
     for doc in _job_documents.get_many(doc_ids):

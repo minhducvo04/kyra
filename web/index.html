@@ -60,6 +60,7 @@
         <select id="draft-material-type">
           <option value="cover_letter">Cover letter</option>
           <option value="full_resume">Full resume, optimized (PDF)</option>
+          <option value="latex_resume">Full resume, optimized (edit my .tex)</option>
           <option value="resume_bullet">Single resume bullet</option>
           <option value="other">Other</option>
         </select>
@@ -86,15 +87,20 @@
         </select>
       </div>
 
+      <label class="jobs-field" style="flex-direction: row; align-items: center; gap: 0.5rem;">
+        <input id="draft-include-github" type="checkbox" style="width: auto;">
+        <span>Include my real GitHub projects (fetches live from your public repos, set GitHub link in PROFILE)</span>
+      </label>
+
       <details class="jobs-details">
         <summary>Quick one-off upload (also saved to your library)</summary>
         <label class="jobs-field">
-          <span>Resume (pdf / docx / txt)</span>
-          <input id="draft-resume" type="file" accept=".pdf,.docx,.txt,.md">
+          <span>Resume (pdf / docx / txt / tex)</span>
+          <input id="draft-resume" type="file" accept=".pdf,.docx,.txt,.md,.tex">
         </label>
         <label class="jobs-field">
           <span>Style sample file</span>
-          <input id="draft-style" type="file" accept=".pdf,.docx,.txt,.md">
+          <input id="draft-style" type="file" accept=".pdf,.docx,.txt,.md,.tex">
         </label>
       </details>
 
@@ -166,7 +172,7 @@
           <option value="note">Note (e.g. summary of a past project)</option>
         </select>
         <textarea id="doc-text" rows="3" placeholder="Paste text directly (e.g. a project summary) — or attach a file below instead"></textarea>
-        <input id="doc-file" type="file" accept=".pdf,.docx,.txt,.md">
+        <input id="doc-file" type="file" accept=".pdf,.docx,.txt,.md,.tex">
         <button class="jobs-btn" id="doc-add" type="button">Add to library</button>
       </div>
     </section>

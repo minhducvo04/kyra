@@ -448,6 +448,7 @@ draftGenerateBtn.addEventListener("click", async () => {
     form.append("background_document_ids", checkedDocIds.join(","));
     const styleDocSelect = document.getElementById("draft-style-doc");
     form.append("style_document_id", styleDocSelect.value);
+    form.append("include_github", document.getElementById("draft-include-github").checked);
     if (draftResume.files[0]) form.append("resume", draftResume.files[0]);
     if (draftStyle.files[0]) form.append("style_sample", draftStyle.files[0]);
 
