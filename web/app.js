@@ -686,7 +686,7 @@ async function loadDraftDocPickers() {
 
 const PROFILE_FIELDS = [
   "first_name", "last_name", "email", "phone", "country", "current_company",
-  "linkedin_url", "github_url", "portfolio_url", "twitter_url", "preferred_name", "pronouns",
+  "linkedin_url", "github_url", "portfolio_url", "twitter_url", "preferred_name", "pronouns", "resume_path",
   "eeo_gender_identity", "eeo_race_ethnicity", "eeo_hispanic_latino", "eeo_veteran_status", "eeo_disability_status",
 ];
 
@@ -702,7 +702,34 @@ async function loadProfile() {
   } catch (err) {
     addLine("error", `couldn't load profile — ${err.message}`);
   }
+  await loadResumePicker();
 }
+
+async function loadResumePicker() {
+  const picker = document.getElementById("profile-resume-picker");
+  const currentPath = document.getElementById("profile-resume_path").value;
+  try {
+    const docs = await fetchDocuments();
+    const resumesWithFile = docs.filter((d) => d.kind === "resume" && d.file_path);
+    picker.innerHTML = '<option value="">Pick a resume from your document library…</option>';
+    for (const doc of resumesWithFile) {
+      const opt = document.createElement("option");
+      opt.value = doc.file_path;
+      opt.textContent = doc.label;
+      opt.selected = doc.file_path === currentPath;
+      picker.appendChild(opt);
+    }
+    if (resumesWithFile.length === 0) {
+      picker.innerHTML += '<option value="" disabled>(no uploaded resume files yet — upload one below or in DRAFT)</option>';
+    }
+  } catch {
+    /* document library not reachable - the manual text field still works */
+  }
+}
+
+document.getElementById("profile-resume-picker").addEventListener("change", (e) => {
+  if (e.target.value) document.getElementById("profile-resume_path").value = e.target.value;
+});
 
 const profileSaveBtn = document.getElementById("profile-save");
 const profileWarnings = document.getElementById("profile-warnings");
@@ -814,6 +841,7 @@ docAddBtn.addEventListener("click", async () => {
       document.getElementById("doc-text").value = "";
       fileInput.value = "";
       await loadDocumentList();
+      await loadResumePicker(); // a newly-uploaded resume file should show up here immediately
     }
   } catch (err) {
     addLine("error", `couldn't add document — ${err.message}`);

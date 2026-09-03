@@ -180,20 +180,24 @@ class DraftOut(BaseModel):
     warnings: list[str] = []
 
 
-def _extract_upload(upload: UploadFile | None) -> tuple[str, str | None]:
-    """Returns (text, warning). A warning (not an exception) on an
-    unsupported/unreadable file, so one bad upload doesn't 500 the whole
-    request - the draft can still proceed on whatever else was given.
+def _extract_upload(upload: UploadFile | None) -> tuple[str, bytes | None, str | None]:
+    """Returns (text, raw_bytes, warning). raw_bytes is what actually gets
+    saved to disk for a resume (see JobDocumentStore.add(file_bytes=...)) -
+    job_autofill.py needs a real file to attach to a browser file input,
+    extracted text alone can't be uploaded to a form. A warning (not an
+    exception) on an unsupported/unreadable file, so one bad upload
+    doesn't 500 the whole request - the draft can still proceed on
+    whatever else was given.
     """
     if upload is None or not upload.filename:
-        return "", None
+        return "", None, None
     try:
         data = upload.file.read()
-        return extract_text(upload.filename, data), None
+        return extract_text(upload.filename, data), data, None
     except UnsupportedDocumentType as e:
-        return "", f"{upload.filename}: {e}"
+        return "", None, f"{upload.filename}: {e}"
     except Exception as e:
-        return "", f"{upload.filename}: couldn't read file ({e})"
+        return "", None, f"{upload.filename}: couldn't read file ({e})"
 
 
 @app.post("/api/job/draft", response_model=DraftOut)
@@ -227,11 +231,13 @@ def job_draft(
     if background_text.strip():
         background_parts.append(background_text.strip())
 
-    resume_text, warn = _extract_upload(resume)
+    resume_text, resume_bytes, warn = _extract_upload(resume)
     if warn:
         warnings.append(warn)
     if resume_text:
-        saved = _job_documents.add(label=resume.filename, kind="resume", text=resume_text, source_filename=resume.filename)
+        saved = _job_documents.add(
+            label=resume.filename, kind="resume", text=resume_text, source_filename=resume.filename, file_bytes=resume_bytes
+        )
         background_parts.append(f"[{saved.label}]\n{resume_text}")
         warnings.append(f"saved '{saved.label}' to your document library for reuse")
 
@@ -246,12 +252,13 @@ def job_draft(
             style_text = docs[0].text
         else:
             warnings.append(f"style document {style_document_id!r} not found")
-    style_upload_text, warn = _extract_upload(style_sample)
+    style_upload_text, style_upload_bytes, warn = _extract_upload(style_sample)
     if warn:
         warnings.append(warn)
     if style_upload_text:
         saved = _job_documents.add(
-            label=style_sample.filename, kind="style_sample", text=style_upload_text, source_filename=style_sample.filename
+            label=style_sample.filename, kind="style_sample", text=style_upload_text,
+            source_filename=style_sample.filename, file_bytes=style_upload_bytes,
         )
         style_text = style_text or style_upload_text
         warnings.append(f"saved '{saved.label}' to your document library for reuse")
@@ -272,6 +279,7 @@ class JobDocumentOut(BaseModel):
     text: str
     source_filename: str | None
     added_at: str
+    file_path: str | None = None
 
 
 @app.get("/api/job/documents")
@@ -292,16 +300,17 @@ def add_job_document(
     """
     body_text = text.strip()
     filename = None
+    file_bytes = None
     if file is not None and file.filename:
         filename = file.filename
-        extracted, warn = _extract_upload(file)
+        extracted, file_bytes, warn = _extract_upload(file)
         if warn:
             return {"error": warn}
         body_text = extracted
     if not body_text:
         return {"error": "no text or file content given"}
     try:
-        doc = _job_documents.add(label=label, kind=kind, text=body_text, source_filename=filename)
+        doc = _job_documents.add(label=label, kind=kind, text=body_text, source_filename=filename, file_bytes=file_bytes)
     except ValueError as e:
         return {"error": str(e)}
     return asdict(doc)

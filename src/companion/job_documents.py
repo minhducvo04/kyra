@@ -38,6 +38,7 @@ class JobDocument:
     text: str
     source_filename: str | None
     added_at: str
+    file_path: str | None = None  # set only when the original file bytes were kept (see add(file_bytes=...))
 
 
 class JobDocumentStore:
@@ -45,28 +46,56 @@ class JobDocumentStore:
         self._dir = Path(dir_path)
         self._dir.mkdir(parents=True, exist_ok=True)
         self._index_path = self._dir / INDEX_NAME
+        self._files_dir = self._dir / "files"
 
     def _read_all(self) -> list[dict]:
         if not self._index_path.exists():
             return []
-        return json.loads(self._index_path.read_text(encoding="utf-8"))
+        docs = json.loads(self._index_path.read_text(encoding="utf-8"))
+        for d in docs:
+            d.setdefault("file_path", None)  # tolerate records saved before this field existed
+        return docs
 
     def _write_all(self, docs: list[dict]) -> None:
         self._index_path.write_text(json.dumps(docs, indent=2), encoding="utf-8")
 
-    def add(self, label: str, kind: str, text: str, source_filename: str | None = None) -> JobDocument:
+    def add(
+        self,
+        label: str,
+        kind: str,
+        text: str,
+        source_filename: str | None = None,
+        file_bytes: bytes | None = None,
+    ) -> JobDocument:
+        """file_bytes: the original uploaded file, kept on disk alongside its
+        extracted text - needed for resumes specifically, since job_autofill.py
+        attaches an actual file to a browser file input (extracted text alone
+        can't be uploaded to a form). Optional because pasted-text documents
+        (notes, or style samples typed directly) have no original file.
+        """
         if kind not in VALID_KINDS:
             raise ValueError(f"kind must be one of {sorted(VALID_KINDS)}, got {kind!r}")
         text = text.strip()
         if not text:
             raise ValueError("document text can't be empty")
+        doc_id = uuid.uuid4().hex[:12]
+
+        file_path = None
+        if file_bytes:
+            suffix = Path(source_filename).suffix if source_filename else ""
+            self._files_dir.mkdir(parents=True, exist_ok=True)
+            saved_path = self._files_dir / f"{doc_id}{suffix}"
+            saved_path.write_bytes(file_bytes)
+            file_path = str(saved_path)
+
         doc = JobDocument(
-            id=uuid.uuid4().hex[:12],
+            id=doc_id,
             label=label.strip() or (source_filename or "untitled"),
             kind=kind,
             text=text,
             source_filename=source_filename,
             added_at=datetime.now().astimezone().isoformat(),
+            file_path=file_path,
         )
         docs = self._read_all()
         docs.append(asdict(doc))
@@ -82,8 +111,12 @@ class JobDocumentStore:
 
     def delete(self, doc_id: str) -> bool:
         docs = self._read_all()
+        removed = [d for d in docs if d["id"] == doc_id]
         remaining = [d for d in docs if d["id"] != doc_id]
-        if len(remaining) == len(docs):
+        if not removed:
             return False
         self._write_all(remaining)
+        file_path = removed[0].get("file_path")
+        if file_path:
+            Path(file_path).unlink(missing_ok=True)  # best-effort - don't fail the delete over a missing file
         return True

@@ -126,6 +126,15 @@
         <label class="jobs-field"><span>Pronouns</span><input id="profile-pronouns" type="text"></label>
       </div>
 
+      <label class="jobs-field">
+        <span>Resume file for autofill — the actual file Kyra attaches when filling out a job form</span>
+        <select id="profile-resume-picker">
+          <option value="">Pick a resume from your document library…</option>
+        </select>
+        <input id="profile-resume_path" type="text" placeholder="Or paste an absolute file path directly" style="margin-top: 0.35rem;">
+        <span class="jobs-hint">Upload a resume in the DRAFT or below in DOCUMENT LIBRARY first, then pick it here — that's the easiest way to fill this in.</span>
+      </label>
+
       <details class="jobs-details">
         <summary>Voluntary self-identification (EEO) — defaults to declining, edit only if you want real answers on file</summary>
         <label class="jobs-field"><span>Gender identity</span><input id="profile-eeo_gender_identity" type="text"></label>
