@@ -15,7 +15,6 @@ Two real bugs found and fixed while building this, not just theoretical risks:
 ## Queued for later
 
 - ~~Router/agent-specialist model benchmark~~ — **done, 2026-09-02, see `docs/router-model-benchmark.md`.** Headline: `Llama-3.2-3B` stays the classifier default (96.6% accuracy after a real prompt-bug fix this benchmark caught), and Qwen2.5-7B was flawless as a local tool-caller on an 11-case suite - promising but not yet enough to move the Agent Specialist role off Claude (small suite, needs harder ambiguous/multi-tool cases first).
-- **Job Application Auto scoping** — tracker vs. draft assistant vs. both, still needs Duc's pick (see job #4 below). Full auto-submission stays out of scope regardless.
 - **Real subtask decomposition/execution** — today "complex" input just biases routing toward Claude in one call; actually splitting into subtasks and running them (possibly across multiple tool/model calls) was scoped out as a separate, bigger feature.
 - **Background/threaded turns** — deferred per the effort estimate given earlier (text/web version: hours; voice version: days, mostly UX judgment, not code).
 
@@ -26,7 +25,7 @@ Two real bugs found and fixed while building this, not just theoretical risks:
 | 1 | Work coordination / Claude Code handoff | Claude | Building tonight (draft-only, no execution) |
 | 2 | Reminder + Planner | Local | Building tonight |
 | 3 | Normal talk (casual chat) | Local | Building tonight — memory recall upgrade |
-| 4 | Job Application Auto | Claude (drafting only) | Hard boundary: no auto-submission, ever. Tracker/draft scoping needs Duc's pick. |
+| 4 | Job Application Auto | Claude (drafting only) | Built (2026-09-03) — tracker + two-pass draft assistant, both. Hard boundary holds: no auto-submission, ever. |
 | 5 | Daily Tech News | Local | Building tonight — RSS-based, not scraped |
 | 6 | Quick question | Router, per-question | No build needed — already works via `chat.py`/`voice_chat.py` |
 | 7 | Learning reels / book summaries | Claude | Built (2026-09-02) — spaced-repetition review loop |
@@ -44,8 +43,14 @@ Local is exactly the case the benchmark validated as "good enough" — the gap t
 - Add recency weighting: `score = 0.7·similarity + 0.3·recency_decay` — casual chat leans on "what we just talked about" more than pure semantic match.
 - Later: periodically summarize old sessions into compact profile facts instead of storing every raw exchange forever.
 
-### 4. Job Application Auto
-**Hard boundary, not a preference**: filling in and submitting real application forms is off-limits to automate. In scope: an application tracker (company/role/link/status/notes, with follow-up nudges) and/or a draft assistant (paste a posting, Kyra drafts a tailored paragraph from stored background, Duc reviews and submits himself). Needs Duc's pick on which (or both) before building.
+### 4. Job Application Auto — built, wired in, verified (2026-09-03)
+**Hard boundary, not a preference, and it still holds**: nothing in `src/companion/job_applications.py` fills in or submits a real application form — the tracker only logs status Duc reports, and the draft tool produces text for Duc to review and use himself. Duc's answer to the tracker-vs-draft scoping question was **both**.
+
+- **Tracker** (`JobApplicationStore`, SQLite): `add_job_application`, `list_job_applications` (optional status filter), `update_job_application_status` (applied/interviewing/offer/rejected/withdrawn).
+- **Draft assistant** (`draft_application_material`): two-pass generation — draft, then a separate critique-and-rewrite pass checking the result against known AI-writing tells (overused words like "delve"/"boasts", rule-of-three lists, forced parallelism, hedging), the same core technique as [github.com/blader/humanizer](https://github.com/blader/humanizer), which Duc surfaced from his own research into the humanizing approach. Never invents facts — the critique pass is bound by the same rule as the draft pass: a name, number, date, or claim has to come from what Duc actually gave it.
+- Wired into `default_tool_registry()` (`src/companion/default_tools.py`) with a dedicated `AnthropicLLM` instance at `max_tokens=1500` for drafting — the same tool-calling token-budget lesson from the router build (job #1 above) applies here too: a cover letter draft plus a critique pass needs real room, not the 500-token chat default.
+- `router.py`'s `CLASSIFIER_PROMPT` updated with few-shot examples for all four tools, replacing the now-stale "draft a cover letter → text/claude, no matching tool" example from before this tool existed. Re-tested against a mixed batch per the standing rule — all 9 job-application cases (add/list/update-status/draft) classify correctly, no regression on the existing suite.
+- Verified with real calls: CRUD tested end-to-end (including invalid-status and invalid-id error handling), and the draft tool tested with a real Claude call producing a natural, non-hallucinated cover letter for a fictional job posting using Duc's actual project background.
 
 ### 5. Daily Tech News
 Not scraping NYTimes — fragile, ToS-risk, paywalled. RSS instead: NYT Technology RSS (official, free), Hacker News (official API), TechCrunch/Ars Technica/The Verge RSS. A `NewsTool` pulls, dedupes, and Kyra summarizes the top N into a spoken-friendly briefing. On-demand tonight; scheduled daily push bundles with the reminders scheduler work later.
