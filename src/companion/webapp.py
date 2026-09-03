@@ -25,12 +25,16 @@ from companion.doc_text import UnsupportedDocumentType, extract_text
 from companion.job_applications import VALID_STATUSES, JobApplicationStore, draft_application_material
 from companion.job_autofill import GreenhouseAutofillEngine
 from companion.job_documents import JobDocumentStore
+from companion.learning import LearningStore
 from companion.llm import AnthropicLLM, LazyBackends, build_llm
 from companion.memory import ChromaMemoryStore
 from companion.memory_notes import MarkdownMemoryNotesStore
+from companion.news import TechNewsTool
 from companion.persona import KYRA
 from companion.profile import load_profile, save_profile
+from companion.reminders import RemindersStore
 from companion.router import TurnRouter, route_and_answer_verbose
+from companion.science import ScienceFactsTool
 from companion.voice import FasterWhisperSTT, KokoroTTS, decode_uploaded_audio, encode_wav_bytes
 
 WEB_DIR = Path(__file__).resolve().parent.parent.parent / "web"
@@ -61,6 +65,15 @@ _draft_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=2500)
 _autofill_engine = GreenhouseAutofillEngine()
 _job_documents = JobDocumentStore()
 _memory_notes = MarkdownMemoryNotesStore()
+
+# TOOLS panel - reminders/news/science/learning were already built and
+# working through chat, just never given their own UI surface. Same
+# direct-endpoint pattern as the JOBS panel: a button already knows what
+# it wants, no need to round-trip through the classifier.
+_reminders_store = RemindersStore()
+_learning_store = LearningStore()
+_news_tool = TechNewsTool()
+_science_tool = ScienceFactsTool()
 
 
 class ChatIn(BaseModel):
@@ -408,3 +421,74 @@ def job_autofill(body: AutofillIn) -> dict:
         "skipped": [asdict(s) for s in report.skipped],
         "summary_path": report.summary_path,
     }
+
+
+# ---------------- TOOLS panel ----------------
+# reminders/news/science/learning - built earlier, only ever reachable
+# through typed/spoken chat until now. Same direct-endpoint pattern as
+# JOBS: a UI button already knows what it wants.
+
+
+@app.get("/api/reminders")
+def list_reminders(include_done: bool = False) -> dict:
+    return {"reminders": [asdict(r) for r in _reminders_store.list(include_done)]}
+
+
+class AddReminderIn(BaseModel):
+    text: str
+    due_at: str | None = None
+
+
+@app.post("/api/reminders")
+def add_reminder(body: AddReminderIn) -> dict:
+    return asdict(_reminders_store.add(body.text, body.due_at))
+
+
+@app.post("/api/reminders/{reminder_id}/complete")
+def complete_reminder(reminder_id: int) -> dict:
+    return {"ok": _reminders_store.complete(reminder_id)}
+
+
+class SnoozeReminderIn(BaseModel):
+    due_at: str
+
+
+@app.post("/api/reminders/{reminder_id}/snooze")
+def snooze_reminder(reminder_id: int, body: SnoozeReminderIn) -> dict:
+    return {"ok": _reminders_store.snooze(reminder_id, body.due_at)}
+
+
+@app.get("/api/news")
+def get_news(per_source: int = 3) -> dict:
+    return _news_tool.run(per_source=per_source)
+
+
+@app.get("/api/science")
+def get_science(per_source: int = 2) -> dict:
+    return _science_tool.run(per_source=per_source)
+
+
+@app.get("/api/learning/due")
+def learning_due() -> dict:
+    return {"due": [asdict(i) for i in _learning_store.due()]}
+
+
+class AddLearningItemIn(BaseModel):
+    topic: str
+    summary: str
+    key_takeaway: str
+
+
+@app.post("/api/learning")
+def add_learning_item(body: AddLearningItemIn) -> dict:
+    return asdict(_learning_store.add(body.topic, body.summary, body.key_takeaway))
+
+
+class MarkReviewedIn(BaseModel):
+    remembered: bool
+
+
+@app.post("/api/learning/{item_id}/review")
+def mark_learning_reviewed(item_id: int, body: MarkReviewedIn) -> dict:
+    result = _learning_store.mark_reviewed(item_id, body.remembered)
+    return result if result else {"error": f"no learning item with id {item_id}"}

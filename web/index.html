@@ -32,6 +32,7 @@
           <span class="dot"></span>LOCAL
         </button>
       </div>
+      <button class="jobs-toggle" id="tools-toggle" type="button">TOOLS</button>
       <button class="jobs-toggle" id="jobs-toggle" type="button">JOBS</button>
       <div class="status">
         <span class="status-dot"></span>
@@ -179,6 +180,57 @@
       <div class="jobs-output" id="autofill-output" hidden>
         <div class="jobs-output-header"><span>RESULT</span></div>
         <div id="autofill-result"></div>
+      </div>
+    </section>
+  </aside>
+
+  <aside class="jobs-panel" id="tools-panel" aria-hidden="true">
+    <div class="jobs-panel-header">
+      <span>TOOLS</span>
+      <button id="tools-close" type="button" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="jobs-tabs" role="tablist">
+      <button class="jobs-tab is-active" data-tools-tab="reminders" type="button">REMINDERS</button>
+      <button class="jobs-tab" data-tools-tab="news" type="button">NEWS</button>
+      <button class="jobs-tab" data-tools-tab="science" type="button">SCIENCE</button>
+      <button class="jobs-tab" data-tools-tab="learning" type="button">LEARNING</button>
+    </div>
+
+    <section class="jobs-tab-panel is-active" data-tools-tab-panel="reminders">
+      <div class="jobs-tracker-add">
+        <input id="reminder-text" type="text" placeholder="Remind me to...">
+        <input id="reminder-due" type="datetime-local">
+        <button class="jobs-btn" id="reminder-add" type="button">Add</button>
+      </div>
+      <label class="jobs-field" style="flex-direction: row; align-items: center; gap: 0.5rem;">
+        <input id="reminder-show-done" type="checkbox" style="width: auto;">
+        <span>show completed</span>
+      </label>
+      <div class="jobs-tracker-list" id="reminder-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tools-tab-panel="news">
+      <button class="jobs-btn" id="news-fetch" type="button">Fetch tech news</button>
+      <div class="jobs-feed-list" id="news-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tools-tab-panel="science">
+      <button class="jobs-btn" id="science-fetch" type="button">Fetch science facts</button>
+      <div class="jobs-feed-list" id="science-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tools-tab-panel="learning">
+      <div class="jobs-panel-subhead" style="border-top: none; padding-top: 0;">DUE FOR REVIEW</div>
+      <button class="jobs-btn" id="learning-refresh" type="button">Check due reviews</button>
+      <div class="jobs-tracker-list" id="learning-due-list"></div>
+
+      <div class="jobs-panel-subhead">ADD AN ITEM</div>
+      <div class="jobs-doc-add">
+        <input id="learning-topic" type="text" placeholder="Topic (e.g. CAP theorem)">
+        <textarea id="learning-summary" rows="3" placeholder="Summary"></textarea>
+        <input id="learning-takeaway" type="text" placeholder="Key takeaway">
+        <button class="jobs-btn" id="learning-add" type="button">Save for spaced repetition</button>
       </div>
     </section>
   </aside>

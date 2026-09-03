@@ -32,6 +32,7 @@ body[data-backend="auto"] {
 html, body {
   height: 100%;
   margin: 0;
+  overflow-x: hidden;
   background: var(--void);
   color: var(--text);
 }
@@ -560,6 +561,8 @@ body {
 
 @media (max-width: 560px) {
   .wordmark-sub { display: none; }
+  .header-controls { gap: 0.5rem; }
+  .jobs-toggle { padding: 0.5rem 0.55rem; font-size: 0.58rem; }
   .core-wrap { width: min(26vh, 160px); height: min(26vh, 160px); }
   .line { max-width: 100%; }
   .line-tag { width: 3.4rem; }
@@ -904,6 +907,46 @@ body {
   border-radius: 2px;
   padding: 0.45rem 0.6rem;
 }
+
+.jobs-feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.jobs-feed-item {
+  border: 1px solid var(--grid);
+  border-radius: 2px;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.75rem;
+}
+.jobs-feed-item-source {
+  color: var(--accent);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.jobs-feed-item-title { color: var(--text); margin: 0.2rem 0; }
+.jobs-feed-item a { color: var(--text); text-decoration: none; }
+.jobs-feed-item a:hover { color: var(--accent); text-decoration: underline; }
+.jobs-feed-item-summary { color: var(--text-faint); font-size: 0.7rem; }
+
+.jobs-reminder-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+.jobs-reminder-actions button {
+  appearance: none;
+  border: 1px solid var(--grid);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.62rem;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.jobs-reminder-actions button:hover { color: var(--accent); border-color: var(--accent-dim); }
+.jobs-reminder-done { text-decoration: line-through; color: var(--text-faint) !important; }
 
 @media (max-width: 560px) {
   .jobs-panel { width: 100vw; }

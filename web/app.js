@@ -822,3 +822,284 @@ docAddBtn.addEventListener("click", async () => {
     docAddBtn.textContent = "Add to library";
   }
 });
+
+/* ---------------- tools panel ---------------- */
+
+const toolsToggle = document.getElementById("tools-toggle");
+const toolsPanel = document.getElementById("tools-panel");
+const toolsClose = document.getElementById("tools-close");
+
+function openToolsPanel() {
+  toolsPanel.classList.add("is-open");
+  toolsPanel.setAttribute("aria-hidden", "false");
+  toolsToggle.classList.add("is-active");
+  const activeTab = document.querySelector("#tools-panel .jobs-tab.is-active");
+  const loaders = { reminders: loadReminders, learning: loadLearningDue };
+  if (activeTab && loaders[activeTab.dataset.toolsTab]) loaders[activeTab.dataset.toolsTab]();
+}
+function closeToolsPanel() {
+  toolsPanel.classList.remove("is-open");
+  toolsPanel.setAttribute("aria-hidden", "true");
+  toolsToggle.classList.remove("is-active");
+}
+toolsToggle.addEventListener("click", () => {
+  toolsPanel.classList.contains("is-open") ? closeToolsPanel() : openToolsPanel();
+});
+toolsClose.addEventListener("click", closeToolsPanel);
+
+document.querySelectorAll("#tools-panel .jobs-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll("#tools-panel .jobs-tab").forEach((t) => t.classList.toggle("is-active", t === tab));
+    document.querySelectorAll("#tools-panel .jobs-tab-panel").forEach((p) => {
+      p.classList.toggle("is-active", p.dataset.toolsTabPanel === tab.dataset.toolsTab);
+    });
+    const loaders = { reminders: loadReminders, learning: loadLearningDue };
+    if (loaders[tab.dataset.toolsTab]) loaders[tab.dataset.toolsTab]();
+  });
+});
+
+/* -- reminders -- */
+
+async function loadReminders() {
+  const list = document.getElementById("reminder-list");
+  const showDone = document.getElementById("reminder-show-done").checked;
+  list.textContent = "loading…";
+  try {
+    const res = await fetch(`/api/reminders?include_done=${showDone}`);
+    const data = await res.json();
+    renderReminders(data.reminders || []);
+  } catch (err) {
+    list.textContent = `couldn't load — ${err.message}`;
+  }
+}
+
+function renderReminders(reminders) {
+  const list = document.getElementById("reminder-list");
+  list.innerHTML = "";
+  if (reminders.length === 0) {
+    list.textContent = "nothing here";
+    return;
+  }
+  for (const r of reminders) {
+    const item = document.createElement("div");
+    item.className = "jobs-tracker-item";
+    const top = document.createElement("div");
+    top.className = "jobs-tracker-item-top";
+    const left = document.createElement("div");
+    const text = document.createElement("div");
+    text.className = "jobs-tracker-item-company" + (r.done ? " jobs-reminder-done" : "");
+    text.textContent = r.text;
+    const due = document.createElement("div");
+    due.className = "jobs-tracker-item-role";
+    due.textContent = r.due_at ? new Date(r.due_at).toLocaleString() : "no due date";
+    left.append(text, due);
+
+    const actions = document.createElement("div");
+    actions.className = "jobs-reminder-actions";
+    if (!r.done) {
+      const completeBtn = document.createElement("button");
+      completeBtn.type = "button";
+      completeBtn.textContent = "done";
+      completeBtn.addEventListener("click", async () => {
+        await fetch(`/api/reminders/${r.id}/complete`, { method: "POST" });
+        loadReminders();
+      });
+      const snoozeBtn = document.createElement("button");
+      snoozeBtn.type = "button";
+      snoozeBtn.textContent = "+1 day";
+      snoozeBtn.addEventListener("click", async () => {
+        const base = r.due_at ? new Date(r.due_at) : new Date();
+        base.setDate(base.getDate() + 1);
+        await fetch(`/api/reminders/${r.id}/snooze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ due_at: base.toISOString() }),
+        });
+        loadReminders();
+      });
+      actions.append(completeBtn, snoozeBtn);
+    }
+
+    top.append(left, actions);
+    item.appendChild(top);
+    list.appendChild(item);
+  }
+}
+
+document.getElementById("reminder-add").addEventListener("click", async () => {
+  const text = document.getElementById("reminder-text").value.trim();
+  if (!text) return;
+  const dueEl = document.getElementById("reminder-due");
+  const due_at = dueEl.value ? new Date(dueEl.value).toISOString() : null;
+  try {
+    await fetch("/api/reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, due_at }),
+    });
+    document.getElementById("reminder-text").value = "";
+    dueEl.value = "";
+    loadReminders();
+  } catch (err) {
+    addLine("error", `couldn't add reminder — ${err.message}`);
+  }
+});
+document.getElementById("reminder-show-done").addEventListener("change", loadReminders);
+
+/* -- news / science (same shape, share a renderer) -- */
+
+function renderFeed(container, items, textField) {
+  container.innerHTML = "";
+  if (items.length === 0) {
+    container.textContent = "nothing fetched yet";
+    return;
+  }
+  for (const item of items) {
+    const el = document.createElement("div");
+    el.className = "jobs-feed-item";
+    const source = document.createElement("div");
+    source.className = "jobs-feed-item-source";
+    source.textContent = item.source;
+    const title = document.createElement("div");
+    title.className = "jobs-feed-item-title";
+    const link = document.createElement("a");
+    link.href = item.link;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = item.title;
+    title.appendChild(link);
+    const summary = document.createElement("div");
+    summary.className = "jobs-feed-item-summary";
+    summary.textContent = item[textField] || "";
+    el.append(source, title, summary);
+    container.appendChild(el);
+  }
+}
+
+document.getElementById("news-fetch").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const list = document.getElementById("news-list");
+  btn.disabled = true;
+  btn.textContent = "Fetching…";
+  list.textContent = "";
+  try {
+    const res = await fetch("/api/news");
+    const data = await res.json();
+    renderFeed(list, data.headlines || [], "summary");
+  } catch (err) {
+    list.textContent = `couldn't fetch — ${err.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Fetch tech news";
+  }
+});
+
+document.getElementById("science-fetch").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const list = document.getElementById("science-list");
+  btn.disabled = true;
+  btn.textContent = "Fetching…";
+  list.textContent = "";
+  try {
+    const res = await fetch("/api/science");
+    const data = await res.json();
+    renderFeed(list, data.facts || [], "summary");
+  } catch (err) {
+    list.textContent = `couldn't fetch — ${err.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Fetch science facts";
+  }
+});
+
+/* -- learning -- */
+
+async function loadLearningDue() {
+  const list = document.getElementById("learning-due-list");
+  list.textContent = "loading…";
+  try {
+    const res = await fetch("/api/learning/due");
+    const data = await res.json();
+    renderLearningDue(data.due || []);
+  } catch (err) {
+    list.textContent = `couldn't load — ${err.message}`;
+  }
+}
+
+function renderLearningDue(items) {
+  const list = document.getElementById("learning-due-list");
+  list.innerHTML = "";
+  if (items.length === 0) {
+    list.textContent = "nothing due right now";
+    return;
+  }
+  for (const item of items) {
+    const el = document.createElement("div");
+    el.className = "jobs-tracker-item";
+    const top = document.createElement("div");
+    top.className = "jobs-tracker-item-top";
+    const left = document.createElement("div");
+    const topic = document.createElement("div");
+    topic.className = "jobs-tracker-item-company";
+    topic.textContent = item.topic;
+    const takeaway = document.createElement("div");
+    takeaway.className = "jobs-tracker-item-role";
+    takeaway.textContent = item.key_takeaway;
+    left.append(topic, takeaway);
+
+    const actions = document.createElement("div");
+    actions.className = "jobs-reminder-actions";
+    const yesBtn = document.createElement("button");
+    yesBtn.type = "button";
+    yesBtn.textContent = "remembered";
+    yesBtn.addEventListener("click", async () => {
+      await fetch(`/api/learning/${item.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remembered: true }),
+      });
+      loadLearningDue();
+    });
+    const noBtn = document.createElement("button");
+    noBtn.type = "button";
+    noBtn.textContent = "forgot";
+    noBtn.addEventListener("click", async () => {
+      await fetch(`/api/learning/${item.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remembered: false }),
+      });
+      loadLearningDue();
+    });
+    actions.append(yesBtn, noBtn);
+
+    top.append(left, actions);
+    const summary = document.createElement("div");
+    summary.className = "jobs-feed-item-summary";
+    summary.textContent = item.summary;
+    el.append(top, summary);
+    list.appendChild(el);
+  }
+}
+
+document.getElementById("learning-add").addEventListener("click", async () => {
+  const topic = document.getElementById("learning-topic").value.trim();
+  const summary = document.getElementById("learning-summary").value.trim();
+  const key_takeaway = document.getElementById("learning-takeaway").value.trim();
+  if (!topic || !summary || !key_takeaway) return;
+  try {
+    await fetch("/api/learning", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic, summary, key_takeaway }),
+    });
+    document.getElementById("learning-topic").value = "";
+    document.getElementById("learning-summary").value = "";
+    document.getElementById("learning-takeaway").value = "";
+    loadLearningDue();
+  } catch (err) {
+    addLine("error", `couldn't save learning item — ${err.message}`);
+  }
+});
+
+document.getElementById("learning-refresh").addEventListener("click", loadLearningDue);
