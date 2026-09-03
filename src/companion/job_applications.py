@@ -24,6 +24,11 @@ DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "job_applicat
 
 VALID_STATUSES = {"applied", "interviewing", "offer", "rejected", "withdrawn"}
 
+NO_SPECIFIC_JOB = (
+    "(No specific posting given - draft general-purpose material aimed at Duc's ideal target role, "
+    "based on his background and skills below. Don't invent a specific company or job title.)"
+)
+
 DRAFT_SYSTEM = "You draft honest, specific job-application material. Never invent facts, numbers, dates, or claims that weren't given to you."
 DRAFT_PROMPT = """Draft a {material_type} tailored to this job, using only the background actually given below - no invented achievements, numbers, or claims.
 
@@ -32,8 +37,13 @@ DRAFT_PROMPT = """Draft a {material_type} tailored to this job, using only the b
 
 === Duc's relevant background ===
 {background}
-
+{style_block}
 Write it directly - just the {material_type} text, no preamble, no "Here's a draft:" framing."""
+
+STYLE_BLOCK_TEMPLATE = """
+=== Writing style sample to match (tone/voice only - don't copy its facts or claims) ===
+{style_sample}
+"""
 
 CRITIQUE_SYSTEM = "You edit text to remove things that make it read as obviously AI-generated, without changing its meaning or adding any new claims."
 # Pattern list adapted from github.com/blader/humanizer (MIT license) - its
@@ -66,9 +76,9 @@ Chatbot/hedging patterns:
 Process:
 1. Identify which patterns above actually appear in the draft.
 2. Rewrite only what needs it - preserve every claim, keep specific details specific, don't flatten voice into something blander.
-3. Match a natural, direct written voice - varied sentence length, no forced symmetry, no over-polish.
+3. Match a natural, direct written voice - varied sentence length, no forced symmetry, no over-polish. {voice_instruction}
 4. Before finishing, check yourself: does anything here still sound AI? Did any fact, name, number, or date change from the draft? If a fact changed, that's a bug - fix it back.
-
+{style_block}
 === Draft ===
 {draft}
 
@@ -211,37 +221,66 @@ class UpdateJobApplicationStatusTool(Tool):
         return asdict(result) if result else {"error": f"no application with id {id}"}
 
 
+def draft_application_material(
+    llm: AnthropicLLM,
+    material_type: str,
+    job_context: str,
+    background: str,
+    style_sample: str = "",
+) -> str:
+    """The actual two-pass draft-then-critique logic, factored out of the
+    Tool so the web UI's dedicated draft endpoint (webapp.py) can call it
+    directly - no need to round-trip through Claude tool-calling just to
+    run a deterministic two-call pipeline the UI already knows it wants.
+    Blank job_context means "no specific posting" (Duc's ideal-role-in-
+    general case), not an error - never invents a fake company/title.
+    """
+    job_context = job_context.strip() or NO_SPECIFIC_JOB
+    style_sample = style_sample.strip()
+    draft_style_block = STYLE_BLOCK_TEMPLATE.format(style_sample=style_sample) if style_sample else ""
+    draft = llm.respond(
+        system=DRAFT_SYSTEM, history=[],
+        user_input=DRAFT_PROMPT.format(
+            material_type=material_type, job_context=job_context, background=background, style_block=draft_style_block
+        ),
+    )
+    voice_instruction = "A writing style sample is given below - match its tone and voice, not its facts." if style_sample else ""
+    critique_style_block = STYLE_BLOCK_TEMPLATE.format(style_sample=style_sample) if style_sample else ""
+    return llm.respond(
+        system=CRITIQUE_SYSTEM, history=[],
+        user_input=CRITIQUE_PROMPT.format(draft=draft, voice_instruction=voice_instruction, style_block=critique_style_block),
+    )
+
+
 class DraftApplicationMaterialTool(Tool):
     name = "draft_application_material"
     description = (
-        "Draft a cover letter or resume bullet tailored to a specific job, using Duc's actual background "
-        "(never invented). Runs a draft-then-critique pass so it doesn't read like obvious AI output. "
-        "This produces text for Duc to review and use himself - it never submits anything anywhere."
+        "Draft a cover letter or resume bullet, using Duc's actual background (never invented). Tailors to a "
+        "specific job if given, or drafts general-purpose material for Duc's ideal target role if not. Runs a "
+        "draft-then-critique pass so it doesn't read like obvious AI output. This produces text for Duc to "
+        "review and use himself - it never submits anything anywhere."
     )
     input_schema = {
         "type": "object",
         "properties": {
             "material_type": {"type": "string", "enum": ["cover_letter", "resume_bullet", "other"]},
-            "job_context": {"type": "string", "description": "The job posting / role details to tailor to"},
+            "job_context": {
+                "type": "string",
+                "description": "The job posting / role details to tailor to. Leave blank/omit for general-purpose material aimed at Duc's ideal role.",
+            },
             "background": {
                 "type": "string",
                 "description": "Duc's relevant background/achievements to draw on - only what's actually known, don't invent anything",
             },
         },
-        "required": ["material_type", "job_context", "background"],
+        "required": ["material_type", "background"],
     }
 
     def __init__(self, llm: AnthropicLLM):
         self._llm = llm
 
-    def run(self, material_type: str, job_context: str, background: str) -> dict:
-        draft = self._llm.respond(
-            system=DRAFT_SYSTEM, history=[],
-            user_input=DRAFT_PROMPT.format(material_type=material_type, job_context=job_context, background=background),
-        )
-        final = self._llm.respond(
-            system=CRITIQUE_SYSTEM, history=[], user_input=CRITIQUE_PROMPT.format(draft=draft),
-        )
+    def run(self, material_type: str, background: str, job_context: str = "") -> dict:
+        final = draft_application_material(self._llm, material_type, job_context, background)
         return {"material_type": material_type, "draft": final}
 
 

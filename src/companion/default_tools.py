@@ -28,7 +28,7 @@ def default_tool_registry(draft_backend: AnthropicLLM | None = None) -> ToolRegi
 
         from companion.config import require_api_key
 
-        draft_backend = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=1500)
+        draft_backend = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=2500)
 
     return ToolRegistry(
         reminder_tools()

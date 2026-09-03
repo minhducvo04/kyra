@@ -32,12 +32,85 @@
           <span class="dot"></span>LOCAL
         </button>
       </div>
+      <button class="jobs-toggle" id="jobs-toggle" type="button">JOBS</button>
       <div class="status">
         <span class="status-dot"></span>
         <span id="status-text">ONLINE</span>
       </div>
     </div>
   </header>
+
+  <aside class="jobs-panel" id="jobs-panel" aria-hidden="true">
+    <div class="jobs-panel-header">
+      <span>JOB APPLICATIONS</span>
+      <button id="jobs-close" type="button" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="jobs-tabs" role="tablist">
+      <button class="jobs-tab is-active" data-tab="draft" type="button">DRAFT</button>
+      <button class="jobs-tab" data-tab="tracker" type="button">TRACKER</button>
+      <button class="jobs-tab" data-tab="autofill" type="button">AUTOFILL</button>
+    </div>
+
+    <section class="jobs-tab-panel is-active" data-tab-panel="draft">
+      <label class="jobs-field">
+        <span>Material</span>
+        <select id="draft-material-type">
+          <option value="cover_letter">Cover letter</option>
+          <option value="resume_bullet">Resume bullet</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label class="jobs-field">
+        <span>Job posting / role (leave blank to draft for an ideal role in general)</span>
+        <textarea id="draft-job-context" rows="4" placeholder="Paste the job posting, or describe the role. Leave blank for general-purpose material."></textarea>
+      </label>
+      <label class="jobs-field">
+        <span>Background (optional if you upload a resume below)</span>
+        <textarea id="draft-background" rows="3" placeholder="Any extra background/achievements not in your resume"></textarea>
+      </label>
+      <label class="jobs-field">
+        <span>Resume (pdf / docx / txt) — used as background facts</span>
+        <input id="draft-resume" type="file" accept=".pdf,.docx,.txt,.md">
+      </label>
+      <label class="jobs-field">
+        <span>Style sample (optional) — a resume/letter whose tone to match, not its facts</span>
+        <input id="draft-style" type="file" accept=".pdf,.docx,.txt,.md">
+      </label>
+      <button class="jobs-btn" id="draft-generate" type="button">Generate draft</button>
+      <div class="jobs-warnings" id="draft-warnings" hidden></div>
+      <div class="jobs-output" id="draft-output" hidden>
+        <div class="jobs-output-header">
+          <span>DRAFT</span>
+          <button class="jobs-copy" id="draft-copy" type="button">copy</button>
+        </div>
+        <pre id="draft-text"></pre>
+      </div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tab-panel="tracker">
+      <div class="jobs-tracker-add">
+        <input id="tracker-company" type="text" placeholder="Company">
+        <input id="tracker-role" type="text" placeholder="Role">
+        <input id="tracker-link" type="text" placeholder="Link (optional)">
+        <button class="jobs-btn" id="tracker-add" type="button">Add</button>
+      </div>
+      <div class="jobs-tracker-list" id="tracker-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tab-panel="autofill">
+      <label class="jobs-field">
+        <span>Greenhouse job posting URL</span>
+        <input id="autofill-url" type="text" placeholder="https://job-boards.greenhouse.io/company/jobs/12345">
+      </label>
+      <button class="jobs-btn" id="autofill-run" type="button">Fill it in</button>
+      <p class="jobs-hint">Opens a real browser window and fills it from your saved profile (data/applicant_profile.json). Nothing gets submitted — you review and click submit yourself.</p>
+      <div class="jobs-output" id="autofill-output" hidden>
+        <div class="jobs-output-header"><span>RESULT</span></div>
+        <div id="autofill-result"></div>
+      </div>
+    </section>
+  </aside>
 
   <main class="stage">
     <div class="core-wrap" id="core-wrap">

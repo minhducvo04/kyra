@@ -386,3 +386,245 @@ btnHandsfree.addEventListener("click", () => setVoiceMode("handsfree"));
   }
   input.focus();
 })();
+
+/* ---------------- jobs panel ---------------- */
+
+const jobsToggle = document.getElementById("jobs-toggle");
+const jobsPanel = document.getElementById("jobs-panel");
+const jobsClose = document.getElementById("jobs-close");
+
+function openJobsPanel() {
+  jobsPanel.classList.add("is-open");
+  jobsPanel.setAttribute("aria-hidden", "false");
+  jobsToggle.classList.add("is-active");
+}
+function closeJobsPanel() {
+  jobsPanel.classList.remove("is-open");
+  jobsPanel.setAttribute("aria-hidden", "true");
+  jobsToggle.classList.remove("is-active");
+}
+jobsToggle.addEventListener("click", () => {
+  jobsPanel.classList.contains("is-open") ? closeJobsPanel() : openJobsPanel();
+});
+jobsClose.addEventListener("click", closeJobsPanel);
+
+document.querySelectorAll(".jobs-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".jobs-tab").forEach((t) => t.classList.toggle("is-active", t === tab));
+    document.querySelectorAll(".jobs-tab-panel").forEach((p) => {
+      p.classList.toggle("is-active", p.dataset.tabPanel === tab.dataset.tab);
+    });
+    if (tab.dataset.tab === "tracker") loadTrackerList();
+  });
+});
+
+/* -- draft -- */
+
+const draftMaterialType = document.getElementById("draft-material-type");
+const draftJobContext = document.getElementById("draft-job-context");
+const draftBackground = document.getElementById("draft-background");
+const draftResume = document.getElementById("draft-resume");
+const draftStyle = document.getElementById("draft-style");
+const draftGenerateBtn = document.getElementById("draft-generate");
+const draftWarnings = document.getElementById("draft-warnings");
+const draftOutput = document.getElementById("draft-output");
+const draftText = document.getElementById("draft-text");
+const draftCopy = document.getElementById("draft-copy");
+
+draftGenerateBtn.addEventListener("click", async () => {
+  draftGenerateBtn.disabled = true;
+  draftGenerateBtn.textContent = "Drafting…";
+  draftWarnings.hidden = true;
+  draftOutput.hidden = true;
+  try {
+    const form = new FormData();
+    form.append("material_type", draftMaterialType.value);
+    form.append("job_context", draftJobContext.value);
+    form.append("background_text", draftBackground.value);
+    if (draftResume.files[0]) form.append("resume", draftResume.files[0]);
+    if (draftStyle.files[0]) form.append("style_sample", draftStyle.files[0]);
+
+    const res = await fetch("/api/job/draft", { method: "POST", body: form });
+    if (!res.ok) throw new Error(`server returned ${res.status}`);
+    const data = await res.json();
+
+    if (data.warnings && data.warnings.length) {
+      draftWarnings.textContent = data.warnings.join(" · ");
+      draftWarnings.hidden = false;
+    }
+    draftText.textContent = data.draft;
+    draftOutput.hidden = false;
+  } catch (err) {
+    draftWarnings.textContent = `draft failed — ${err.message}`;
+    draftWarnings.hidden = false;
+  } finally {
+    draftGenerateBtn.disabled = false;
+    draftGenerateBtn.textContent = "Generate draft";
+  }
+});
+
+draftCopy.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(draftText.textContent);
+    draftCopy.textContent = "copied!";
+  } catch {
+    draftCopy.textContent = "copy failed";
+  } finally {
+    setTimeout(() => (draftCopy.textContent = "copy"), 1500);
+  }
+});
+
+/* -- tracker -- */
+
+const trackerCompany = document.getElementById("tracker-company");
+const trackerRole = document.getElementById("tracker-role");
+const trackerLink = document.getElementById("tracker-link");
+const trackerAddBtn = document.getElementById("tracker-add");
+const trackerList = document.getElementById("tracker-list");
+
+const STATUSES = ["applied", "interviewing", "offer", "rejected", "withdrawn"];
+
+async function loadTrackerList() {
+  trackerList.textContent = "loading…";
+  try {
+    const res = await fetch("/api/job/applications");
+    const data = await res.json();
+    renderTrackerList(data.applications || []);
+  } catch (err) {
+    trackerList.textContent = `couldn't load — ${err.message}`;
+  }
+}
+
+function renderTrackerList(apps) {
+  trackerList.innerHTML = "";
+  if (apps.length === 0) {
+    trackerList.textContent = "no applications tracked yet";
+    return;
+  }
+  for (const app of apps) {
+    const item = document.createElement("div");
+    item.className = "jobs-tracker-item";
+
+    const top = document.createElement("div");
+    top.className = "jobs-tracker-item-top";
+    const left = document.createElement("div");
+    const company = document.createElement("div");
+    company.className = "jobs-tracker-item-company";
+    company.textContent = app.company;
+    const role = document.createElement("div");
+    role.className = "jobs-tracker-item-role";
+    role.textContent = app.role;
+    left.append(company, role);
+
+    const select = document.createElement("select");
+    select.className = "jobs-tracker-status";
+    for (const s of STATUSES) {
+      const opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = s;
+      opt.selected = s === app.status;
+      select.appendChild(opt);
+    }
+    select.addEventListener("change", async () => {
+      try {
+        await fetch("/api/job/applications/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: app.id, status: select.value }),
+        });
+      } catch (err) {
+        addLine("error", `status update failed — ${err.message}`);
+      }
+    });
+
+    top.append(left, select);
+    item.appendChild(top);
+
+    if (app.link) {
+      const link = document.createElement("a");
+      link.href = app.link;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = app.link;
+      link.style.color = "var(--text-faint)";
+      link.style.fontSize = "0.68rem";
+      item.appendChild(link);
+    }
+
+    trackerList.appendChild(item);
+  }
+}
+
+trackerAddBtn.addEventListener("click", async () => {
+  const company = trackerCompany.value.trim();
+  const role = trackerRole.value.trim();
+  if (!company || !role) return;
+  trackerAddBtn.disabled = true;
+  try {
+    await fetch("/api/job/applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company, role, link: trackerLink.value.trim() || null }),
+    });
+    trackerCompany.value = "";
+    trackerRole.value = "";
+    trackerLink.value = "";
+    await loadTrackerList();
+  } catch (err) {
+    addLine("error", `couldn't add application — ${err.message}`);
+  } finally {
+    trackerAddBtn.disabled = false;
+  }
+});
+
+/* -- autofill -- */
+
+const autofillUrl = document.getElementById("autofill-url");
+const autofillRunBtn = document.getElementById("autofill-run");
+const autofillOutput = document.getElementById("autofill-output");
+const autofillResult = document.getElementById("autofill-result");
+
+autofillRunBtn.addEventListener("click", async () => {
+  const url = autofillUrl.value.trim();
+  if (!url) return;
+  autofillRunBtn.disabled = true;
+  autofillRunBtn.textContent = "Filling…";
+  autofillOutput.hidden = true;
+  try {
+    const res = await fetch("/api/job/autofill", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    autofillResult.innerHTML = "";
+    if (data.error) {
+      const p = document.createElement("p");
+      p.style.color = "var(--danger)";
+      p.textContent = data.missing_fields ? `${data.error}: ${data.missing_fields.join(", ")}` : data.error;
+      autofillResult.appendChild(p);
+    } else {
+      const summary = document.createElement("p");
+      summary.textContent = `filled ${data.filled.length}, skipped ${data.skipped.length}. Nothing submitted.`;
+      autofillResult.appendChild(summary);
+      if (data.skipped.length) {
+        const list = document.createElement("ul");
+        list.style.fontSize = "0.72rem";
+        list.style.color = "var(--text-dim)";
+        for (const s of data.skipped) {
+          const li = document.createElement("li");
+          li.textContent = `${s.label} — ${s.reason}`;
+          list.appendChild(li);
+        }
+        autofillResult.appendChild(list);
+      }
+    }
+    autofillOutput.hidden = false;
+  } catch (err) {
+    autofillResult.textContent = `autofill failed — ${err.message}`;
+    autofillOutput.hidden = false;
+  } finally {
+    autofillRunBtn.disabled = false;
+    autofillRunBtn.textContent = "Fill it in";
+  }
+});

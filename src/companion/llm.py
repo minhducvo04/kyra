@@ -70,6 +70,15 @@ class AnthropicLLM(LLMBackend):
         response = self._client.messages.create(
             model=self._model, max_tokens=self._max_tokens, system=system, messages=messages,
         )
+        if response.stop_reason == "max_tokens":
+            # Same bug class documented for respond_with_tools() above -
+            # Sonnet 5's adaptive thinking can eat into max_tokens even on
+            # a plain reply, and a genuinely truncated response silently
+            # looks complete (it just stops mid-sentence) unless flagged.
+            # Caught for real via job_applications.py's draft tool cutting
+            # a cover letter off mid-word with the default budget.
+            text = extract_text(response)
+            return text + "\n\n[cut off - ran out of room, try again or ask for something shorter]"
         return extract_text(response)
 
     def respond_with_tools(

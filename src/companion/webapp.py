@@ -9,18 +9,25 @@ AUTO, which hands every turn to the same TurnRouter chat.py/voice_chat.py
 use - one router, three front doors.
 """
 import base64
+from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile
+from anthropic import Anthropic
+from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from companion.config import require_api_key
 from companion.conversation import ConversationManager
 from companion.default_tools import default_tool_registry
-from companion.llm import LazyBackends, build_llm
+from companion.doc_text import UnsupportedDocumentType, extract_text
+from companion.job_applications import VALID_STATUSES, JobApplicationStore, draft_application_material
+from companion.job_autofill import GreenhouseAutofillEngine
+from companion.llm import AnthropicLLM, LazyBackends, build_llm
 from companion.memory import ChromaMemoryStore
 from companion.persona import KYRA
+from companion.profile import load_profile
 from companion.router import TurnRouter, route_and_answer_verbose
 from companion.voice import FasterWhisperSTT, KokoroTTS, decode_uploaded_audio, encode_wav_bytes
 
@@ -38,6 +45,18 @@ _router = TurnRouter(_registry)
 _current_backend = "auto"  # "claude" | "local" | "auto" - auto (the router) is the default now that it exists
 _stt = FasterWhisperSTT()
 _tts = KokoroTTS()
+
+# Job application panel - hits the same underlying stores/tools as the
+# chat path (job_applications.py, job_autofill.py) directly rather than
+# round-tripping through the router/classifier, since a dedicated UI
+# already knows exactly which action it wants (no intent classification
+# needed for a button labeled "Add").
+_job_store = JobApplicationStore()
+# Dedicated instance at the larger tool-calling token budget - same
+# reasoning as default_tools.py::default_tool_registry(draft_backend=...):
+# a draft plus a critique pass needs more room than plain chat's default.
+_draft_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=2500)
+_autofill_engine = GreenhouseAutofillEngine()
 
 
 class ChatIn(BaseModel):
@@ -128,3 +147,125 @@ def voice(audio: UploadFile) -> VoiceOut:
         reply_audio_b64=base64.b64encode(wav_bytes).decode("ascii"),
         reply_audio_rate=rate,
     )
+
+
+# ---------------- Job Application panel ----------------
+# Direct endpoints, not routed through the classifier - a dedicated UI
+# button already knows exactly which action it wants, so there's no
+# intent to classify. Same underlying stores/tools chat uses either way
+# (job_applications.py, job_autofill.py, profile.py) - no logic forked.
+
+
+class DraftOut(BaseModel):
+    draft: str
+    background_chars: int
+    style_chars: int
+    warnings: list[str] = []
+
+
+def _extract_upload(upload: UploadFile | None) -> tuple[str, str | None]:
+    """Returns (text, warning). A warning (not an exception) on an
+    unsupported/unreadable file, so one bad upload doesn't 500 the whole
+    request - the draft can still proceed on whatever else was given.
+    """
+    if upload is None or not upload.filename:
+        return "", None
+    try:
+        data = upload.file.read()
+        return extract_text(upload.filename, data), None
+    except UnsupportedDocumentType as e:
+        return "", f"{upload.filename}: {e}"
+    except Exception as e:
+        return "", f"{upload.filename}: couldn't read file ({e})"
+
+
+@app.post("/api/job/draft", response_model=DraftOut)
+def job_draft(
+    material_type: str = Form(...),
+    job_context: str = Form(""),
+    background_text: str = Form(""),
+    resume: UploadFile | None = File(None),
+    style_sample: UploadFile | None = File(None),
+) -> DraftOut:
+    warnings: list[str] = []
+
+    resume_text, warn = _extract_upload(resume)
+    if warn:
+        warnings.append(warn)
+    style_text, warn = _extract_upload(style_sample)
+    if warn:
+        warnings.append(warn)
+
+    background_parts = [p for p in (background_text.strip(), resume_text) if p]
+    background = "\n\n".join(background_parts)
+    if not background:
+        warnings.append("no background given - draft will be generic. Paste some background or upload a resume.")
+
+    draft = draft_application_material(
+        _draft_llm, material_type=material_type, job_context=job_context, background=background, style_sample=style_text
+    )
+    return DraftOut(draft=draft, background_chars=len(background), style_chars=len(style_text), warnings=warnings)
+
+
+class JobApplicationOut(BaseModel):
+    id: int
+    company: str
+    role: str
+    link: str | None
+    status: str
+    notes: str | None
+    created_at: str
+    updated_at: str
+
+
+@app.get("/api/job/applications")
+def list_job_applications(status: str | None = None) -> dict:
+    return {"applications": [asdict(a) for a in _job_store.list(status)]}
+
+
+class AddJobApplicationIn(BaseModel):
+    company: str
+    role: str
+    link: str | None = None
+    notes: str | None = None
+
+
+@app.post("/api/job/applications")
+def add_job_application(body: AddJobApplicationIn) -> dict:
+    return asdict(_job_store.add(body.company, body.role, body.link, body.notes))
+
+
+class UpdateJobApplicationStatusIn(BaseModel):
+    id: int
+    status: str
+    notes: str | None = None
+
+
+@app.post("/api/job/applications/status")
+def update_job_application_status(body: UpdateJobApplicationStatusIn) -> dict:
+    if body.status not in VALID_STATUSES:
+        return {"error": f"status must be one of {sorted(VALID_STATUSES)}"}
+    result = _job_store.update_status(body.id, body.status, body.notes)
+    return asdict(result) if result else {"error": f"no application with id {body.id}"}
+
+
+class AutofillIn(BaseModel):
+    url: str
+
+
+@app.post("/api/job/autofill")
+def job_autofill(body: AutofillIn) -> dict:
+    profile = load_profile()
+    missing = profile.is_ready_for_autofill()
+    if missing:
+        return {"error": "profile isn't ready for autofill", "missing_fields": missing}
+    try:
+        report = _autofill_engine.fill(body.url, profile)
+    except Exception as e:
+        return {"error": f"autofill failed: {e}"}
+    return {
+        "url": body.url,
+        "filled": [asdict(f) for f in report.filled],
+        "skipped": [asdict(s) for s in report.skipped],
+        "summary_path": report.summary_path,
+    }
