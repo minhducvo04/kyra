@@ -47,7 +47,7 @@ DECOMPOSE_WORD_THRESHOLD = 60
 CLASSIFIER_PROMPT = """You are a fast triage classifier for an AI assistant router - a small, quick model, not the one that will actually answer the user.
 
 Given the user's message, decide two things:
-1. "path": "tool" ONLY if the message matches one of the tools listed below by name/description - managing reminders/tasks (add, list, complete, snooze), fetching tech news, fetching science facts, explicitly saving/reviewing something learned for spaced repetition, or tracking/drafting a job application (logging a company/role, listing/updating application status, or drafting a cover letter/resume bullet for a specific job). If it involves a task or piece of work but none of the listed tools actually do it (e.g. coordinating other work, or just explaining/teaching a topic without being asked to save it), that is "text", not "tool" - having a tool for one kind of task doesn't mean everything task-shaped is a tool call.
+1. "path": "tool" ONLY if the message matches one of the tools listed below by name/description - managing reminders/tasks (add, list, complete, snooze), fetching tech news, fetching science facts, explicitly saving/reviewing something learned for spaced repetition, tracking/drafting a job application (logging a company/role, listing/updating application status, or drafting a cover letter/resume bullet for a specific job), or explicitly asking to remember/note a durable fact about Duc (a preference, a person, an ongoing project) for later. If it involves a task or piece of work but none of the listed tools actually do it (e.g. coordinating other work, or just explaining/teaching a topic without being asked to save it), that is "text", not "tool" - having a tool for one kind of task doesn't mean everything task-shaped is a tool call.
 2. If path is "text", "backend" - which model should actually answer:
    - "claude": work coordination / handing something to Claude Code, learning summaries or explaining a topic in depth, or anything needing careful reasoning
    - "local": casual chat, small talk, science facts framed as pure conversation (not "fetch me facts"), or anything else conversational and low-stakes
@@ -75,6 +75,8 @@ Examples:
 - "mark the Stripe application as interviewing" -> {{"path": "tool", "backend": "claude", "reason": "update job application status"}}
 - "help me draft a cover letter for this job posting" -> {{"path": "tool", "backend": "claude", "reason": "draft tailored job application material"}}
 - "write me a resume bullet for this role" -> {{"path": "tool", "backend": "claude", "reason": "draft tailored job application material"}}
+- "remember that I prefer standing desks" -> {{"path": "tool", "backend": "claude", "reason": "save a durable memory note"}}
+- "make a note that my sister's name is Linh" -> {{"path": "tool", "backend": "claude", "reason": "save a durable memory note"}}
 - "can you coordinate this with Claude Code" -> {{"path": "text", "backend": "claude", "reason": "no matching tool, work coordination"}}
 - "give me a quick summary of the CAP theorem" -> {{"path": "text", "backend": "claude", "reason": "explaining a topic, not asked to save it"}}
 - "tell me something cool about black holes" -> {{"path": "text", "backend": "local", "reason": "casual science chat, not a fetch request"}}

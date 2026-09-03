@@ -3,6 +3,7 @@ from datetime import datetime
 
 from companion.llm import AnthropicLLM, LLMBackend, Message
 from companion.memory import MemoryStore
+from companion.memory_notes import MarkdownMemoryNotesStore, MemoryNotesStore
 from companion.persona import Persona
 from companion.tools import ToolRegistry
 
@@ -15,15 +16,28 @@ class ConversationManager:
     caller's decision, not this class's.
     """
 
-    def __init__(self, persona: Persona, memory: MemoryStore, llm: LLMBackend):
+    def __init__(
+        self,
+        persona: Persona,
+        memory: MemoryStore,
+        llm: LLMBackend,
+        memory_notes: MemoryNotesStore | None = None,
+    ):
         self.persona = persona
         self.memory = memory
         self.llm = llm
+        # Curated durable facts (see memory_notes.py) - a separate, small,
+        # always-loaded-in-full layer from the vector-retrieved memory
+        # below. If omitted, build the default Markdown-backed store so
+        # existing call sites (chat.py/voice_chat.py/webapp.py) don't need
+        # to change - same pattern as default_tools.py's draft_backend.
+        self.memory_notes = memory_notes or MarkdownMemoryNotesStore()
         self.history: list[Message] = []
 
     def _build_system(self, user_input: str) -> str:
         memories = self.memory.retrieve(user_input, k=5)
         memory_block = "\n".join(f"- {m.text}" for m in memories) or "(no relevant memories yet)"
+        notes_block = self.memory_notes.render()
         # Without this, "tomorrow"/"tonight" have nothing to resolve
         # against - caught for real when a reminder tool call landed a due
         # date over a year in the past because nothing ever told the model
@@ -34,7 +48,8 @@ class ConversationManager:
         return (
             f"{self.persona.system_prompt()}\n\n"
             f"Current date and time: {now_str}\n\n"
-            f"Relevant things you remember about Duc:\n{memory_block}"
+            f"Durable facts you've saved about Duc (always shown, not search-retrieved):\n{notes_block}\n\n"
+            f"Relevant things you remember about Duc from past conversations:\n{memory_block}"
         )
 
     def handle_turn(self, user_input: str) -> str:

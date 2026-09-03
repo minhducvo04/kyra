@@ -8,6 +8,7 @@ in each file.
 from companion.job_applications import job_application_tools
 from companion.learning import learning_tools
 from companion.llm import AnthropicLLM
+from companion.memory_notes import memory_note_tools
 from companion.news import TechNewsTool
 from companion.reminders import reminder_tools
 from companion.science import ScienceFactsTool
@@ -32,5 +33,6 @@ def default_tool_registry(draft_backend: AnthropicLLM | None = None) -> ToolRegi
         reminder_tools()
         + learning_tools()
         + job_application_tools(llm=draft_backend)
+        + memory_note_tools()
         + [TechNewsTool(), ScienceFactsTool()]
     )
