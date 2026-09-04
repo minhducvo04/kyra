@@ -29,7 +29,7 @@ from companion.job_applications import (
     JobApplicationStore,
     draft_application_material,
     optimize_full_resume,
-    optimize_latex_resume,
+    optimize_latex_resume_one_page,
 )
 from companion.job_autofill import GreenhouseAutofillEngine
 from companion.job_documents import JobDocumentStore
@@ -194,7 +194,7 @@ class DraftOut(BaseModel):
     background_chars: int
     style_chars: int
     warnings: list[str] = []
-    pdf_url: str | None = None  # set only for material_type == "full_resume"
+    pdf_url: str | None = None  # set for material_type in {"full_resume", "latex_resume"}
 
 
 def _resume_doc_preview(doc) -> str:
@@ -280,13 +280,40 @@ def _fetch_github_context() -> tuple[str, list[str]]:
 
 def _pick_resume_source(
     background_text: str, background_document_ids: str, resume: UploadFile | None
-) -> tuple[str, list[str]]:
+) -> tuple[str, str, list[str]]:
     """Shared by the full-resume and LaTeX-resume paths - exactly one
-    clean source of truth, in priority order: a one-off upload (also
-    saved to the library, same dedup as the paragraph-drafting path),
-    then a single selected resume-kind document, then pasted text.
+    clean source of truth for the resume itself, in priority order: a
+    one-off upload (also saved to the library, same dedup as the
+    paragraph-drafting path), then a single selected resume-kind
+    document, then pasted text.
+
+    Also gathers "extra facts" alongside it: Memory Notes (durable facts
+    Kyra already knows, e.g. "graduated June 2026") plus any selected
+    non-resume library documents (free-text notes) - real gap found
+    2026-09-04, Duc asked whether he could update resume generation "by
+    words" (tell Kyra something new) and neither of these paths looked
+    at Memory Notes or note documents at all, unlike the plain
+    paragraph-drafting flow which already does. Returns
+    (resume_text, extra_facts_text, warnings).
     """
     warnings: list[str] = []
+    extra_parts: list[str] = []
+
+    notes_block = _memory_notes.render()
+    if notes_block and notes_block != "(no saved notes yet)":
+        extra_parts.append(f"[What Kyra already knows about Duc]\n{notes_block}")
+
+    doc_ids = [i.strip() for i in background_document_ids.split(",") if i.strip()]
+    picked = _job_documents.get_many(doc_ids)
+    for doc in picked:
+        if doc.kind != "resume":
+            extra_parts.append(f"[{doc.label}]\n{doc.text}")
+
+    def _with_extra(resume_text: str) -> tuple[str, str, list[str]]:
+        if background_text.strip():
+            extra_parts.append(background_text.strip())
+        return resume_text, "\n\n".join(extra_parts), warnings
+
     resume_text, resume_bytes, warn = _extract_upload(resume)
     if warn:
         warnings.append(warn)
@@ -296,25 +323,39 @@ def _pick_resume_source(
         )
         if is_new:
             warnings.append(f"saved '{saved.label}' to your document library (PROFILE tab → Document Library) for reuse")
-        return resume_text, warnings
+        return _with_extra(resume_text)
 
-    doc_ids = [i.strip() for i in background_document_ids.split(",") if i.strip()]
-    picked = _job_documents.get_many(doc_ids)
     resumes = [d for d in picked if d.kind == "resume"]
     if resumes:
         if len(resumes) > 1:
             warnings.append(f"multiple resumes selected - using '{resumes[0].label}', the others were ignored")
-        return resumes[0].text, warnings
+        return _with_extra(resumes[0].text)
     if background_text.strip():
-        return background_text.strip(), warnings
-    return "", warnings
+        # background_text is the resume source itself here (nothing else
+        # was given) - don't also double it into extra_parts.
+        return background_text.strip(), "\n\n".join(extra_parts), warnings
+    return "", "\n\n".join(extra_parts), warnings
+
+
+def _save_generated_pdf(pdf_bytes: bytes) -> str:
+    """Writes already-rendered PDF bytes to the same generated-resumes
+    directory render_pdf() uses, so both resume paths serve through the
+    one /api/job/resume-pdf/{filename} endpoint. Returns the filename
+    (not the full path) for building that URL.
+    """
+    import uuid
+
+    RESUME_PDF_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid.uuid4().hex[:12]}.pdf"
+    (RESUME_PDF_DIR / filename).write_bytes(pdf_bytes)
+    return filename
 
 
 def _full_resume_draft(
     job_context: str, background_text: str, background_document_ids: str, resume: UploadFile | None,
     include_github: bool = False,
 ) -> DraftOut:
-    resume_text, warnings = _pick_resume_source(background_text, background_document_ids, resume)
+    resume_text, extra_facts, warnings = _pick_resume_source(background_text, background_document_ids, resume)
 
     if not resume_text:
         return DraftOut(
@@ -326,7 +367,10 @@ def _full_resume_draft(
         github_text, github_warnings = _fetch_github_context()
         warnings.extend(github_warnings)
         if github_text:
-            resume_text = f"{resume_text}\n\n{github_text}"
+            extra_facts = f"{extra_facts}\n\n{github_text}" if extra_facts else github_text
+
+    if extra_facts:
+        resume_text = f"{resume_text}\n\n=== Newer facts to incorporate (may postdate the resume above) ===\n{extra_facts}"
 
     try:
         doc = optimize_full_resume(_resume_llm, resume_text, job_context)
@@ -346,15 +390,19 @@ def _latex_resume_draft(
     job_context: str, background_text: str, background_document_ids: str, resume: UploadFile | None,
     include_github: bool = False,
 ) -> DraftOut:
-    """Edits Duc's own LaTeX source directly and hands the text back -
-    no PDF rendering here at all, he compiles it himself. Exists
-    because real testing on his actual PDF surfaced genuine text-
-    extraction fidelity issues (dropped underscores, spurious spaces
-    around ordinal superscripts) that are inherent to reading a
-    compiled LaTeX PDF back out as text - editing the source directly
-    sidesteps that class of problem entirely.
+    """Edits Duc's own LaTeX source directly, then actually compiles it
+    (latex_compile.py) and iterates until it fits exactly one real page
+    - see job_applications.py::optimize_latex_resume_one_page for why
+    this needs a real compile-measure-iterate loop rather than a single
+    blind rewrite. Editing the source directly (rather than going
+    through resume_format.py/resume_pdf.py) also sidesteps a real
+    text-extraction fidelity issue found testing on Duc's actual PDF
+    (dropped underscores, spurious spaces around ordinal superscripts) -
+    there's nothing to extract when editing the source. Returns both the
+    edited LaTeX (for Duc to keep/tweak) and a compiled PDF preview, so
+    he can see the real result before trusting it.
     """
-    latex_text, warnings = _pick_resume_source(background_text, background_document_ids, resume)
+    latex_text, extra_facts, warnings = _pick_resume_source(background_text, background_document_ids, resume)
 
     if not latex_text:
         return DraftOut(
@@ -364,22 +412,30 @@ def _latex_resume_draft(
     if "\\begin{document}" not in latex_text and "\\documentclass" not in latex_text:
         warnings.append("this doesn't look like LaTeX source (no \\documentclass/\\begin{document} found) - results may be off")
 
-    extra_context = ""
     if include_github:
         github_text, github_warnings = _fetch_github_context()
         warnings.extend(github_warnings)
         if github_text:
-            extra_context = (
-                "\n\n=== Additional real project data (context only - use if relevant, don't paste this "
-                f"section into the LaTeX output) ===\n{github_text}"
-            )
+            extra_facts = f"{extra_facts}\n\n{github_text}" if extra_facts else github_text
 
     try:
-        optimized = optimize_latex_resume(_resume_llm, latex_text + extra_context, job_context)
+        result = optimize_latex_resume_one_page(_resume_llm, latex_text, job_context, extra_facts)
     except ValueError as e:
         return DraftOut(draft="", background_chars=len(latex_text), style_chars=0, warnings=warnings + [str(e)])
 
-    return DraftOut(draft=optimized, background_chars=len(latex_text), style_chars=0, warnings=warnings)
+    warnings.extend(result.notes)
+    if not result.fit:
+        warnings.append(
+            "couldn't automatically confirm a one-page fit - review the compiled PDF and adjust further yourself if needed"
+        )
+
+    pdf_url = None
+    if result.pdf_bytes:
+        pdf_url = f"/api/job/resume-pdf/{_save_generated_pdf(result.pdf_bytes)}"
+
+    return DraftOut(
+        draft=result.latex, background_chars=len(latex_text), style_chars=0, warnings=warnings, pdf_url=pdf_url,
+    )
 
 
 @app.get("/api/job/resume-pdf/{filename}")

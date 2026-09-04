@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from companion.latex_compile import CompileResult, compile_latex
 from companion.llm import AnthropicLLM, TRUNCATION_MARKER
 from companion.resume_format import ResumeDoc, ResumeFormatError, parse_resume_text
 from companion.tools import Tool
@@ -396,6 +397,160 @@ def optimize_latex_resume(llm: AnthropicLLM, original_latex: str, job_context: s
     if text.endswith(TRUNCATION_MARKER):
         raise ValueError("the optimized LaTeX got cut off before finishing - try again, or shorten the original source")
     return text.strip()
+
+
+# --- One-page LaTeX fitting: generate, actually compile with a real local
+# LaTeX engine, measure the real page count, and iterate - built 2026-09-04
+# after Duc's direct feedback that a generic PDF template wasn't an
+# acceptable stand-in for his real resume, and that "make it fit one page"
+# needs real content selection (which courses/projects/bullets to keep),
+# not just the reword-in-place behavior optimize_latex_resume() above does.
+# An LLM editing LaTeX text has no ground truth for whether the result
+# compiles to one page or two - that depends on font metrics/hyphenation/
+# package behavior it can't see from the source. So this doesn't guess:
+# it compiles for real (latex_compile.py) and feeds the actual page count
+# back for another pass, same "verify with a real run" discipline as the
+# rest of this project, applied to LaTeX instead of Python. Runs fully
+# automatically (Duc's choice) - no per-cut approval step.
+LATEX_ONE_PAGE_SYSTEM = (
+    "You edit LaTeX resume source code so it fits exactly one printed page. You preserve the document's "
+    "structure, packages, and commands exactly - you edit content only: which entries to keep, how bullets are "
+    "worded, how much detail each gets. To fit one page you may omit whole entries (an older or less relevant "
+    "project, a course, a weak bullet) - cut the least relevant content first rather than cramming everything in "
+    "shrunk down, and never touch margins, font size, or spacing commands to force a fit. You never invent a new "
+    "achievement, number, date, title, skill, course, or project that isn't already in the original, and you "
+    "never reword a kept item into something stronger than what actually happened. Output only valid, complete "
+    "LaTeX source - no commentary, no markdown code fences, nothing before or after it."
+)
+
+LATEX_ONE_PAGE_PROMPT = """Edit this LaTeX resume so it fits on exactly one printed page, prioritizing what's most \
+relevant to the job/role context below (if given). If everything doesn't fit, cut the least relevant material \
+first - an older or less relevant project, a course, a weaker bullet - rather than shrinking the layout. Every \
+fact, number, date, title, skill, course, and project that remains must trace back to the original - don't invent \
+anything, even something plausible-sounding.
+
+Keep the LaTeX structure, packages, and commands exactly as given - only add, remove, or edit content. Don't touch \
+margins, font size, or spacing commands.
+
+=== Job / role context (optional - if blank, optimize generally rather than invent a target) ===
+{job_context}
+
+=== Additional facts to incorporate if relevant - may postdate the resume below, e.g. graduation, new coursework \
+(optional) ===
+{extra_facts}
+
+=== Original LaTeX source (the only source of truth for facts and structure) ===
+{original_latex}
+
+Output the complete, edited LaTeX source now - nothing else."""
+
+LATEX_SHRINK_PROMPT = """This LaTeX resume just compiled to {page_count} real pages - it still needs to fit exactly \
+one page. Cut more: drop the single least-relevant remaining project, course, or bullet (favor what's most relevant \
+to the job/role context below), or tighten wordy bullets further. Don't invent anything, don't touch margins/font/ \
+spacing commands, keep the LaTeX structure intact.
+
+=== Job / role context ===
+{job_context}
+
+=== Current LaTeX source (cut further from this - don't start over) ===
+{current_latex}
+
+Output the complete, edited LaTeX source now - nothing else."""
+
+LATEX_FIX_PROMPT = """This LaTeX failed to compile with the error below. Fix the LaTeX syntax only - keep the same \
+content decisions (what was kept, cut, or reworded), don't undo those edits, don't invent anything new.
+
+=== Compiler error (tail of the .log around each error) ===
+{error_log}
+
+=== Current LaTeX source (fix this) ===
+{current_latex}
+
+Output the complete, corrected LaTeX source now - nothing else."""
+
+
+@dataclass
+class LatexFitResult:
+    latex: str
+    pdf_bytes: bytes | None
+    page_count: int | None
+    fit: bool  # True only if a compiled attempt landed on exactly one page
+    attempts: int
+    notes: list[str]  # one line per attempt, for a transparent "here's what happened" summary in the UI
+
+
+def optimize_latex_resume_one_page(
+    llm: AnthropicLLM, original_latex: str, job_context: str = "", extra_facts: str = "", max_attempts: int = 4,
+) -> LatexFitResult:
+    """Generates an edit, actually compiles it with a real local LaTeX
+    engine (latex_compile.py), and iterates against the real page count
+    until it lands on exactly one page or max_attempts runs out. On
+    giving up, returns the best (fewest-pages) real compiled attempt
+    seen, with fit=False and a note explaining it didn't fully converge -
+    never a document that was never actually compiled.
+    """
+    job_context = job_context.strip() or "(none given - optimize generally)"
+    extra_facts = extra_facts.strip() or "(none)"
+
+    text = llm.respond(
+        system=LATEX_ONE_PAGE_SYSTEM, history=[],
+        user_input=LATEX_ONE_PAGE_PROMPT.format(
+            job_context=job_context, extra_facts=extra_facts, original_latex=original_latex
+        ),
+    )
+    if text.endswith(TRUNCATION_MARKER):
+        raise ValueError("the optimized LaTeX got cut off before finishing - try again, or shorten the original source")
+    current_latex = text.strip()
+
+    notes: list[str] = []
+    best: CompileResult | None = None
+    best_latex = current_latex
+
+    for attempt in range(1, max_attempts + 1):
+        result = compile_latex(current_latex)
+
+        if not result.success:
+            notes.append(f"attempt {attempt}: compile failed, asking Claude to fix the LaTeX")
+            if attempt == max_attempts:
+                break
+            fix_text = llm.respond(
+                system=LATEX_ONE_PAGE_SYSTEM, history=[],
+                user_input=LATEX_FIX_PROMPT.format(error_log=result.log_tail, current_latex=current_latex),
+            )
+            if fix_text.endswith(TRUNCATION_MARKER):
+                notes.append(f"attempt {attempt}: fix attempt got cut off - stopping here")
+                break
+            current_latex = fix_text.strip()
+            continue
+
+        notes.append(f"attempt {attempt}: compiled to {result.page_count} page(s)")
+        if best is None or (best.page_count is not None and result.page_count is not None and result.page_count < best.page_count):
+            best, best_latex = result, current_latex
+
+        if result.page_count == 1:
+            return LatexFitResult(
+                latex=current_latex, pdf_bytes=result.pdf_bytes, page_count=1, fit=True, attempts=attempt, notes=notes,
+            )
+
+        if attempt == max_attempts:
+            break
+
+        shrink_text = llm.respond(
+            system=LATEX_ONE_PAGE_SYSTEM, history=[],
+            user_input=LATEX_SHRINK_PROMPT.format(
+                page_count=result.page_count, job_context=job_context, current_latex=current_latex
+            ),
+        )
+        if shrink_text.endswith(TRUNCATION_MARKER):
+            notes.append(f"attempt {attempt}: shrink attempt got cut off - stopping here")
+            break
+        current_latex = shrink_text.strip()
+
+    notes.append(f"couldn't automatically reach exactly one page in {max_attempts} attempt(s) - returning the closest real compile")
+    return LatexFitResult(
+        latex=best_latex, pdf_bytes=best.pdf_bytes if best else None,
+        page_count=best.page_count if best else None, fit=False, attempts=max_attempts, notes=notes,
+    )
 
 
 class DraftApplicationMaterialTool(Tool):
