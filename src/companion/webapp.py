@@ -14,7 +14,7 @@ from pathlib import Path
 
 from anthropic import Anthropic
 from fastapi import FastAPI, File, Form, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -26,8 +26,12 @@ from companion.github_profile import extract_username as extract_github_username
 from companion.github_profile import fetch_github_projects
 from companion.job_applications import (
     VALID_STATUSES,
+    FitBlock,
+    FitSelection,
     JobApplicationStore,
+    analyze_latex_resume_fit,
     draft_application_material,
+    generate_latex_from_selection,
     optimize_full_resume,
     optimize_latex_resume_one_page,
 )
@@ -125,8 +129,23 @@ class BackendIn(BaseModel):
 
 
 @app.get("/")
-def index() -> FileResponse:
-    return FileResponse(WEB_DIR / "index.html")
+def index() -> HTMLResponse:
+    """Serves index.html with each static asset's real file mtime
+    appended as a cache-busting query string (e.g. app.js?v=1725...) -
+    a real bug caught 2026-09-04 while building the resume "Detailed"
+    mode: a browser (including the automated test browser used to
+    verify this UI) can keep serving a stale cached app.js/style.css
+    after an edit even across a hard reload, since StaticFiles' ETag/
+    Last-Modified validation doesn't guarantee a re-fetch. A manually
+    bumped version string would work but silently goes stale the next
+    time someone edits these files and forgets to bump it - reading the
+    real mtime here means it can't go stale, no discipline required.
+    """
+    html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+    for asset in ("app.js", "style.css"):
+        mtime = int((WEB_DIR / asset).stat().st_mtime)
+        html = html.replace(f'/static/{asset}"', f'/static/{asset}?v={mtime}"')
+    return HTMLResponse(html)
 
 
 @app.get("/api/backend")
@@ -205,6 +224,63 @@ class DraftOut(BaseModel):
     style_chars: int
     warnings: list[str] = []
     pdf_url: str | None = None  # set for material_type in {"full_resume", "latex_resume"}
+
+
+# --- Resume "Detailed" mode (analyze -> pick -> generate) - a JSON-body
+# request/response shape rather than the file-upload Form(...) pattern
+# the rest of JOBS uses, since this flow has no file upload of its own
+# (it works from a document library selection, same as Fast mode without
+# a one-off upload) and passes structured block data back and forth
+# between two calls instead. FitBlockIO mirrors job_applications.py's
+# FitBlock dataclass field-for-field - kept as a separate pydantic model
+# rather than reusing the dataclass directly so FastAPI's OpenAPI schema
+# stays accurate without coupling the API shape to the dataclass's exact
+# definition.
+class FitBlockIO(BaseModel):
+    id: str
+    section: str
+    entry: str
+    kind: str
+    label: str
+    score: int
+    priority: str
+    reason: str
+    recommended_keep: bool
+
+
+class ResumeFitAnalyzeIn(BaseModel):
+    job_context: str = ""
+    background_text: str = ""
+    background_document_ids: str = ""
+
+
+class ResumeFitAnalyzeOut(BaseModel):
+    sections: list[str] = []
+    blocks: list[FitBlockIO] = []
+    warnings: list[str] = []
+
+
+class FitSelectionIn(BaseModel):
+    id: str
+    keep: bool
+
+
+class ResumeFitGenerateIn(BaseModel):
+    job_context: str = ""
+    background_text: str = ""
+    background_document_ids: str = ""
+    blocks: list[FitBlockIO]
+    selections: list[FitSelectionIn]
+
+
+class ResumeFitGenerateOut(BaseModel):
+    draft: str = ""
+    pdf_url: str | None = None
+    fit: bool = False
+    page_count: int | None = None
+    cut_suggestions: list[FitBlockIO] = []
+    notes: list[str] = []
+    warnings: list[str] = []
 
 
 def _resume_doc_preview(doc) -> str:
@@ -456,6 +532,71 @@ def get_resume_pdf(filename: str):
     if not path.is_file():
         return {"error": "not found"}
     return FileResponse(path, media_type="application/pdf", filename="optimized_resume.pdf")
+
+
+@app.post("/api/job/resume-fit/analyze", response_model=ResumeFitAnalyzeOut)
+def resume_fit_analyze(body: ResumeFitAnalyzeIn) -> ResumeFitAnalyzeOut:
+    """First half of Detailed mode: rates every real bullet/entry/skill
+    line against the job context, without editing anything - no file
+    upload here, works from the document library the same way Fast mode
+    does when nothing new is uploaded (_pick_resume_source(..., resume=None)).
+    """
+    latex_text, extra_facts, warnings = _pick_resume_source(body.background_text, body.background_document_ids, None)
+    if not latex_text:
+        return ResumeFitAnalyzeOut(
+            warnings=warnings + ["nothing to analyze - pick a resume from your document library or paste it in Extra background"]
+        )
+    if "\\begin{document}" not in latex_text and "\\documentclass" not in latex_text:
+        warnings.append("this doesn't look like LaTeX source (no \\documentclass/\\begin{document} found) - results may be off")
+
+    try:
+        analysis = analyze_latex_resume_fit(_resume_llm, latex_text, body.job_context)
+    except ValueError as e:
+        return ResumeFitAnalyzeOut(warnings=warnings + [str(e)])
+
+    blocks_out = [FitBlockIO(**asdict(b)) for b in analysis.blocks]
+    return ResumeFitAnalyzeOut(sections=analysis.sections, blocks=blocks_out, warnings=warnings)
+
+
+@app.post("/api/job/resume-fit/generate", response_model=ResumeFitGenerateOut)
+def resume_fit_generate(body: ResumeFitGenerateIn) -> ResumeFitGenerateOut:
+    """Second half of Detailed mode: edits the LaTeX to match exactly
+    what Duc checked/unchecked (the full block list + selections are
+    echoed back from the frontend's analyze-step state, keeping this
+    endpoint stateless like the rest of webapp.py), compiles it for
+    real, and never cuts more than what was explicitly marked CUT - see
+    generate_latex_from_selection()'s docstring for why overflow is
+    reported (cut_suggestions), not auto-trimmed.
+    """
+    latex_text, extra_facts, warnings = _pick_resume_source(body.background_text, body.background_document_ids, None)
+    if not latex_text:
+        return ResumeFitGenerateOut(
+            warnings=warnings + ["nothing to generate from - pick a resume from your document library or paste it in Extra background"]
+        )
+
+    blocks = [FitBlock(**b.model_dump()) for b in body.blocks]
+    selections = [FitSelection(id=s.id, keep=s.keep) for s in body.selections]
+
+    try:
+        result = generate_latex_from_selection(_resume_llm, latex_text, blocks, selections, body.job_context, extra_facts)
+    except ValueError as e:
+        return ResumeFitGenerateOut(warnings=warnings + [str(e)])
+
+    pdf_url = None
+    if result.pdf_bytes:
+        pdf_url = f"/api/job/resume-pdf/{_save_generated_pdf(result.pdf_bytes)}"
+
+    warnings.extend(result.notes)
+    if not result.fit and not result.cut_suggestions:
+        warnings.append("didn't compile even after a fix attempt - see the draft text below")
+    elif not result.fit:
+        warnings.append("your selection doesn't fit one page yet - see the suggested items to cut next, lowest fit first")
+
+    cut_out = [FitBlockIO(**asdict(b)) for b in result.cut_suggestions]
+    return ResumeFitGenerateOut(
+        draft=result.latex, pdf_url=pdf_url, fit=result.fit, page_count=result.page_count,
+        cut_suggestions=cut_out, notes=result.notes, warnings=warnings,
+    )
 
 
 @app.post("/api/job/draft", response_model=DraftOut)

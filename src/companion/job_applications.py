@@ -12,6 +12,7 @@ rewriting what still sounds artificial. Never invents facts: the
 critique pass is told the same rule that project states outright -
 a name, number, date, or claim has to come from what Duc actually gave it.
 """
+import json
 import sqlite3
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -569,6 +570,268 @@ def optimize_latex_resume_one_page(
     return LatexFitResult(
         latex=best_latex, pdf_bytes=best.pdf_bytes if best else None,
         page_count=best.page_count if best else None, fit=False, attempts=max_attempts, notes=notes,
+    )
+
+
+# --- Resume "Detailed" mode: rate every real bullet/entry/skill-category
+# in a LaTeX resume against a job, let Duc pick exactly what survives via
+# a checklist in the UI, then edit only what he selected. Built
+# 2026-09-04 after Duc explicitly asked for two speed/control tiers -
+# "Fast" (optimize_latex_resume_one_page, above) decides cuts itself;
+# this mode never cuts anything he didn't explicitly uncheck. When asked
+# how overflow (his picks not fitting one page) should be handled, his
+# own answer was "tell me what to cut next," not auto-trim - so
+# generate_latex_from_selection() below never removes more than what was
+# marked CUT, even if the result doesn't fit; it resurfaces the kept
+# blocks sorted by their own analysis score instead, so Duc decides.
+RESUME_FIT_SYSTEM = (
+    "You analyze a LaTeX resume against a job context and rate how relevant each individual piece of content "
+    "is to that job - you don't edit anything. Every Education, Experience, Projects, or award/activity entry "
+    "gets its own whole-entry row (so it can be dropped as a unit). Additionally, every real bullet inside an "
+    "Experience or Projects entry gets its own bullet row, and every coursework line or skills category line "
+    "gets its own detail row. A job or project entry with bullets therefore produces one entry row PLUS one row "
+    "per bullet, all sharing the same entry label, so the UI can show it as one item with its bullets nested "
+    "underneath. Every real piece of content in the source must get exactly one rating at its own level - don't "
+    "skip real content, and don't invent content that isn't there. Output ONLY a single JSON object matching "
+    "the schema given - no commentary, no markdown code fences, nothing before or after it."
+)
+
+RESUME_FIT_PROMPT = """Rate how relevant each piece of content below is to this job context, on a 0-100 scale \
+(100 = highly relevant and clearly worth keeping, 0 = not relevant at all). Use these priority buckets: score >= \
+75 is "High", 40-74 is "Medium", below 40 is "Low". Set recommended_keep to true for High and Medium, false for \
+Low - that's only a starting suggestion, Duc reviews and changes it himself in the UI.
+
+For every Education, Experience, Projects, or award/activity entry, output one "entry"-kind row rating that \
+whole item (so it can be dropped as a single unit). THEN, for every real bullet inside an Experience or \
+Projects entry, ALSO output one "bullet"-kind row for that individual bullet, sharing the same "entry" label as \
+its parent entry row - a job with 6 bullets produces 1 entry row + 6 bullet rows, all with "entry" set to that \
+job's label. For a coursework line or a skills category line, output one "detail"-kind row (no separate parent \
+row needed for these). Every real bullet, entry, coursework line, and skills category line in the source needs \
+exactly one row at its own level - don't skip real content, don't invent content that isn't there.
+
+Only content wrapped in the resume's own bullet/item command (e.g. a \\resumeItem{{...}} call, or an \\item \
+inside an itemize) counts as a "bullet" row. An introductory or summary sentence that sits between an entry's \
+heading and its bulleted list, but is NOT itself wrapped as a bullet, is part of the entry itself - don't give \
+it its own "bullet" row; it stays with the entry automatically and isn't independently selectable.
+
+Give each row a short, stable, unique id (lowercase, hyphens, e.g. "exp-escaype" for the entry row and \
+"exp-escaype-bullet-2" for one of its bullets, or "edu-berkeley-course-ml" for a coursework detail). "entry" is \
+the human-readable label of the parent entry (e.g. "Escaype LLC - Software Engineer Intern") - the entry row \
+itself and every bullet row beneath it must share this exact same "entry" value. For a "detail" row with no \
+real parent (a coursework line, a skills category), set "entry" to that item's own label. "label" is a short \
+preview of the actual content (the entry's own heading for an "entry" row; truncate a long bullet to roughly \
+100 characters for a "bullet" row).
+
+=== Job / role context (optional - if blank, rate for general strength/clarity rather than a specific target) ===
+{job_context}
+
+=== Resume LaTeX source ===
+{original_latex}
+
+Output exactly this JSON shape, nothing else:
+{{"sections": ["Education", "Experience", "Projects", "Skills", ...actual section names found...],
+  "blocks": [
+    {{"id": "...", "section": "...", "entry": "...", "kind": "entry|bullet|detail", "label": "...",
+      "score": 0-100, "priority": "High|Medium|Low", "reason": "one short sentence", "recommended_keep": true|false}},
+    ...
+  ]}}"""
+
+
+@dataclass
+class FitBlock:
+    id: str
+    section: str
+    entry: str
+    kind: str  # "entry" | "bullet" | "detail"
+    label: str
+    score: int
+    priority: str  # "High" | "Medium" | "Low"
+    reason: str
+    recommended_keep: bool
+
+
+@dataclass
+class ResumeFitAnalysis:
+    sections: list[str]
+    blocks: list[FitBlock]
+
+
+def _strip_code_fence(text: str) -> str:
+    """The model sometimes wraps JSON in a ```json fence despite being
+    told not to - stripped defensively rather than failing an otherwise-
+    valid response over formatting the system prompt already forbade.
+    """
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    return text
+
+
+def analyze_latex_resume_fit(llm: AnthropicLLM, original_latex: str, job_context: str = "") -> ResumeFitAnalysis:
+    """Rates every real bullet/entry/skill-category in a LaTeX resume
+    against a job context, without editing anything - the first half of
+    "Detailed" mode. Never invents content: every block must trace back
+    to something actually in original_latex, and the model is told to
+    cover every real block rather than selectively omitting ones it'd
+    rather cut - that decision belongs to Duc, in the UI, not here.
+    Raises ValueError if the response was truncated or isn't valid JSON.
+    """
+    job_context = job_context.strip() or "(none given - rate for general strength/clarity)"
+    text = llm.respond(
+        system=RESUME_FIT_SYSTEM, history=[],
+        user_input=RESUME_FIT_PROMPT.format(job_context=job_context, original_latex=original_latex),
+    )
+    if text.endswith(TRUNCATION_MARKER):
+        raise ValueError("the fit analysis got cut off before finishing - try again, or shorten the original source")
+    text = _strip_code_fence(text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"the fit analysis didn't come back as valid JSON - try again ({e})")
+
+    blocks = [
+        FitBlock(
+            id=b["id"], section=b["section"], entry=b.get("entry", ""), kind=b["kind"], label=b["label"],
+            score=int(b["score"]), priority=b["priority"], reason=b.get("reason", ""),
+            recommended_keep=bool(b.get("recommended_keep", int(b["score"]) >= 40)),
+        )
+        for b in data.get("blocks", [])
+    ]
+    return ResumeFitAnalysis(sections=data.get("sections", []), blocks=blocks)
+
+
+@dataclass
+class FitSelection:
+    id: str
+    keep: bool
+
+
+@dataclass
+class ResumeFitGenerateResult:
+    latex: str
+    pdf_bytes: bytes | None
+    page_count: int | None
+    fit: bool  # True only if it compiled to exactly one page
+    cut_suggestions: list[FitBlock]  # kept blocks, lowest score first - only populated when it didn't fit
+    notes: list[str]
+
+
+RESUME_FIT_GENERATE_SYSTEM = (
+    "You edit LaTeX resume source code to include exactly the content Duc selected, and nothing else. You "
+    "preserve the document's structure, packages, and commands exactly - you only add, remove, or reword "
+    "content, and every piece of content you keep must use the exact same LaTeX commands it already used in the "
+    "original (e.g. keep using \\resumeItem{...} for a bullet that was already a \\resumeItem, keep intro text "
+    "that precedes a bulleted list exactly as plain text with no command around it). Never insert a bare/raw "
+    "\\item or any other structural command that doesn't already appear in the original for that kind of "
+    "content, even to represent something you're keeping - if you're unsure how a kept piece of content should "
+    "be re-emitted, copy its original LaTeX for it verbatim. Decisions are hierarchical: an entry-level row "
+    "marked CUT means remove that whole entry (heading and all its bullets), regardless of what its own bullet "
+    "rows say. An entry-level row marked KEEP means keep that entry's heading (and any intro text that isn't "
+    "itself a separate bullet row), but only include the bullets under it that are themselves marked KEEP - "
+    "drop the rest. A detail row (a coursework line, a skills category line) marked CUT is removed on its own. "
+    "If every entry-level row within a whole section ends up cut, remove that section's heading and its now-"
+    "empty list wrapper too - never leave a section heading with nothing under it. Never cut anything not "
+    "marked CUT, and never add anything not marked KEEP, even if you personally think it "
+    "should be different - Duc already reviewed and decided this, it is not yours to override. You never "
+    "invent a new achievement, number, date, title, skill, course, or project that isn't already in the "
+    "original, and extra facts (if given) may only correct or extend a detail inside a KEPT entry, never create "
+    "a new standalone entry. Output only valid, complete LaTeX source - no commentary, no markdown code fences, "
+    "nothing before or after it."
+)
+
+RESUME_FIT_GENERATE_PROMPT = """Edit this LaTeX resume to include exactly the content marked KEEP below, and \
+remove everything marked CUT. Where a kept bullet's wording can be tightened for the job context below, do so - \
+but every fact must still trace back to the original, and every cut must match exactly what's marked, nothing \
+more and nothing less.
+
+=== Job / role context (optional) ===
+{job_context}
+
+=== Content decisions (id: kind, section, entry, "label" -> KEEP or CUT) ===
+{decisions}
+
+=== Additional facts (optional) - use ONLY to correct/extend a detail inside a KEPT entry, never to add a new \
+standalone entry, even if true and relevant ===
+{extra_facts}
+
+=== Original LaTeX source (the only source of truth for facts and structure) ===
+{original_latex}
+
+Output the complete, edited LaTeX source now - nothing else."""
+
+
+def generate_latex_from_selection(
+    llm: AnthropicLLM, original_latex: str, blocks: list[FitBlock], selections: list[FitSelection],
+    job_context: str = "", extra_facts: str = "",
+) -> ResumeFitGenerateResult:
+    """Second half of "Detailed" mode: edits the LaTeX to match exactly
+    what Duc checked/unchecked in the UI, compiles it for real
+    (latex_compile.py), and - if it doesn't land on one page - never
+    cuts more on its own. Instead it resurfaces the kept blocks sorted
+    by their own analysis score, lowest first, so Duc can see what to
+    uncheck next and regenerate - fully deterministic, no extra LLM
+    call needed since the scores are already known from analysis.
+    A real compile failure still gets one automatic fix-only pass
+    (LATEX_FIX_PROMPT, shared with Fast mode) - that's correcting broken
+    syntax, not cutting more content, so it doesn't cross the "only what
+    Duc marked" boundary.
+    """
+    job_context = job_context.strip() or "(none given)"
+    extra_facts = extra_facts.strip() or "(none)"
+    keep_ids = {s.id for s in selections if s.keep}
+    by_id = {b.id: b for b in blocks}
+
+    decision_lines = [
+        f'{b.id}: {b.kind}, {b.section}, {b.entry}, "{b.label}" -> {"KEEP" if b.id in keep_ids else "CUT"}'
+        for b in blocks
+    ]
+    decisions = "\n".join(decision_lines) or "(no content blocks given)"
+
+    text = llm.respond(
+        system=RESUME_FIT_GENERATE_SYSTEM, history=[],
+        user_input=RESUME_FIT_GENERATE_PROMPT.format(
+            job_context=job_context, decisions=decisions, extra_facts=extra_facts, original_latex=original_latex,
+        ),
+    )
+    if text.endswith(TRUNCATION_MARKER):
+        raise ValueError("the edited resume got cut off before finishing - try again, or select fewer items")
+    current_latex = text.strip()
+
+    notes: list[str] = []
+    result = compile_latex(current_latex)
+    if not result.success:
+        notes.append("compile failed, asking Claude to fix the LaTeX")
+        fix_text = llm.respond(
+            system=RESUME_FIT_GENERATE_SYSTEM, history=[],
+            user_input=LATEX_FIX_PROMPT.format(error_log=result.log_tail, current_latex=current_latex),
+        )
+        if fix_text.endswith(TRUNCATION_MARKER):
+            notes.append("fix attempt got cut off - returning the broken version so you can see what happened")
+            return ResumeFitGenerateResult(
+                latex=current_latex, pdf_bytes=None, page_count=None, fit=False, cut_suggestions=[], notes=notes,
+            )
+        current_latex = fix_text.strip()
+        result = compile_latex(current_latex)
+
+    if not result.success:
+        notes.append("still didn't compile after one fix attempt - review the LaTeX yourself")
+        return ResumeFitGenerateResult(
+            latex=current_latex, pdf_bytes=None, page_count=None, fit=False, cut_suggestions=[], notes=notes,
+        )
+
+    notes.append(f"compiled to {result.page_count} page(s)")
+    fit = result.page_count == 1
+    cut_suggestions: list[FitBlock] = []
+    if not fit:
+        kept_blocks = [by_id[i] for i in keep_ids if i in by_id]
+        cut_suggestions = sorted(kept_blocks, key=lambda b: b.score)
+
+    return ResumeFitGenerateResult(
+        latex=current_latex, pdf_bytes=result.pdf_bytes, page_count=result.page_count, fit=fit,
+        cut_suggestions=cut_suggestions, notes=notes,
     )
 
 

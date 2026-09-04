@@ -10,6 +10,9 @@
   --accent-dim: #0f6b82;
   --accent-glow: rgba(41, 216, 255, 0.38);
   --danger: #ff5470;
+  --fit-high: #3ddc84;
+  --fit-medium: #ffcc4d;
+  --fit-low: #6a8a9c;
   --idle-speed: 140s;
   --mid-speed: 90s;
   --inner-speed: 46s;
@@ -832,6 +835,74 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
+/* Resume "Detailed" mode - fit-scored, section-grouped content checklist.
+   One card per section (Education/Experience/Projects/...), one group per
+   entry within it (a job/project's own row plus its bullets nested under
+   it), so a resume with many bullets still reads as a short list of
+   things, not one long flat list - Duc's explicit ask when this was
+   designed (2026-09-04). */
+.fit-section {
+  border: 1px solid var(--grid);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.fit-section-title {
+  padding: 0.4rem 0.6rem;
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--grid);
+}
+.fit-entry-group:not(:last-child) { border-bottom: 1px solid var(--grid); }
+.fit-entry-group { padding: 0.3rem 0; }
+
+.fit-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+}
+.fit-row.is-child { padding-left: 1.4rem; }
+.fit-row input[type="checkbox"] { margin-top: 0.15rem; width: auto; flex: 0 0 auto; }
+.fit-row-body { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.fit-row-top { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+.fit-row-label { font-size: 0.76rem; color: var(--text); }
+.fit-row.is-child .fit-row-label { color: var(--text-dim); font-size: 0.73rem; }
+.fit-row-reason { font-size: 0.66rem; color: var(--text-faint); }
+
+.fit-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.64rem;
+  font-weight: 500;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.fit-badge.priority-high { color: var(--fit-high); }
+.fit-badge.priority-medium { color: var(--fit-medium); }
+.fit-badge.priority-low { color: var(--fit-low); }
+
+.fit-cut-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border: 1px solid var(--danger);
+  border-radius: 2px;
+  padding: 0.5rem 0.6rem;
+  background: rgba(255, 84, 112, 0.06);
+  font-size: 0.72rem;
+}
+.fit-cut-suggestions .fit-cut-title { color: var(--danger); letter-spacing: 0.05em; text-transform: uppercase; font-size: 0.64rem; }
+.fit-cut-suggestions ul { margin: 0.2rem 0 0; padding-left: 1.1rem; color: var(--text-dim); }
 
 .jobs-profile-grid {
   display: grid;

@@ -489,6 +489,234 @@ draftCopy.addEventListener("click", async () => {
   }
 });
 
+/* -- resume "Detailed" mode: analyze fit -> pick & choose -> generate --
+   Same job-context/background/document fields above feed both this and
+   the normal Fast draft flow - only the material_type dropdown decides
+   which UI block is visible and which endpoint(s) get hit. */
+
+const fitPanel = document.getElementById("fit-panel");
+const fitAnalyzeBtn = document.getElementById("fit-analyze");
+const fitWarnings = document.getElementById("fit-warnings");
+const fitChecklist = document.getElementById("fit-checklist");
+const fitGenerateBtn = document.getElementById("fit-generate");
+const fitCutSuggestions = document.getElementById("fit-cut-suggestions");
+const fitCutList = document.getElementById("fit-cut-list");
+const fitOutput = document.getElementById("fit-output");
+const fitText = document.getElementById("fit-text");
+const fitCopy = document.getElementById("fit-copy");
+
+let currentFitBlocks = [];
+
+function isResumeDetailed() {
+  return draftMaterialType.value === "resume_detailed";
+}
+
+function updateDraftModeVisibility() {
+  const detailed = isResumeDetailed();
+  fitPanel.hidden = !detailed;
+  draftGenerateBtn.hidden = detailed;
+  if (detailed) {
+    draftWarnings.hidden = true;
+    draftOutput.hidden = true;
+  } else {
+    fitWarnings.hidden = true;
+    fitChecklist.hidden = true;
+    fitGenerateBtn.hidden = true;
+    fitCutSuggestions.hidden = true;
+    fitOutput.hidden = true;
+  }
+}
+draftMaterialType.addEventListener("change", updateDraftModeVisibility);
+updateDraftModeVisibility();
+
+function collectDraftBackgroundFields() {
+  const checkedDocIds = Array.from(document.querySelectorAll("#draft-background-docs input[type=checkbox]:checked")).map((c) => c.value);
+  return {
+    job_context: draftJobContext.value,
+    background_text: draftBackground.value,
+    background_document_ids: checkedDocIds.join(","),
+  };
+}
+
+function priorityClass(priority) {
+  const p = (priority || "").toLowerCase();
+  return p === "high" ? "priority-high" : p === "medium" ? "priority-medium" : "priority-low";
+}
+
+function renderFitRow(block, isChild) {
+  const row = document.createElement("label");
+  row.className = "fit-row" + (isChild ? " is-child" : "");
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = block.recommended_keep;
+  checkbox.dataset.blockId = block.id;
+  row.appendChild(checkbox);
+
+  const body = document.createElement("div");
+  body.className = "fit-row-body";
+
+  const top = document.createElement("div");
+  top.className = "fit-row-top";
+  const label = document.createElement("span");
+  label.className = "fit-row-label";
+  label.textContent = block.label;
+  top.appendChild(label);
+  const badge = document.createElement("span");
+  badge.className = "fit-badge " + priorityClass(block.priority);
+  badge.textContent = `${block.score}% fit — ${block.priority}`;
+  top.appendChild(badge);
+  body.appendChild(top);
+
+  if (block.reason) {
+    const reason = document.createElement("div");
+    reason.className = "fit-row-reason";
+    reason.textContent = block.reason;
+    body.appendChild(reason);
+  }
+  row.appendChild(body);
+  return row;
+}
+
+function renderFitChecklist(sections, blocks) {
+  fitChecklist.innerHTML = "";
+  currentFitBlocks = blocks;
+
+  // Group by section, then by entry (an "entry"-kind row plus its
+  // "bullet" children share one entry label; a "detail" row with no
+  // real parent - a coursework/skills line - is its own single-row group.
+  const orderedSections = sections && sections.length ? sections : [...new Set(blocks.map((b) => b.section))];
+  for (const sectionName of orderedSections) {
+    const sectionBlocks = blocks.filter((b) => b.section === sectionName);
+    if (sectionBlocks.length === 0) continue;
+
+    const sectionEl = document.createElement("div");
+    sectionEl.className = "fit-section";
+    const title = document.createElement("div");
+    title.className = "fit-section-title";
+    title.textContent = sectionName;
+    sectionEl.appendChild(title);
+
+    const entryOrder = [];
+    const byEntry = new Map();
+    for (const b of sectionBlocks) {
+      if (!byEntry.has(b.entry)) {
+        byEntry.set(b.entry, []);
+        entryOrder.push(b.entry);
+      }
+      byEntry.get(b.entry).push(b);
+    }
+
+    for (const entryName of entryOrder) {
+      const group = byEntry.get(entryName);
+      const groupEl = document.createElement("div");
+      groupEl.className = "fit-entry-group";
+      const parent = group.find((b) => b.kind === "entry");
+      const children = group.filter((b) => b.kind !== "entry").sort((a, b) => b.score - a.score);
+      if (parent) groupEl.appendChild(renderFitRow(parent, false));
+      for (const child of children) groupEl.appendChild(renderFitRow(child, !!parent));
+      sectionEl.appendChild(groupEl);
+    }
+    fitChecklist.appendChild(sectionEl);
+  }
+  fitChecklist.hidden = false;
+  fitGenerateBtn.hidden = false;
+}
+
+fitAnalyzeBtn.addEventListener("click", async () => {
+  fitAnalyzeBtn.disabled = true;
+  fitAnalyzeBtn.textContent = "Analyzing…";
+  fitWarnings.hidden = true;
+  fitChecklist.hidden = true;
+  fitGenerateBtn.hidden = true;
+  fitCutSuggestions.hidden = true;
+  fitOutput.hidden = true;
+  try {
+    const body = collectDraftBackgroundFields();
+    const res = await fetch("/api/job/resume-fit/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`server returned ${res.status}`);
+    const data = await res.json();
+    if (data.warnings && data.warnings.length) {
+      fitWarnings.textContent = data.warnings.join(" · ");
+      fitWarnings.hidden = false;
+    }
+    if (data.blocks && data.blocks.length) {
+      renderFitChecklist(data.sections, data.blocks);
+    }
+  } catch (err) {
+    fitWarnings.textContent = `analysis failed — ${err.message}`;
+    fitWarnings.hidden = false;
+  } finally {
+    fitAnalyzeBtn.disabled = false;
+    fitAnalyzeBtn.textContent = "Analyze fit";
+  }
+});
+
+fitGenerateBtn.addEventListener("click", async () => {
+  fitGenerateBtn.disabled = true;
+  fitGenerateBtn.textContent = "Generating…";
+  fitWarnings.hidden = true;
+  fitCutSuggestions.hidden = true;
+  fitOutput.hidden = true;
+  try {
+    const selections = Array.from(fitChecklist.querySelectorAll("input[type=checkbox]")).map((c) => ({
+      id: c.dataset.blockId,
+      keep: c.checked,
+    }));
+    const body = { ...collectDraftBackgroundFields(), blocks: currentFitBlocks, selections };
+    const res = await fetch("/api/job/resume-fit/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`server returned ${res.status}`);
+    const data = await res.json();
+    if (data.warnings && data.warnings.length) {
+      fitWarnings.textContent = data.warnings.join(" · ");
+      fitWarnings.hidden = false;
+    }
+    if (data.cut_suggestions && data.cut_suggestions.length) {
+      fitCutList.innerHTML = "";
+      for (const b of data.cut_suggestions) {
+        const li = document.createElement("li");
+        li.textContent = `${b.label} (${b.score}% fit)`;
+        fitCutList.appendChild(li);
+      }
+      fitCutSuggestions.hidden = false;
+    }
+    fitText.textContent = data.draft || "";
+    const pdfLink = document.getElementById("fit-pdf-link");
+    if (data.pdf_url) {
+      pdfLink.href = data.pdf_url;
+      pdfLink.hidden = false;
+    } else {
+      pdfLink.hidden = true;
+    }
+    fitOutput.hidden = false;
+  } catch (err) {
+    fitWarnings.textContent = `generate failed — ${err.message}`;
+    fitWarnings.hidden = false;
+  } finally {
+    fitGenerateBtn.disabled = false;
+    fitGenerateBtn.textContent = "Generate resume from selection";
+  }
+});
+
+fitCopy.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(fitText.textContent);
+    fitCopy.textContent = "copied!";
+  } catch {
+    fitCopy.textContent = "copy failed";
+  } finally {
+    setTimeout(() => (fitCopy.textContent = "copy"), 1500);
+  }
+});
+
 /* -- tracker -- */
 
 const trackerCompany = document.getElementById("tracker-company");

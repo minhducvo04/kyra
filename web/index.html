@@ -60,6 +60,7 @@
         <select id="draft-material-type">
           <option value="cover_letter">Cover letter</option>
           <option value="latex_resume">Resume — Fast (auto one-page fit from my .tex)</option>
+          <option value="resume_detailed">Resume — Detailed (pick &amp; choose)</option>
           <option value="resume_bullet">Single resume bullet</option>
           <option value="other">Other</option>
         </select>
@@ -112,6 +113,26 @@
         </div>
         <a id="draft-pdf-link" class="jobs-btn" href="#" hidden style="display: block; text-align: center; text-decoration: none; margin: 0.7rem;">Download PDF</a>
         <pre id="draft-text"></pre>
+      </div>
+
+      <div id="fit-panel" hidden style="display: flex; flex-direction: column; gap: 0.7rem;">
+        <button class="jobs-btn" id="fit-analyze" type="button">Analyze fit</button>
+        <p class="jobs-hint">Rates every bullet, entry, and skills line against the job above. Nothing is cut until you generate.</p>
+        <div class="jobs-warnings" id="fit-warnings" hidden></div>
+        <div id="fit-checklist" hidden style="display: flex; flex-direction: column; gap: 0.6rem;"></div>
+        <button class="jobs-btn" id="fit-generate" type="button" hidden>Generate resume from selection</button>
+        <div class="fit-cut-suggestions" id="fit-cut-suggestions" hidden>
+          <div class="fit-cut-title">Doesn't fit one page yet — consider cutting next (lowest fit first)</div>
+          <ul id="fit-cut-list"></ul>
+        </div>
+        <div class="jobs-output" id="fit-output" hidden>
+          <div class="jobs-output-header">
+            <span>RESULT</span>
+            <button class="jobs-copy" id="fit-copy" type="button">copy</button>
+          </div>
+          <a id="fit-pdf-link" class="jobs-btn" href="#" hidden style="display: block; text-align: center; text-decoration: none; margin: 0.7rem;">Download PDF</a>
+          <pre id="fit-text"></pre>
+        </div>
       </div>
     </section>
 
