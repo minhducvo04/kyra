@@ -265,7 +265,11 @@ FULL_RESUME_SYSTEM = (
     "You rewrite and optimize resumes. You reorganize emphasis, tighten wording, and strengthen verbs - you "
     "never invent a new achievement, number, date, title, or skill that isn't already in the original resume "
     "given to you. If a bullet is weak, make it clearer and more specific using only what's actually there, "
-    "don't pad it with invented detail."
+    "don't pad it with invented detail. Extra facts given alongside the resume may only correct or extend a "
+    "detail INSIDE an entry that already exists (a graduation date, a GPA, one more course on an existing "
+    "coursework line) - never use them to add a brand-new standalone entry (a new job, project, certification, "
+    "or section) that wasn't already its own entry in the original, even if the fact is true and relevant - "
+    "adding a new entry to a real application document is Duc's own call to make by hand."
 )
 
 FORMAT_INSTRUCTIONS = """Output the resume in EXACTLY this line-tagged format - no markdown, no extra commentary, nothing before NAME: or after the last ENDSECTION:
@@ -311,13 +315,19 @@ and skill must trace back to the original resume. Don't invent anything, even so
 === Job / role context (optional - if blank, optimize generally rather than invent a target) ===
 {job_context}
 
+=== Additional facts (optional) - use ONLY to correct/extend a detail inside an entry that already exists below \
+(e.g. an updated graduation date, GPA, or one more course on an existing coursework line). Do NOT create a new \
+standalone entry (a new job, project, certification, or section) from these, even if true and relevant - that's \
+Duc's own call, not yours to make here ===
+{extra_facts}
+
 === Original resume (the only source of truth for facts) ===
 {original_resume}
 
 {format_instructions}"""
 
 
-def optimize_full_resume(llm: AnthropicLLM, original_resume: str, job_context: str = "") -> ResumeDoc:
+def optimize_full_resume(llm: AnthropicLLM, original_resume: str, job_context: str = "", extra_facts: str = "") -> ResumeDoc:
     """The full-resume path: one generation call (no separate critique
     pass - resume bullets are already terse/action-verb-driven by
     convention, not prose with the chatbot-ish tells the cover-letter
@@ -335,10 +345,12 @@ def optimize_full_resume(llm: AnthropicLLM, original_resume: str, job_context: s
     quietly ship a document missing its last bullet.
     """
     job_context = job_context.strip() or "(none given - optimize generally)"
+    extra_facts = extra_facts.strip() or "(none)"
     text = llm.respond(
         system=FULL_RESUME_SYSTEM, history=[],
         user_input=FULL_RESUME_PROMPT.format(
-            job_context=job_context, original_resume=original_resume, format_instructions=FORMAT_INSTRUCTIONS
+            job_context=job_context, extra_facts=extra_facts, original_resume=original_resume,
+            format_instructions=FORMAT_INSTRUCTIONS,
         ),
     )
     if text.endswith(TRUNCATION_MARKER):
@@ -419,8 +431,13 @@ LATEX_ONE_PAGE_SYSTEM = (
     "project, a course, a weak bullet) - cut the least relevant content first rather than cramming everything in "
     "shrunk down, and never touch margins, font size, or spacing commands to force a fit. You never invent a new "
     "achievement, number, date, title, skill, course, or project that isn't already in the original, and you "
-    "never reword a kept item into something stronger than what actually happened. Output only valid, complete "
-    "LaTeX source - no commentary, no markdown code fences, nothing before or after it."
+    "never reword a kept item into something stronger than what actually happened. Extra facts given alongside "
+    "the resume may only correct or extend details INSIDE an entry that already exists (a graduation date, a "
+    "GPA, one more course added to an existing coursework line) - never use them to add a brand-new standalone "
+    "entry (a new job, project, certification, or section) that wasn't already its own entry in the original, "
+    "even if the fact is true and relevant - adding a new entry to a real application document is Duc's call to "
+    "make by hand, not something to infer automatically. Output only valid, complete LaTeX source - no "
+    "commentary, no markdown code fences, nothing before or after it."
 )
 
 LATEX_ONE_PAGE_PROMPT = """Edit this LaTeX resume so it fits on exactly one printed page, prioritizing what's most \
@@ -435,8 +452,10 @@ margins, font size, or spacing commands.
 === Job / role context (optional - if blank, optimize generally rather than invent a target) ===
 {job_context}
 
-=== Additional facts to incorporate if relevant - may postdate the resume below, e.g. graduation, new coursework \
-(optional) ===
+=== Additional facts (optional) - use ONLY to correct/extend a detail inside an entry that already exists below \
+(e.g. an updated graduation date, GPA, or one more course on an existing coursework line). Do NOT create a new \
+standalone entry (a new job, project, certification, or section) from these, even if true and relevant - that's \
+Duc's own call, not yours to make here ===
 {extra_facts}
 
 === Original LaTeX source (the only source of truth for facts and structure) ===

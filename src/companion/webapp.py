@@ -74,10 +74,20 @@ _job_store = JobApplicationStore()
 # a draft plus a critique pass needs more room than plain chat's default.
 _draft_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=2500)
 # A full resume rewrite is a genuinely long document, not a paragraph -
-# a 3000-token budget silently truncated mid-document in testing.
-# Separate instance/budget from _draft_llm, which stays sized for
-# cover letters/bullets (already verified clean at 2500).
-_resume_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=6000)
+# a 3000-token budget silently truncated mid-document in testing, and
+# 6000 still hit the same wall for real (2026-09-04, Duc's actual LaTeX
+# resume against a real job posting - "cut off before finishing" on
+# repeat attempts). Same root cause each time: Sonnet 5's adaptive
+# thinking eats into max_tokens unpredictably (see llm.py), and every
+# iteration of the one-page fit loop has to return a COMPLETE document,
+# not a diff, so thinking + a full multi-KB LaTeX/resume output can
+# together exceed a budget that looked generous in isolated testing.
+# Raising the ceiling costs nothing unless actually used (max_tokens is
+# a cap, not a reservation) - 16000 leaves enormous headroom over any
+# real resume's output size. Separate instance/budget from _draft_llm,
+# which stays sized for cover letters/bullets (already verified clean
+# at 2500 - much shorter output, doesn't need this).
+_resume_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=16000)
 _autofill_engine = GreenhouseAutofillEngine()
 _job_documents = JobDocumentStore()
 _memory_notes = MarkdownMemoryNotesStore()
@@ -369,11 +379,8 @@ def _full_resume_draft(
         if github_text:
             extra_facts = f"{extra_facts}\n\n{github_text}" if extra_facts else github_text
 
-    if extra_facts:
-        resume_text = f"{resume_text}\n\n=== Newer facts to incorporate (may postdate the resume above) ===\n{extra_facts}"
-
     try:
-        doc = optimize_full_resume(_resume_llm, resume_text, job_context)
+        doc = optimize_full_resume(_resume_llm, resume_text, job_context, extra_facts)
     except ResumeFormatError as e:
         return DraftOut(draft="", background_chars=len(resume_text), style_chars=0, warnings=warnings + [str(e)])
 
