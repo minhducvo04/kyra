@@ -24,7 +24,7 @@ def resample(audio: np.ndarray, from_rate: int, to_rate: int) -> np.ndarray:
 
 
 def main() -> None:
-    text = "Hi Duc, I'm Kyra. I'll remember this for your interview prep."
+    text = "Hi Duc, I'm Kyra. I'll remember this for your next study session."
 
     print("Loading Kokoro (TTS)...")
     tts = KokoroTTS()

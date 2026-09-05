@@ -1,7 +1,7 @@
 # Kyra v2 — a suggested outline for a scalable, industry-shaped version
 
 Written 2026-09-04. v1 is a single-user, single-process, everything-local app — the *right* shape for a learning
-project and for the interview-prep goal. v2 is what it would take to run Kyra as a service: multiple clients
+project and for its original learning goal. v2 is what it would take to run Kyra as a service: multiple clients
 (web, phone, Apple Vision Pro), a cloud footprint, real data stores, and operational maturity. This is an outline
 to discuss, not a commitment — each phase is independently shippable, and the Strategy-pattern boundaries in v1
 are exactly what make it incremental instead of a rewrite.

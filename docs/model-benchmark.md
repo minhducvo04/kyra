@@ -358,7 +358,7 @@ _user:_ What should I prioritise this week, and remind me how long I've got?
 
 > Alright, let's get you locked in.
 > 
-> **Priority #1: Concurrency and multithreading.** That's your known weak spot, and for an final round, it's exactly the kind of thing that shows up in system design or coding rounds. Don't let it slide this week — everything else can wait behind this.
+> **Priority #1: Concurrency and multithreading.** That's your known weak spot, and for a final round, it's exactly the kind of thing that shows up in system design or coding rounds. Don't let it slide this week — everything else can wait behind this.
 > 
 > Here's how I'd break it down:
 > 1. **Mornings (your best focus window):** Deep-dive concurrency — thread pools, locks, race conditions, deadlocks, producer-consumer problems. Actually write code, don't just read theory.

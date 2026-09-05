@@ -9,7 +9,7 @@
 3. **Verify** — a real run (real API call / real compile / real browser), not just unit tests. Keep the proof
    (log lines, screenshot, output file) and mention it in the commit message.
 4. **Record** — a "key decision" bullet in CLAUDE.md (the *why*), a row in `docs/industry-standards.md` if a
-   standard changed, an entry in `docs/needs-your-input.md` for anything that needs the owner.
+   standard changed, an entry in `data/private_docs/needs-your-input.md` for anything that needs the owner.
 5. **Close** — commit. End the reply with exactly:
    `Finished: <part>. Next: <part>. Suggested: <model> / <effort>.`
 

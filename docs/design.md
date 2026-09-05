@@ -59,7 +59,7 @@ This is the class every future agentic tool plugs into later (Feature Backlog #1
 
 ## Why this shape (the LLD angle)
 
-`MemoryStore` being an abstract interface rather than "just import chromadb everywhere" is the actual pattern interview test for with "how would you extend this design." Same reasoning will apply to `Tool` later — an interface now means adding a new tool or memory backend is additive, not a rewrite.
+`MemoryStore` being an abstract interface rather than "just import chromadb everywhere" is the pattern LLD interview rounds test for with "how would you extend this design." Same reasoning will apply to `Tool` later — an interface now means adding a new tool or memory backend is additive, not a rewrite.
 
 ## Out of scope for v1
 

@@ -1,7 +1,7 @@
 # Industry standards applied to Kyra — what changed, what it was before, and why the standard exists
 
 Written 2026-09-04 during a whole-system audit. Each row is a concrete change in this repo; the "why" is the reason
-the industry converged on it, which is the part worth being able to explain in an interview.
+the industry converged on it, which is the part worth being able to explain.
 
 Legend: ✅ done tonight · 🟡 partially done / next step noted · ⏭ deliberately not done (with reason)
 
@@ -85,5 +85,5 @@ Legend: ✅ done tonight · 🟡 partially done / next step noted · ⏭ deliber
 
 - `pytest`: 56 passed, ~5 s, including real `pdflatex` compiles.
 - `ruff check src scripts tests`: clean.
-- Real end-to-end: Duc's actual LaTeX resume + a realistic SDE posting through the rewritten Fast loop with a real Claude call — result recorded in CLAUDE.md.
+- Real end-to-end: Duc's actual LaTeX resume + a realistic SDE posting through the rewritten Fast loop with a real Claude call — result recorded in the private prep notes and CLAUDE.md.
 - Test PDFs generated during verification were deleted; the one pre-existing `data/generated_resumes/078cb7e0bc4a.pdf` (the 2-page output from the old `full_resume` HTML path, 2026-09-04 00:36) is the artifact that prompted this audit and was left in place as evidence.
