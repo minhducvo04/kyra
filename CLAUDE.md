@@ -124,6 +124,12 @@ Global principles and the session-end line live in `~/.claude/CLAUDE.md`; this i
 | Implementing a specified feature, wiring, docs, refactors covered by tests | Sonnet 5 | medium |
 | Trivial edits, questions answerable from one file | Sonnet 5 | low |
 
+### Skills in use (vendored under `.claude/skills/`, see `ATTRIBUTION.md` there)
+- `grill-me` / `grilling` before any non-trivial build; `interview-me` when an ask is ambiguous.
+- `test-driven-development` and `code-review-and-quality` during build and review.
+- `ponytail` on build sessions (minimal code); `ponytail-review` to hunt over-engineering in a diff.
+- `domain-modeling` maintains `CONTEXT.md` (shared vocabulary) when terms get introduced.
+
 ## Working practices
 
 - **Never `cat`, `diff`, or otherwise print the full contents of `.env`.** It holds a live Anthropic API key. Two earlier sessions accidentally leaked a real key into a conversation this way (both keys were revoked after). For diagnostics, check only length/prefix/whitespace, like `scripts/debug_api_key.py` does.
