@@ -1023,3 +1023,32 @@ body {
   .jobs-panel { width: 100vw; }
   .jobs-profile-grid { grid-template-columns: 1fr; }
 }
+
+/* One-page fit verdict for resume output - a pass/fail the eye can't
+   miss, separate from the softer warnings line above it. */
+.fit-status {
+  margin: 0.7rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+}
+.fit-status.is-ok {
+  color: var(--fit-high);
+  border-color: var(--fit-high);
+  background: rgba(61, 220, 132, 0.08);
+}
+.fit-status.is-bad {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: rgba(255, 84, 112, 0.08);
+}
+.fit-notes {
+  margin: 0 0.7rem;
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+.fit-notes summary { cursor: pointer; }
+.fit-notes ul { margin: 0.3rem 0 0 1rem; padding: 0; }

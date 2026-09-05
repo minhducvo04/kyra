@@ -13,17 +13,24 @@ critique pass is told the same rule that project states outright -
 a name, number, date, or claim has to come from what Duc actually gave it.
 """
 import json
+import logging
+import math
+import re
 import sqlite3
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 from companion.latex_compile import CompileResult, compile_latex
-from companion.llm import AnthropicLLM, TRUNCATION_MARKER
+from companion.llm import TRUNCATION_MARKER, AnthropicLLM
+from companion.paths import DATA_DIR
 from companion.resume_format import ResumeDoc, ResumeFormatError, parse_resume_text
+from companion.resume_guard import check_resume_output
 from companion.tools import Tool
 
-DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "job_applications.db"
+DB_PATH = DATA_DIR / "job_applications.db"
+
+logger = logging.getLogger(__name__)
 
 VALID_STATUSES = {"applied", "interviewing", "offer", "rejected", "withdrawn"}
 
@@ -120,7 +127,7 @@ class JobApplicationStore:
         self._conn.commit()
 
     def add(self, company: str, role: str, link: str | None = None, notes: str | None = None) -> JobApplication:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         cur = self._conn.execute(
             "INSERT INTO job_applications (company, role, link, status, notes, created_at, updated_at) "
             "VALUES (?, ?, ?, 'applied', ?, ?, ?)",
@@ -150,7 +157,7 @@ class JobApplicationStore:
         ).fetchone()
         if row is None:
             return None
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         new_notes = notes if notes is not None else row[3]
         self._conn.execute(
             "UPDATE job_applications SET status = ?, notes = ?, updated_at = ? WHERE id = ?",
@@ -450,6 +457,9 @@ anything, even something plausible-sounding.
 Keep the LaTeX structure, packages, and commands exactly as given - only add, remove, or edit content. Don't touch \
 margins, font size, or spacing commands.
 
+=== Length budget (measured by actually compiling the original) ===
+{length_budget}
+
 === Job / role context (optional - if blank, optimize generally rather than invent a target) ===
 {job_context}
 
@@ -464,10 +474,15 @@ Duc's own call, not yours to make here ===
 
 Output the complete, edited LaTeX source now - nothing else."""
 
-LATEX_SHRINK_PROMPT = """This LaTeX resume just compiled to {page_count} real pages - it still needs to fit exactly \
-one page. Cut more: drop the single least-relevant remaining project, course, or bullet (favor what's most relevant \
-to the job/role context below), or tighten wordy bullets further. Don't invent anything, don't touch margins/font/ \
-spacing commands, keep the LaTeX structure intact.
+LATEX_SHRINK_PROMPT = """This LaTeX resume was just compiled for real and does NOT fit on one page.
+
+=== Measured overflow ===
+{overflow_hint}
+
+Cut more, proportionally to that overflow: drop whole entries or several bullets at once (favor what's least \
+relevant to the job/role context below), or tighten wordy bullets - but cutting too little and having to try \
+again is the most common failure here, so when in doubt cut MORE than the minimum. Don't invent anything, don't \
+touch margins/font/spacing commands, keep the LaTeX structure intact.
 
 === Job / role context ===
 {job_context}
@@ -488,6 +503,47 @@ content decisions (what was kept, cut, or reworded), don't undo those edits, don
 
 Output the complete, corrected LaTeX source now - nothing else."""
 
+# How many attempts the fit loop gets before returning its best real
+# compile. Each attempt costs one Claude call plus a local compile; with
+# overflow measurement feeding proportional cut sizes, convergence is
+# normally 1-2 shrinks, so 5 is headroom, not the expected path.
+DEFAULT_FIT_ATTEMPTS = 5
+
+
+def _length_budget_text(baseline: CompileResult) -> str:
+    """Tells the model, in concrete measured terms, how much room it has
+    - the single most useful signal for a first pass. Without it, the
+    model edits blind and a resume that already fit can come back longer
+    (the actual way a one-page original became a two-page result)."""
+    if not baseline.success or baseline.measure is None:
+        return "(the original couldn't be compiled to measure it - assume it's tight and don't add net length)"
+    m = baseline.measure
+    if m.page_count == 1:
+        return (
+            f"The original ALREADY compiles to exactly one page, with about {m.first_page_capacity} lines of "
+            "text on it. Your edited version must be no longer than the original: net length must stay equal "
+            "or shorter. Every bullet you lengthen or add must be paid for by cutting or tightening something "
+            "else. Do not add new bullets, entries, or lines unless you remove at least as much."
+        )
+    return (
+        f"The original compiles to {m.page_count} pages: page 1 holds about {m.first_page_capacity} lines, and "
+        f"{m.overflow_lines} line(s) spill past it. You must cut at least that much content (plus a safety "
+        "margin of a few lines) - whole entries and several bullets, not one bullet."
+    )
+
+
+def _overflow_hint(result: CompileResult, attempt: int, max_attempts: int) -> str:
+    m = result.measure
+    if m is None:
+        return f"It compiled to {result.page_count} pages. Cut substantially more."
+    target = max(3, math.ceil(m.overflow_lines * 1.4) + attempt)
+    return (
+        f"It compiled to {m.page_count} pages. Page 1 holds about {m.first_page_capacity} lines; "
+        f"{m.overflow_lines} line(s) spilled past it. Remove content worth AT LEAST {target} lines - roughly "
+        f"{max(2, target // 2)}-{target} bullets (a bullet is ~1-2 lines) or one whole entry. This is attempt "
+        f"{attempt} of {max_attempts}."
+    )
+
 
 @dataclass
 class LatexFitResult:
@@ -497,40 +553,73 @@ class LatexFitResult:
     fit: bool  # True only if a compiled attempt landed on exactly one page
     attempts: int
     notes: list[str]  # one line per attempt, for a transparent "here's what happened" summary in the UI
+    overflow_lines: int | None = None  # lines past page 1 on the returned document (0 when it fits)
+    original_page_count: int | None = None
+    guard_warnings: list[str] = field(default_factory=list)  # resume_guard.py fact-check results
+
+
+def _better(candidate: CompileResult, best: CompileResult | None) -> bool:
+    """Fewest pages wins; among equal page counts, fewest overflow lines."""
+    if best is None:
+        return True
+    c = (candidate.page_count or 999, candidate.overflow_lines or 0)
+    b = (best.page_count or 999, best.overflow_lines or 0)
+    return c < b
 
 
 def optimize_latex_resume_one_page(
-    llm: AnthropicLLM, original_latex: str, job_context: str = "", extra_facts: str = "", max_attempts: int = 4,
+    llm: AnthropicLLM, original_latex: str, job_context: str = "", extra_facts: str = "",
+    max_attempts: int = DEFAULT_FIT_ATTEMPTS,
 ) -> LatexFitResult:
     """Generates an edit, actually compiles it with a real local LaTeX
     engine (latex_compile.py), and iterates against the real page count
+    AND the measured overflow (how many lines spilled past page one)
     until it lands on exactly one page or max_attempts runs out. On
-    giving up, returns the best (fewest-pages) real compiled attempt
-    seen, with fit=False and a note explaining it didn't fully converge -
-    never a document that was never actually compiled.
+    giving up, returns the best real compiled attempt seen (fewest
+    pages, then fewest overflow lines), with fit=False and a note
+    explaining it didn't fully converge - never a document that was
+    never actually compiled.
+
+    The original is compiled first so the model gets a measured length
+    budget up front ("this already fits with ~51 lines - don't grow
+    it"); before that existed a one-page original could come back as
+    two pages and the per-bullet shrink nibbles never caught up.
     """
     job_context = job_context.strip() or "(none given - optimize generally)"
     extra_facts = extra_facts.strip() or "(none)"
+    notes: list[str] = []
+
+    baseline = compile_latex(original_latex)
+    if baseline.success and baseline.measure is not None:
+        notes.append(
+            f"original compiles to {baseline.page_count} page(s), {baseline.measure.first_page_capacity} lines on page 1"
+        )
+    else:
+        notes.append("original didn't compile cleanly - proceeding without a measured length budget")
+    logger.info("one-page fit: baseline pages=%s overflow=%s", baseline.page_count, baseline.overflow_lines)
 
     text = llm.respond(
         system=LATEX_ONE_PAGE_SYSTEM, history=[],
         user_input=LATEX_ONE_PAGE_PROMPT.format(
-            job_context=job_context, extra_facts=extra_facts, original_latex=original_latex
+            length_budget=_length_budget_text(baseline), job_context=job_context,
+            extra_facts=extra_facts, original_latex=original_latex,
         ),
     )
     if text.endswith(TRUNCATION_MARKER):
         raise ValueError("the optimized LaTeX got cut off before finishing - try again, or shorten the original source")
-    current_latex = text.strip()
+    current_latex = _strip_code_fence(text)
 
-    notes: list[str] = []
     best: CompileResult | None = None
     best_latex = current_latex
+    attempts_used = 0
 
     for attempt in range(1, max_attempts + 1):
+        attempts_used = attempt
         result = compile_latex(current_latex)
 
         if not result.success:
             notes.append(f"attempt {attempt}: compile failed, asking Claude to fix the LaTeX")
+            logger.warning("one-page fit attempt %d: compile failed", attempt)
             if attempt == max_attempts:
                 break
             fix_text = llm.respond(
@@ -540,16 +629,22 @@ def optimize_latex_resume_one_page(
             if fix_text.endswith(TRUNCATION_MARKER):
                 notes.append(f"attempt {attempt}: fix attempt got cut off - stopping here")
                 break
-            current_latex = fix_text.strip()
+            current_latex = _strip_code_fence(fix_text)
             continue
 
-        notes.append(f"attempt {attempt}: compiled to {result.page_count} page(s)")
-        if best is None or (best.page_count is not None and result.page_count is not None and result.page_count < best.page_count):
+        over = result.overflow_lines or 0
+        notes.append(
+            f"attempt {attempt}: compiled to {result.page_count} page(s)" + (f", {over} line(s) over" if over else "")
+        )
+        logger.info("one-page fit attempt %d: pages=%s overflow=%s", attempt, result.page_count, over)
+        if _better(result, best):
             best, best_latex = result, current_latex
 
         if result.page_count == 1:
             return LatexFitResult(
-                latex=current_latex, pdf_bytes=result.pdf_bytes, page_count=1, fit=True, attempts=attempt, notes=notes,
+                latex=current_latex, pdf_bytes=result.pdf_bytes, page_count=1, fit=True, attempts=attempt,
+                notes=notes, overflow_lines=0, original_page_count=baseline.page_count,
+                guard_warnings=check_resume_output(current_latex, [original_latex, extra_facts]),
             )
 
         if attempt == max_attempts:
@@ -558,18 +653,24 @@ def optimize_latex_resume_one_page(
         shrink_text = llm.respond(
             system=LATEX_ONE_PAGE_SYSTEM, history=[],
             user_input=LATEX_SHRINK_PROMPT.format(
-                page_count=result.page_count, job_context=job_context, current_latex=current_latex
+                overflow_hint=_overflow_hint(result, attempt, max_attempts), job_context=job_context,
+                current_latex=current_latex,
             ),
         )
         if shrink_text.endswith(TRUNCATION_MARKER):
             notes.append(f"attempt {attempt}: shrink attempt got cut off - stopping here")
             break
-        current_latex = shrink_text.strip()
+        current_latex = _strip_code_fence(shrink_text)
 
-    notes.append(f"couldn't automatically reach exactly one page in {max_attempts} attempt(s) - returning the closest real compile")
+    notes.append(
+        f"couldn't automatically reach exactly one page in {attempts_used} attempt(s) - returning the closest real compile"
+    )
+    logger.warning("one-page fit gave up after %d attempts; best pages=%s", attempts_used, best.page_count if best else None)
     return LatexFitResult(
         latex=best_latex, pdf_bytes=best.pdf_bytes if best else None,
-        page_count=best.page_count if best else None, fit=False, attempts=max_attempts, notes=notes,
+        page_count=best.page_count if best else None, fit=False, attempts=attempts_used, notes=notes,
+        overflow_lines=best.overflow_lines if best else None, original_page_count=baseline.page_count,
+        guard_warnings=check_resume_output(best_latex, [original_latex, extra_facts]),
     )
 
 
@@ -663,11 +764,9 @@ def _strip_code_fence(text: str) -> str:
     """
     text = text.strip()
     if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
-        text = text.strip()
-    return text
+        text = re.sub(r"^```[A-Za-z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text.strip())
+    return text.strip()
 
 
 def analyze_latex_resume_fit(llm: AnthropicLLM, original_latex: str, job_context: str = "") -> ResumeFitAnalysis:
@@ -690,7 +789,7 @@ def analyze_latex_resume_fit(llm: AnthropicLLM, original_latex: str, job_context
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:
-        raise ValueError(f"the fit analysis didn't come back as valid JSON - try again ({e})")
+        raise ValueError(f"the fit analysis didn't come back as valid JSON - try again ({e})") from e
 
     blocks = [
         FitBlock(
@@ -717,6 +816,8 @@ class ResumeFitGenerateResult:
     fit: bool  # True only if it compiled to exactly one page
     cut_suggestions: list[FitBlock]  # kept blocks, lowest score first - only populated when it didn't fit
     notes: list[str]
+    overflow_lines: int | None = None
+    guard_warnings: list[str] = field(default_factory=list)
 
 
 RESUME_FIT_GENERATE_SYSTEM = (
@@ -798,7 +899,7 @@ def generate_latex_from_selection(
     )
     if text.endswith(TRUNCATION_MARKER):
         raise ValueError("the edited resume got cut off before finishing - try again, or select fewer items")
-    current_latex = text.strip()
+    current_latex = _strip_code_fence(text)
 
     notes: list[str] = []
     result = compile_latex(current_latex)
@@ -813,7 +914,7 @@ def generate_latex_from_selection(
             return ResumeFitGenerateResult(
                 latex=current_latex, pdf_bytes=None, page_count=None, fit=False, cut_suggestions=[], notes=notes,
             )
-        current_latex = fix_text.strip()
+        current_latex = _strip_code_fence(fix_text)
         result = compile_latex(current_latex)
 
     if not result.success:
@@ -822,7 +923,9 @@ def generate_latex_from_selection(
             latex=current_latex, pdf_bytes=None, page_count=None, fit=False, cut_suggestions=[], notes=notes,
         )
 
-    notes.append(f"compiled to {result.page_count} page(s)")
+    over = result.overflow_lines or 0
+    notes.append(f"compiled to {result.page_count} page(s)" + (f", {over} line(s) over" if over else ""))
+    logger.info("detailed generate: pages=%s overflow=%s", result.page_count, over)
     fit = result.page_count == 1
     cut_suggestions: list[FitBlock] = []
     if not fit:
@@ -831,7 +934,8 @@ def generate_latex_from_selection(
 
     return ResumeFitGenerateResult(
         latex=current_latex, pdf_bytes=result.pdf_bytes, page_count=result.page_count, fit=fit,
-        cut_suggestions=cut_suggestions, notes=notes,
+        cut_suggestions=cut_suggestions, notes=notes, overflow_lines=over,
+        guard_warnings=check_resume_output(current_latex, [original_latex, extra_facts]),
     )
 
 

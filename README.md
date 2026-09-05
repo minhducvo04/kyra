@@ -10,7 +10,13 @@ Built as a hands-on learning project for AI pipeline / LLM / agentic RAG experie
 
 Phase 1 done and verified end-to-end: persona, long-term memory (Chroma-backed `MemoryStore`), and the conversation orchestrator (multi-turn chat + memory persisting and getting recalled across sessions).
 
-Voice I/O is built - local, open-source speech-to-text (faster-whisper) and text-to-speech (Kokoro), plus hands-free/push-to-talk listening (`scripts/voice_chat.py`). The non-audio parts (model loading, synthesis, VAD scoring) are verified; nobody has run it with a real microphone yet - **that's you next.**
+Voice I/O is built and verified with a real microphone (2026-09-02) - local, open-source speech-to-text (faster-whisper) and text-to-speech (Kokoro), plus hands-free/push-to-talk listening (`scripts/voice_chat.py`).
+
+Web UI (`scripts/web_ui.py`) with a per-turn router (AUTO/CLAUDE/LOCAL), a JOBS panel (drafting, one-page LaTeX resume fitting with a real compile loop, tracker, Greenhouse autofill) and a TOOLS panel (reminders, news, science, spaced-repetition learning).
+
+Quality bar (2026-09-04): `pytest` suite (56 tests, hermetic - never touches your real `data/`), `ruff` lint, CI workflow, structured logging, a deterministic fact-check guard on every generated resume. See `docs/industry-standards.md` for what changed and why, `docs/v2-outline.md` for where it goes next.
+
+Tests: `pip install -r requirements-dev.txt && python3 -m pytest`
 
 ## Setup (run in your own Terminal, not through Claude)
 

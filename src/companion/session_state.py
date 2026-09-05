@@ -10,9 +10,10 @@ A small file trades a little I/O for state that's both shared and settable
 in real time.
 """
 import json
-from pathlib import Path
 
-STATE_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "session_state.json"
+from companion.paths import DATA_DIR
+
+STATE_PATH = DATA_DIR / "session_state.json"
 VALID_MODES = {"auto", "focus", "chill"}
 DEFAULT_MODE = "auto"
 

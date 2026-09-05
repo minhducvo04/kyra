@@ -24,7 +24,9 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-DEFAULT_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "job_documents"
+from companion.paths import DATA_DIR
+
+DEFAULT_DIR = DATA_DIR / "job_documents"
 INDEX_NAME = "index.json"
 
 VALID_KINDS = {"resume", "style_sample", "note"}

@@ -17,6 +17,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import uvicorn
 
+from companion.logging_setup import configure_logging
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -24,6 +26,7 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args()
 
+    configure_logging()
     print(f"Kyra web UI: http://{args.host}:{args.port}")
     uvicorn.run("companion.webapp:app", host=args.host, port=args.port, log_level="warning")
 

@@ -15,12 +15,16 @@ installed via TeX Live/MacTeX on Duc's machine - no new dependency) rather
 than any hosted compile API, matching the project's "everything runs
 locally" stance for anything touching Duc's real resume content.
 """
+import io
+import logging
 import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from pypdf import PdfReader
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_SECONDS = 40
 LOG_TAIL_CHARS = 2000
@@ -36,12 +40,40 @@ _XELATEX_MARKERS = (
 
 
 @dataclass
+class PageMeasure:
+    """How full the compiled document is, in text lines - the signal a
+    one-page-fit loop needs beyond a bare page count. "2 pages" alone
+    can't tell "three lines spilled over" from "half a page spilled
+    over," and those need very different cuts; feeding the model the
+    real overflow lets it cut proportionally in one pass instead of
+    nibbling one bullet per attempt and never converging (the actual
+    failure mode that produced a 2-page result before this existed).
+    """
+    page_count: int
+    lines_per_page: list[int]  # non-blank text lines on each page, in order
+
+    @property
+    def overflow_lines(self) -> int:
+        """Lines that landed on any page after the first - 0 when it fits."""
+        return sum(self.lines_per_page[1:])
+
+    @property
+    def first_page_capacity(self) -> int:
+        return self.lines_per_page[0] if self.lines_per_page else 0
+
+
+@dataclass
 class CompileResult:
     success: bool
     engine: str
     page_count: int | None = None
     pdf_bytes: bytes | None = None
     log_tail: str = ""  # last chunk of the .log file, for feeding compile errors back to the model
+    measure: PageMeasure | None = None
+
+    @property
+    def overflow_lines(self) -> int | None:
+        return self.measure.overflow_lines if self.measure else None
 
 
 def detect_engine(latex_source: str) -> str:
@@ -55,6 +87,20 @@ def detect_engine(latex_source: str) -> str:
     if any(marker in latex_source for marker in _XELATEX_MARKERS):
         return "xelatex"
     return "pdflatex"
+
+
+def measure_pages(pdf_bytes: bytes) -> PageMeasure:
+    """Counts non-blank extracted text lines per page. Text extraction
+    from a compiled PDF isn't perfect (see doc_text.py's notes on
+    ligatures/superscripts), but line counts are robust to that - a
+    dropped underscore doesn't change how many lines there are.
+    """
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    lines_per_page = []
+    for page in reader.pages:
+        text = page.extract_text() or ""
+        lines_per_page.append(sum(1 for line in text.splitlines() if line.strip()))
+    return PageMeasure(page_count=len(reader.pages), lines_per_page=lines_per_page)
 
 
 def _extract_error_context(log_text: str) -> str:
@@ -113,12 +159,18 @@ def compile_latex(
 
         pdf_path = Path(tmpdir) / "resume.pdf"
         if proc.returncode != 0 or not pdf_path.exists():
+            logger.warning("latex compile failed engine=%s returncode=%s", engine, proc.returncode)
             return CompileResult(success=False, engine=engine, log_tail=_extract_error_context(log_text))
 
         pdf_bytes = pdf_path.read_bytes()
         try:
-            page_count = len(PdfReader(pdf_path).pages)
+            measure = measure_pages(pdf_bytes)
         except Exception as e:
             return CompileResult(success=False, engine=engine, log_tail=f"compiled but couldn't read the PDF back: {e}")
 
-        return CompileResult(success=True, engine=engine, page_count=page_count, pdf_bytes=pdf_bytes)
+        logger.info(
+            "latex compile ok engine=%s pages=%d lines_per_page=%s", engine, measure.page_count, measure.lines_per_page
+        )
+        return CompileResult(
+            success=True, engine=engine, page_count=measure.page_count, pdf_bytes=pdf_bytes, measure=measure
+        )

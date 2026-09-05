@@ -14,9 +14,10 @@ page.pdf(), same technique, one fewer library to depend on.
 import html
 from pathlib import Path
 
+from companion.paths import DATA_DIR
 from companion.resume_format import ResumeDoc
 
-OUTPUT_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "generated_resumes"
+OUTPUT_DIR = DATA_DIR / "generated_resumes"
 
 CSS = """
 @page { size: Letter; margin: 0.55in 0.7in; }

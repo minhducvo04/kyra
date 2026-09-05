@@ -4,6 +4,8 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+from companion.paths import DATA_DIR
+
 
 @dataclass
 class MemoryRecord:
@@ -55,7 +57,7 @@ class ChromaMemoryStore(MemoryStore):
 
     def __init__(
         self,
-        path: str = "data/memory_db",
+        path: str | None = None,
         collection_name: str = "kyra_memory",
         embedding_function=None,
     ):
@@ -66,7 +68,10 @@ class ChromaMemoryStore(MemoryStore):
         # function's docstring) - callers get better recall without
         # having to remember to opt in.
         embedding_function = embedding_function or bge_embedding_function()
-        self._client = chromadb.PersistentClient(path=path)
+        # Default under DATA_DIR, not a cwd-relative "data/memory_db" - the
+        # old relative default silently created a fresh empty store whenever
+        # the process was launched from any directory but the project root.
+        self._client = chromadb.PersistentClient(path=str(path or (DATA_DIR / "memory_db")))
         self._collection = self._client.get_or_create_collection(
             collection_name, embedding_function=embedding_function
         )
@@ -95,7 +100,7 @@ class ChromaMemoryStore(MemoryStore):
         now = time.time()
         records = []
         for text, meta, distance in zip(
-            results["documents"][0], results["metadatas"][0], results["distances"][0]
+            results["documents"][0], results["metadatas"][0], results["distances"][0], strict=True
         ):
             similarity = 1 - distance
             ts = (meta or {}).get("timestamp")

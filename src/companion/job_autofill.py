@@ -39,10 +39,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from companion.paths import DATA_DIR
 from companion.profile import ApplicantProfile, load_profile
 from companion.tools import Tool
 
-LOG_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "job_autofill_logs"
+LOG_DIR = DATA_DIR / "job_autofill_logs"
 
 # label substring (case-insensitive) -> ApplicantProfile attribute
 CORE_FIELD_MAP = {

@@ -434,6 +434,29 @@ const draftOutput = document.getElementById("draft-output");
 const draftText = document.getElementById("draft-text");
 const draftCopy = document.getElementById("draft-copy");
 
+/* Renders the one-page verdict returned by the resume endpoints. `fit`
+   is null for non-resume material (nothing to say), true/false otherwise. */
+function renderFitStatus(el, data) {
+  if (data.fit === null || data.fit === undefined) { el.hidden = true; return; }
+  el.classList.remove("is-ok", "is-bad");
+  if (data.fit) {
+    el.classList.add("is-ok");
+    el.textContent = "✓ Fits one page";
+  } else {
+    el.classList.add("is-bad");
+    const over = data.overflow_lines ? ` — ${data.overflow_lines} line(s) past page 1` : "";
+    el.textContent = `✗ Not one page: compiled to ${data.page_count ?? "?"} pages${over}`;
+  }
+  el.hidden = false;
+}
+
+function renderNotes(wrapEl, listEl, notes) {
+  listEl.innerHTML = "";
+  if (!notes || !notes.length) { wrapEl.hidden = true; return; }
+  notes.forEach((n) => { const li = document.createElement("li"); li.textContent = n; listEl.appendChild(li); });
+  wrapEl.hidden = false;
+}
+
 draftGenerateBtn.addEventListener("click", async () => {
   draftGenerateBtn.disabled = true;
   draftGenerateBtn.textContent = "Drafting…";
@@ -461,6 +484,8 @@ draftGenerateBtn.addEventListener("click", async () => {
       draftWarnings.hidden = false;
     }
     draftText.textContent = data.draft;
+    renderFitStatus(document.getElementById("draft-fit-status"), data);
+    renderNotes(document.getElementById("draft-notes-wrap"), document.getElementById("draft-notes"), data.notes);
     const pdfLink = document.getElementById("draft-pdf-link");
     if (data.pdf_url) {
       pdfLink.href = data.pdf_url;
@@ -689,6 +714,7 @@ fitGenerateBtn.addEventListener("click", async () => {
       fitCutSuggestions.hidden = false;
     }
     fitText.textContent = data.draft || "";
+    renderFitStatus(document.getElementById("fit-fit-status"), data);
     const pdfLink = document.getElementById("fit-pdf-link");
     if (data.pdf_url) {
       pdfLink.href = data.pdf_url;

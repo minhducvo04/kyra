@@ -26,13 +26,14 @@ built - this stays pure counting on purpose.
 import json
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from companion.llm import AnthropicLLM
+from companion.paths import DATA_DIR
 
-LOG_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "router.log"
-OBSERVATIONS_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "pattern_observations.md"
+LOG_PATH = DATA_DIR / "router.log"
+OBSERVATIONS_PATH = DATA_DIR / "pattern_observations.md"
 
 DEFAULT_WINDOW_DAYS = 7
 DEFAULT_THRESHOLD = 3
@@ -60,7 +61,7 @@ def load_recent_tool_reasons(window_days: int = DEFAULT_WINDOW_DAYS, log_path: P
     path = Path(log_path)
     if not path.exists():
         return []
-    cutoff = datetime.now(timezone.utc).timestamp() - window_days * 86400
+    cutoff = datetime.now(UTC).timestamp() - window_days * 86400
     reasons = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():

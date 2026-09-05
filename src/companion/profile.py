@@ -23,7 +23,9 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-DEFAULT_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "applicant_profile.json"
+from companion.paths import DATA_DIR
+
+DEFAULT_PATH = DATA_DIR / "applicant_profile.json"
 
 DECLINE = "Decline to self-identify"
 

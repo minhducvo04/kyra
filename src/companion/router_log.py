@@ -11,9 +11,10 @@ like this annoying to migrate, not the format itself.
 """
 import json
 import time
-from pathlib import Path
 
-LOG_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "router.log"
+from companion.paths import DATA_DIR
+
+LOG_PATH = DATA_DIR / "router.log"
 
 
 def log_turn(**fields) -> None:

@@ -9,11 +9,13 @@ AUTO, which hands every turn to the same TurnRouter chat.py/voice_chat.py
 use - one router, three front doors.
 """
 import base64
+import logging
 from dataclasses import asdict
+from functools import cached_property
 from pathlib import Path
 
 from anthropic import Anthropic
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -42,30 +44,62 @@ from companion.llm import AnthropicLLM, LazyBackends, build_llm
 from companion.memory import ChromaMemoryStore
 from companion.memory_notes import MarkdownMemoryNotesStore
 from companion.news import TechNewsTool
+from companion.paths import WEB_DIR
 from companion.persona import KYRA
 from companion.profile import load_profile, save_profile
 from companion.reminders import RemindersStore
 from companion.resume_format import ResumeFormatError
+from companion.resume_guard import check_resume_output
 from companion.resume_pdf import OUTPUT_DIR as RESUME_PDF_DIR
 from companion.resume_pdf import render_pdf
 from companion.router import TurnRouter, route_and_answer_verbose
 from companion.science import ScienceFactsTool
 from companion.voice import FasterWhisperSTT, KokoroTTS, decode_uploaded_audio, encode_wav_bytes
 
-WEB_DIR = Path(__file__).resolve().parent.parent.parent / "web"
-
 app = FastAPI(title="Kyra")
+
+# A resume or writing sample is a few hundred KB at most; a bound keeps
+# a mis-dropped file (a video, a giant PDF) from being read into memory
+# whole and handed to a parser.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
-_memory = ChromaMemoryStore()
+logger = logging.getLogger(__name__)
+
 _claude = build_llm("claude")
-_conversation = ConversationManager(persona=KYRA, memory=_memory, llm=_claude)
 _backends = LazyBackends(claude=_claude)
 _registry = default_tool_registry()
 _router = TurnRouter(_registry)
 _current_backend = "auto"  # "claude" | "local" | "auto" - auto (the router) is the default now that it exists
-_stt = FasterWhisperSTT()
-_tts = KokoroTTS()
+
+
+class _Runtime:
+    """The heavy, model-loading pieces (BGE embeddings for memory,
+    faster-whisper, Kokoro) built on first use rather than at import.
+    Importing this module used to load three ML models before serving a
+    single request - which made the server slow to start and made the
+    HTTP layer impossible to test without those models. Same
+    LazyBackends idea (llm.py) applied to the rest of the runtime.
+    """
+
+    @cached_property
+    def memory(self) -> ChromaMemoryStore:
+        return ChromaMemoryStore()
+
+    @cached_property
+    def conversation(self) -> ConversationManager:
+        return ConversationManager(persona=KYRA, memory=self.memory, llm=_claude)
+
+    @cached_property
+    def stt(self) -> FasterWhisperSTT:
+        return FasterWhisperSTT()
+
+    @cached_property
+    def tts(self) -> KokoroTTS:
+        return KokoroTTS()
+
+
+_rt = _Runtime()
 
 # Job application panel - hits the same underlying stores/tools as the
 # chat path (job_applications.py, job_autofill.py) directly rather than
@@ -160,7 +194,7 @@ def set_backend(body: BackendIn) -> dict:
     if name not in ("claude", "local", "auto"):
         return {"error": f"unknown backend {name!r}"}
     if name in ("claude", "local"):
-        _conversation.llm = _backends[name]  # first switch to local loads the model - can take a while
+        _rt.conversation.llm = _backends[name]  # first switch to local loads the model - can take a while
     _current_backend = name
     return {"backend": _current_backend}
 
@@ -170,10 +204,10 @@ def _answer(message: str) -> ChatOut:
     only thing voice adds on top is transcribing in and synthesizing out.
     """
     if _current_backend != "auto":
-        reply = _conversation.handle_turn(message)
+        reply = _rt.conversation.handle_turn(message)
         return ChatOut(reply=reply, backend=_current_backend)
 
-    reply, decision = route_and_answer_verbose(message, _conversation, _router, _backends, _registry)
+    reply, decision = route_and_answer_verbose(message, _rt.conversation, _router, _backends, _registry)
     if decision is None:  # a mode-switch command ("focus mode" etc.), not a routed turn
         return ChatOut(reply=reply, backend="auto")
     return ChatOut(
@@ -193,14 +227,14 @@ def voice(audio: UploadFile) -> VoiceOut:
     the difference is only how the browser decides when to call it.
     """
     pcm = decode_uploaded_audio(audio.file)
-    transcript = _stt.transcribe(pcm).strip()
+    transcript = _rt.stt.transcribe(pcm).strip()
     if not transcript:
         return VoiceOut(
             reply="", backend=_current_backend, transcript="", reply_audio_b64="", reply_audio_rate=0
         )
 
     chat_out = _answer(transcript)
-    reply_audio, rate = _tts.speak(chat_out.reply)
+    reply_audio, rate = _rt.tts.speak(chat_out.reply)
     wav_bytes = encode_wav_bytes(reply_audio, rate)
 
     return VoiceOut(
@@ -224,6 +258,14 @@ class DraftOut(BaseModel):
     style_chars: int
     warnings: list[str] = []
     pdf_url: str | None = None  # set for material_type in {"full_resume", "latex_resume"}
+    # One-page fit status for the LaTeX path - None for non-resume
+    # material. Surfaced as its own field (not buried in warnings) so
+    # the UI can show an unmissable pass/fail, since "it came back as 2
+    # pages" was a real complaint that a warnings line didn't prevent.
+    fit: bool | None = None
+    page_count: int | None = None
+    overflow_lines: int | None = None
+    notes: list[str] = []
 
 
 # --- Resume "Detailed" mode (analyze -> pick -> generate) - a JSON-body
@@ -278,6 +320,7 @@ class ResumeFitGenerateOut(BaseModel):
     pdf_url: str | None = None
     fit: bool = False
     page_count: int | None = None
+    overflow_lines: int | None = None
     cut_suggestions: list[FitBlockIO] = []
     notes: list[str] = []
     warnings: list[str] = []
@@ -337,7 +380,9 @@ def _extract_upload(upload: UploadFile | None) -> tuple[str, bytes | None, str |
     if upload is None or not upload.filename:
         return "", None, None
     try:
-        data = upload.file.read()
+        data = upload.file.read(MAX_UPLOAD_BYTES + 1)
+        if len(data) > MAX_UPLOAD_BYTES:
+            return "", None, f"{upload.filename}: file is larger than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB - not read"
         return extract_text(upload.filename, data), data, None
     except UnsupportedDocumentType as e:
         return "", None, f"{upload.filename}: {e}"
@@ -463,6 +508,7 @@ def _full_resume_draft(
     pdf_path = render_pdf(doc)
     pdf_filename = Path(pdf_path).name
     preview = _resume_doc_preview(doc)
+    warnings.extend(check_resume_output(preview, [resume_text, extra_facts]))
     return DraftOut(
         draft=preview, background_chars=len(resume_text), style_chars=0,
         warnings=warnings, pdf_url=f"/api/job/resume-pdf/{pdf_filename}",
@@ -506,10 +552,12 @@ def _latex_resume_draft(
     except ValueError as e:
         return DraftOut(draft="", background_chars=len(latex_text), style_chars=0, warnings=warnings + [str(e)])
 
-    warnings.extend(result.notes)
+    warnings.extend(result.guard_warnings)
     if not result.fit:
         warnings.append(
-            "couldn't automatically confirm a one-page fit - review the compiled PDF and adjust further yourself if needed"
+            f"NOT one page: the best attempt compiled to {result.page_count} page(s)"
+            + (f" with {result.overflow_lines} line(s) over" if result.overflow_lines else "")
+            + " - use Resume — Detailed to pick what to cut, or try again"
         )
 
     pdf_url = None
@@ -518,6 +566,7 @@ def _latex_resume_draft(
 
     return DraftOut(
         draft=result.latex, background_chars=len(latex_text), style_chars=0, warnings=warnings, pdf_url=pdf_url,
+        fit=result.fit, page_count=result.page_count, overflow_lines=result.overflow_lines, notes=result.notes,
     )
 
 
@@ -526,11 +575,11 @@ def get_resume_pdf(filename: str):
     # filename comes straight from the URL path - reject anything that
     # isn't a bare generated-uuid.pdf name before touching the filesystem,
     # so this can't be used to read arbitrary files (e.g. "../../.env").
-    if "/" in filename or "\\" in filename or not filename.endswith(".pdf"):
-        return {"error": "invalid filename"}
+    if "/" in filename or "\\" in filename or ".." in filename or not filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="invalid filename")
     path = RESUME_PDF_DIR / filename
     if not path.is_file():
-        return {"error": "not found"}
+        raise HTTPException(status_code=404, detail="not found")
     return FileResponse(path, media_type="application/pdf", filename="optimized_resume.pdf")
 
 
@@ -595,7 +644,8 @@ def resume_fit_generate(body: ResumeFitGenerateIn) -> ResumeFitGenerateOut:
     cut_out = [FitBlockIO(**asdict(b)) for b in result.cut_suggestions]
     return ResumeFitGenerateOut(
         draft=result.latex, pdf_url=pdf_url, fit=result.fit, page_count=result.page_count,
-        cut_suggestions=cut_out, notes=result.notes, warnings=warnings,
+        overflow_lines=result.overflow_lines, cut_suggestions=cut_out, notes=result.notes,
+        warnings=warnings + result.guard_warnings,
     )
 
 

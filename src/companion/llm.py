@@ -9,9 +9,9 @@ import json
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from pathlib import Path
 
 from companion.llm_utils import extract_text
+from companion.paths import DATA_DIR
 
 # Benchmarked as the best speed/quality tradeoff for a local backend: close
 # to the 32B's score in docs/model-benchmark.md at more than twice the
@@ -30,7 +30,7 @@ TRUNCATION_MARKER = "\n\n[cut off - ran out of room, try again or ask for someth
 # dir, same convention as data/voice_models. Separate from
 # scratchpad/bench/'s throwaway HF cache, which is safe to delete anytime.
 os.environ.setdefault(
-    "HF_HOME", str(Path(__file__).resolve().parent.parent.parent / "data" / "local_llm_models")
+    "HF_HOME", str(DATA_DIR / "local_llm_models")
 )
 
 

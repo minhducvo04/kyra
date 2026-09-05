@@ -34,9 +34,10 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 
+from companion.paths import DATA_DIR
 from companion.tools import Tool
 
-DEFAULT_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "memory_notes"
+DEFAULT_DIR = DATA_DIR / "memory_notes"
 
 SUGGESTED_CATEGORIES = ["people", "preferences", "projects", "events"]
 

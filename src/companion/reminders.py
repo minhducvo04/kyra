@@ -6,12 +6,13 @@ should send to the local backend rather than spending a Claude call on it.
 """
 import sqlite3
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
+from companion.paths import DATA_DIR
 from companion.tools import Tool
 
-DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "reminders.db"
+DB_PATH = DATA_DIR / "reminders.db"
 
 
 @dataclass
@@ -40,7 +41,7 @@ class RemindersStore:
         self._conn.commit()
 
     def add(self, text: str, due_at: str | None = None) -> Reminder:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         cur = self._conn.execute(
             "INSERT INTO reminders (text, due_at, created_at, done) VALUES (?, ?, ?, 0)",
             (text, due_at, now),
@@ -70,7 +71,7 @@ class RemindersStore:
         """Not-done reminders due at or before now - for a proactive nudge
         when a session starts, rather than a real push notification (that
         needs a background scheduler - see docs/agentic-roadmap.md)."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         rows = self._conn.execute(
             "SELECT id, text, due_at, created_at, done FROM reminders "
             "WHERE done = 0 AND due_at IS NOT NULL AND due_at <= ? ORDER BY due_at",

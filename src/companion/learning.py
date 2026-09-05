@@ -19,12 +19,13 @@ not gamified further yet (see the roadmap doc for why).
 """
 import sqlite3
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+from companion.paths import DATA_DIR
 from companion.tools import Tool
 
-DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "learning.db"
+DB_PATH = DATA_DIR / "learning.db"
 
 # Day offsets from the last review - index by review_count, capped at the
 # last entry once you're past it (i.e. every successful review after the
@@ -70,7 +71,7 @@ class LearningStore:
         self._conn.commit()
 
     def add(self, topic: str, summary: str, key_takeaway: str) -> LearningItem:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         next_review = (now + timedelta(days=REVIEW_INTERVALS_DAYS[0])).isoformat()
         cur = self._conn.execute(
             "INSERT INTO learning_items (topic, summary, key_takeaway, created_at, next_review_at, review_count) "
@@ -84,7 +85,7 @@ class LearningStore:
         )
 
     def due(self) -> list[LearningItem]:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         rows = self._conn.execute(
             "SELECT id, topic, summary, key_takeaway, created_at, next_review_at, review_count "
             "FROM learning_items WHERE next_review_at <= ? ORDER BY next_review_at",
@@ -101,7 +102,7 @@ class LearningStore:
         review_count = row[0]
         new_count = review_count + 1 if remembered else 0
         idx = min(new_count, len(REVIEW_INTERVALS_DAYS) - 1)
-        next_review = (datetime.now(timezone.utc) + timedelta(days=REVIEW_INTERVALS_DAYS[idx])).isoformat()
+        next_review = (datetime.now(UTC) + timedelta(days=REVIEW_INTERVALS_DAYS[idx])).isoformat()
         self._conn.execute(
             "UPDATE learning_items SET review_count = ?, next_review_at = ? WHERE id = ?",
             (new_count, next_review, item_id),
