@@ -33,6 +33,7 @@ from companion.default_tools import default_tool_registry
 from companion.keybindings import Keybindings, read_key
 from companion.listening import PushToTalkListener, VoiceActivityListener
 from companion.llm import LazyBackends, build_llm
+from companion.logging_setup import configure_logging
 from companion.memory import ChromaMemoryStore
 from companion.persona import KYRA
 from companion.router import TurnRouter, route_and_answer
@@ -68,6 +69,7 @@ def speak_interruptibly(audio, sample_rate, keys: Keybindings) -> bool:
 
 
 def main() -> None:
+    configure_logging()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--mode", choices=["vad", "ptt"], default="vad",
