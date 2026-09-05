@@ -20,6 +20,19 @@ Deliberately a warning, not a hard block: LaTeX preambles carry
 layout numbers (\\vspace{-5pt}, 0.5in) that the model may legitimately
 touch, and a false positive costs Duc a glance, while a false negative
 costs a real application. Cheap, deterministic, no LLM call.
+
+Proper nouns (2026-09-05): numbers alone missed a real fabrication - a
+draft gained a "Operating Systems concepts" coursework entry that was
+never in the source, and no number was involved. So the guard now also
+diffs entry headings (\\resumeSubheading / \\resumeProjectHeading first
+arguments), course codes (CS 61B, EECS 127), and capitalized terms
+against the sources. Same warn-don't-block posture.
+
+Sources vs. output are treated differently for LaTeX comments: a
+commented-out line in the ORIGINAL resume is still Duc's own real
+content (his stash of alternate bullets), so comments count as source
+evidence; a comment in the OUTPUT is invisible on the page, so it is
+stripped before checking.
 """
 import re
 
@@ -40,15 +53,84 @@ def _normalize_number(token: str) -> str:
     return token.replace(",", "").rstrip("%")
 
 
-def number_tokens(text: str) -> set[str]:
+def number_tokens(text: str, keep_comments: bool = False) -> set[str]:
     """All numeric tokens in `text`, normalized (no thousands separators,
     no trailing %). "3.42" and "3.42" match; "1,000" matches "1000".
+    keep_comments=True for sources (a commented bullet is still real).
     """
-    return {_normalize_number(m.group(0)) for m in _NUMBER_RE.finditer(_strip_latex_comments(text))}
+    text = text if keep_comments else _strip_latex_comments(text)
+    return {_normalize_number(m.group(0)) for m in _NUMBER_RE.finditer(text)}
 
 
-def url_tokens(text: str) -> set[str]:
-    return {m.group(0).rstrip(".,;") for m in _URL_RE.finditer(_strip_latex_comments(text))}
+def url_tokens(text: str, keep_comments: bool = False) -> set[str]:
+    text = text if keep_comments else _strip_latex_comments(text)
+    return {m.group(0).rstrip(".,;") for m in _URL_RE.finditer(text)}
+
+
+# Course codes like "CS 61B", "EECS 127", "COMPSCI 169A"; and entry headings
+# - the first brace group after the template's heading macros.
+_COURSE_RE = re.compile(r"\b(?:CS|EECS|EE|COMPSCI|ELENG|ENGIN|DATA)\s?C?\d{2,3}[A-Z]{0,2}\b")
+_HEADING_RE = re.compile(r"\\resume(?:Sub|Project)[Hh]eading\s*\{(?:\\textbf\{)?(?:\\href\{[^}]*\}\{)?(?:\\underline\{)?([^}$|]+)")
+# Capitalized terms: a run of one to four Capitalized/ALLCAPS/CamelCase words
+# ("Metal", "OpenRouter", "Trinity Western", "Gemini 2.5 Flash" minus the
+# number). Sentence-initial words are included; they only matter if they
+# are absent from every source, which for a real proper noun is the signal.
+_TERM_RE = re.compile(r"\b(?:[A-Z][A-Za-z0-9+#-]*)(?:[ \t]+(?:[A-Z][A-Za-z0-9+#-]*)){0,3}\b")
+_LATEX_CMD_RE = re.compile(r"\\[A-Za-z]+\*?")
+# Words that start sentences/bullets and would otherwise look like terms.
+_COMMON_STARTERS = {
+    "Built", "Designed", "Raised", "Benchmarked", "Closed", "Implemented", "Developed", "Reduced", "Improved",
+    "Optimized", "Replaced", "Architected", "Kept", "Persisted", "Cut", "Trained", "Led", "Owned", "Shipped",
+    "The", "A", "An", "And", "Every", "Each", "This", "That", "For", "With", "In", "On", "At", "To", "Of",
+    "Coursework", "Languages", "Skills", "Education", "Experience", "Projects", "Technical",
+}
+
+
+def _plain(text: str) -> str:
+    """LaTeX -> rough plain text for term extraction: drop commands, keep
+    their arguments, unescape \\% \\& \\_. Skill-category labels
+    (\\textbf{Evals}{: ...}) are dropped - they're headings the writer
+    chose, not facts. Brace boundaries and punctuation become newlines so
+    a capitalized run can't leak across two macro arguments
+    ("...Present}{\\resumeItem{Cut OpenRouter..." must not read as one
+    term "Present Cut OpenRouter")."""
+    text = re.sub(r"\\textbf\{[^}]*\}\s*\{:", " ", text)
+    text = _LATEX_CMD_RE.sub(" ", text)
+    text = text.replace("\\%", "%").replace("\\&", "&").replace("\\_", "_")
+    for sep in ("{", "}", "--", "\u2014", ":", ",", ";", "(", ")", "|", "$", "/", "."):
+        text = text.replace(sep, "\n")
+    return text
+
+
+def course_codes(text: str, keep_comments: bool = False) -> set[str]:
+    text = text if keep_comments else _strip_latex_comments(text)
+    return {re.sub(r"\s+", " ", m.group(0)) for m in _COURSE_RE.finditer(text)}
+
+
+def headings(text: str, keep_comments: bool = False) -> set[str]:
+    text = text if keep_comments else _strip_latex_comments(text)
+    return {m.group(1).strip() for m in _HEADING_RE.finditer(text)}
+
+
+def capitalized_terms(text: str, keep_comments: bool = False) -> set[str]:
+    text = text if keep_comments else _strip_latex_comments(text)
+    terms = set()
+    for m in _TERM_RE.finditer(_plain(text)):
+        term = re.sub(r"\s+", " ", m.group(0)).strip(".-")
+        words = term.split()
+        # drop a leading sentence-starter, then keep what remains if anything
+        while words and words[0] in _COMMON_STARTERS:
+            words = words[1:]
+        if words:
+            terms.add(" ".join(words))
+    return terms
+
+
+def _unsupported(fn, output: str, sources: list[str]) -> list[str]:
+    allowed: set[str] = set()
+    for src in sources:
+        allowed |= fn(src, keep_comments=True)
+    return sorted(fn(output) - allowed, key=lambda t: (len(t), t))
 
 
 def unsupported_numbers(output: str, sources: list[str]) -> list[str]:
@@ -56,17 +138,44 @@ def unsupported_numbers(output: str, sources: list[str]) -> list[str]:
     stable output. Empty means every figure traces back to something
     the model was given.
     """
-    allowed: set[str] = set()
-    for src in sources:
-        allowed |= number_tokens(src)
-    return sorted(number_tokens(output) - allowed, key=lambda t: (len(t), t))
+    return _unsupported(number_tokens, output, sources)
 
 
 def unsupported_urls(output: str, sources: list[str]) -> list[str]:
+    return _unsupported(url_tokens, output, sources)
+
+
+def unsupported_courses(output: str, sources: list[str]) -> list[str]:
+    return _unsupported(course_codes, output, sources)
+
+
+def unsupported_headings(output: str, sources: list[str]) -> list[str]:
+    """Entry headings (a job, a project) in the output that no source has -
+    the exact shape of the fabricated-Projects-entry bug."""
+    return _unsupported(headings, output, sources)
+
+
+def unsupported_terms(output: str, sources: list[str]) -> list[str]:
+    """Capitalized terms in the output absent from every source. Noisier
+    than the other checks (a reworded bullet can legitimately introduce
+    "Anthropic" where the source said "Claude"), so it is reported
+    separately and capped in the warning text."""
     allowed: set[str] = set()
     for src in sources:
-        allowed |= url_tokens(src)
-    return sorted(url_tokens(output) - allowed)
+        allowed |= capitalized_terms(src, keep_comments=True)
+    allowed_lower = {a.lower() for a in allowed}
+    # a multi-word term is fine if each of its words appears somewhere in the sources
+    words_ok = set()
+    for a in allowed:
+        words_ok |= {w.lower() for w in a.split()}
+    out = []
+    for term in capitalized_terms(output):
+        if term.lower() in allowed_lower:
+            continue
+        if all(w.lower() in words_ok for w in term.split()):
+            continue
+        out.append(term)
+    return sorted(set(out), key=lambda t: (len(t), t))
 
 
 def check_resume_output(output: str, sources: list[str]) -> list[str]:
@@ -85,4 +194,17 @@ def check_resume_output(output: str, sources: list[str]) -> list[str]:
     urls = unsupported_urls(output, sources)
     if urls:
         warnings.append(f"fact check: link(s) in the output not in your sources - verify: {', '.join(urls[:4])}")
+    heads = unsupported_headings(output, sources)
+    if heads:
+        warnings.append(
+            f"fact check: {len(heads)} entry heading(s) not in any source - a job/project that may have been invented: "
+            + "; ".join(heads[:4])
+        )
+    courses = unsupported_courses(output, sources)
+    if courses:
+        warnings.append(f"fact check: course code(s) not in your sources - verify: {', '.join(courses[:6])}")
+    terms = unsupported_terms(output, sources)
+    if terms:
+        shown = ", ".join(terms[:8]) + (" …" if len(terms) > 8 else "")
+        warnings.append(f"fact check: {len(terms)} capitalized term(s) not in your sources (names, tools, courses) - verify: {shown}")
     return warnings

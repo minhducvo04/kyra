@@ -20,7 +20,7 @@ DEFAULT_LOCAL_MODEL = "mlx-community/Qwen2.5-14B-Instruct-4bit"
 
 # A named constant, not just an inline string, so callers that need to
 # tell a genuinely truncated response apart from a complete one (e.g.
-# job_applications.py's optimize_full_resume, which must never silently
+# job_applications.py's LaTeX resume paths, which must never silently
 # try to parse a cut-off document) can check for it reliably instead of
 # re-typing/matching the marker text themselves.
 TRUNCATION_MARKER = "\n\n[cut off - ran out of room, try again or ask for something shorter]"

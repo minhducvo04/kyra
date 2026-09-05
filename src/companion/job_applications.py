@@ -24,8 +24,8 @@ from pathlib import Path
 from companion.latex_compile import CompileResult, compile_latex
 from companion.llm import TRUNCATION_MARKER, AnthropicLLM
 from companion.paths import DATA_DIR
-from companion.resume_format import ResumeDoc, ResumeFormatError, parse_resume_text
 from companion.resume_guard import check_resume_output
+from companion.resume_latex import content_diff, restore_comments
 from companion.tools import Tool
 
 DB_PATH = DATA_DIR / "job_applications.db"
@@ -262,110 +262,10 @@ def draft_application_material(
     )
 
 
-# --- Full resume optimization (not a couple of bullets - a complete
-# rewrite of the whole document, rendered to an actual PDF via
-# resume_pdf.py). Duc's direct feedback (2026-09-03) was that the
-# resume_bullet material_type produced "2-liners," not what someone
-# means by "optimize my resume" - this is the real thing, gated on
-# actually having a full original resume to work from (nothing to
-# optimize without one).
-FULL_RESUME_SYSTEM = (
-    "You rewrite and optimize resumes. You reorganize emphasis, tighten wording, and strengthen verbs - you "
-    "never invent a new achievement, number, date, title, or skill that isn't already in the original resume "
-    "given to you. If a bullet is weak, make it clearer and more specific using only what's actually there, "
-    "don't pad it with invented detail. Extra facts given alongside the resume may only correct or extend a "
-    "detail INSIDE an entry that already exists (a graduation date, a GPA, one more course on an existing "
-    "coursework line) - never use them to add a brand-new standalone entry (a new job, project, certification, "
-    "or section) that wasn't already its own entry in the original, even if the fact is true and relevant - "
-    "adding a new entry to a real application document is Duc's own call to make by hand."
-)
+# The generic full_resume path (line-tagged text format -> HTML -> Playwright PDF) was deleted
+# 2026-09-05 by Duc's decision: it had no page-fit logic, rendered skills as one blob, and
+# produced the 2-page PDF that started the audit. The LaTeX paths below replaced it.
 
-FORMAT_INSTRUCTIONS = """Output the resume in EXACTLY this line-tagged format - no markdown, no extra commentary, nothing before NAME: or after the last ENDSECTION:
-
-NAME: Full Name
-CONTACT: phone | email | linkedin.com/in/... | github.com/...
-
-SECTION: Education
-ENTRY
-HEADING: School Name
-SUBHEADING: Degree, honors, GPA if given
-DATE: Month Year - Month Year
-BULLET: relevant coursework or detail, only if it was in the original
-ENDENTRY
-ENDSECTION
-
-SECTION: Experience
-ENTRY
-HEADING: Company Name
-SUBHEADING: Job Title
-DATE: Month Year - Month Year
-BULLET: one strengthened bullet per real accomplishment from the original
-BULLET: another one
-ENDENTRY
-ENDSECTION
-
-SECTION: Projects
-ENTRY
-HEADING: Project Name
-SUBHEADING: Tech stack / tools used, comma-separated - NEVER put the tech stack in HEADING, keep HEADING to just the project name
-DATE: Month Year
-BULLET: one strengthened bullet per real accomplishment from the original
-ENDENTRY
-ENDSECTION
-
-(repeat SECTION/ENTRY blocks for Skills or whatever other sections the original resume actually has - a Skills \
-section can be a single ENTRY with one BULLET listing everything, no HEADING/SUBHEADING/DATE needed for it)"""
-
-FULL_RESUME_PROMPT = """Rewrite and optimize this resume - reorder/emphasize what's most relevant if a job is given below, \
-tighten and strengthen every bullet's wording, use strong action verbs - but every fact, number, date, title, \
-and skill must trace back to the original resume. Don't invent anything, even something plausible-sounding.
-
-=== Job / role context (optional - if blank, optimize generally rather than invent a target) ===
-{job_context}
-
-=== Additional facts (optional) - use ONLY to correct/extend a detail inside an entry that already exists below \
-(e.g. an updated graduation date, GPA, or one more course on an existing coursework line). Do NOT create a new \
-standalone entry (a new job, project, certification, or section) from these, even if true and relevant - that's \
-Duc's own call, not yours to make here ===
-{extra_facts}
-
-=== Original resume (the only source of truth for facts) ===
-{original_resume}
-
-{format_instructions}"""
-
-
-def optimize_full_resume(llm: AnthropicLLM, original_resume: str, job_context: str = "", extra_facts: str = "") -> ResumeDoc:
-    """The full-resume path: one generation call (no separate critique
-    pass - resume bullets are already terse/action-verb-driven by
-    convention, not prose with the chatbot-ish tells the cover-letter
-    critique pass targets; a second full rewrite pass would also risk
-    corrupting the strict line-tagged format this needs to parse
-    cleanly). `llm` needs real room - a full resume rewrite is a long
-    document, not a paragraph; caught for real with a 3000-token budget
-    silently truncating mid-document (see webapp.py for the budget this
-    is actually called with).
-
-    Raises ResumeFormatError if the model's output doesn't parse, or if
-    it was genuinely cut off (llm.TRUNCATION_MARKER) - a truncated
-    resume must never be silently parsed and handed back as if it were
-    complete; the caller should surface this as a real failure, not
-    quietly ship a document missing its last bullet.
-    """
-    job_context = job_context.strip() or "(none given - optimize generally)"
-    extra_facts = extra_facts.strip() or "(none)"
-    text = llm.respond(
-        system=FULL_RESUME_SYSTEM, history=[],
-        user_input=FULL_RESUME_PROMPT.format(
-            job_context=job_context, extra_facts=extra_facts, original_resume=original_resume,
-            format_instructions=FORMAT_INSTRUCTIONS,
-        ),
-    )
-    if text.endswith(TRUNCATION_MARKER):
-        raise ResumeFormatError(
-            "the optimized resume got cut off before finishing - try again, or shorten the original resume/job context"
-        )
-    return parse_resume_text(text)
 
 
 # --- LaTeX resume optimization: edits Duc's own .tex source directly and
@@ -406,7 +306,7 @@ def optimize_latex_resume(llm: AnthropicLLM, original_latex: str, job_context: s
     """Returns raw LaTeX text - Duc compiles it himself (Overleaf, local
     pdflatex, whatever he already uses), so this never touches PDF
     rendering at all. Raises ValueError if the response was cut off
-    (llm.TRUNCATION_MARKER) - same reasoning as optimize_full_resume:
+    (llm.TRUNCATION_MARKER) - a cut-off document must never be parsed as complete:
     never hand back a truncated document as if it were complete.
     """
     job_context = job_context.strip() or "(none given - optimize generally)"
@@ -433,11 +333,16 @@ def optimize_latex_resume(llm: AnthropicLLM, original_latex: str, job_context: s
 # rest of this project, applied to LaTeX instead of Python. Runs fully
 # automatically (Duc's choice) - no per-cut approval step.
 LATEX_ONE_PAGE_SYSTEM = (
-    "You edit LaTeX resume source code so it fits exactly one printed page. You preserve the document's "
-    "structure, packages, and commands exactly - you edit content only: which entries to keep, how bullets are "
-    "worded, how much detail each gets. To fit one page you may omit whole entries (an older or less relevant "
-    "project, a course, a weak bullet) - cut the least relevant content first rather than cramming everything in "
-    "shrunk down, and never touch margins, font size, or spacing commands to force a fit. You never invent a new "
+    "You tailor LaTeX resume source code to a target job and keep it on exactly one printed page. Tailoring is "
+    "the job: reorder entries and bullets so the most relevant to the target come first, reword kept bullets to "
+    "use the target's own vocabulary where that is truthful, and cut or tighten the least relevant content to "
+    "make room. Returning the document unchanged, or with only cosmetic edits, is a failure - every run must "
+    "visibly re-rank and rework content for the target. You preserve the document's structure, packages, and "
+    "commands exactly, and you leave every line that begins with % (a comment) exactly where and as it is - those "
+    "are the owner's archived alternatives, never delete or edit them. To fit one page you may omit whole entries "
+    "(an older or less relevant project, a course, a weak bullet) - cut the least relevant content first rather "
+    "than cramming everything in shrunk down, and never touch margins, font size, or spacing commands to force a "
+    "fit. You never invent a new "
     "achievement, number, date, title, skill, course, or project that isn't already in the original, and you "
     "never reword a kept item into something stronger than what actually happened. Extra facts given alongside "
     "the resume may only correct or extend details INSIDE an entry that already exists (a graduation date, a "
@@ -448,13 +353,19 @@ LATEX_ONE_PAGE_SYSTEM = (
     "commentary, no markdown code fences, nothing before or after it."
 )
 
-LATEX_ONE_PAGE_PROMPT = """Edit this LaTeX resume so it fits on exactly one printed page, prioritizing what's most \
-relevant to the job/role context below (if given). If everything doesn't fit, cut the least relevant material \
-first - an older or less relevant project, a course, a weaker bullet - rather than shrinking the layout. Every \
-fact, number, date, title, skill, course, and project that remains must trace back to the original - don't invent \
-anything, even something plausible-sounding.
+LATEX_ONE_PAGE_PROMPT = """Tailor this LaTeX resume to the job/role context below and keep it on exactly one printed page.
 
-Keep the LaTeX structure, packages, and commands exactly as given - only add, remove, or edit content. Don't touch \
+Do all of these, not just the last one:
+1. RE-RANK: within each section, put the entries and bullets most relevant to the target first.
+2. REWORD: rewrite kept bullets to lead with what the target cares about, using the target's own terms where \
+they are truthful descriptions of what the bullet already says. Keep each bullet roughly its original length.
+3. CUT: drop or tighten the least relevant material - an older or less relevant project, a course, a weaker \
+bullet - so the page still fits. Never shrink the layout to make room.
+If no job context is given, tailor for a general AI/software engineering audience and still re-rank and reword.
+
+Every fact, number, date, title, skill, course, and project that remains must trace back to the original - don't \
+invent anything, even something plausible-sounding. Keep the LaTeX structure, packages, and commands exactly as \
+given. Leave every line beginning with % exactly as it is (the owner's archived alternatives). Don't touch \
 margins, font size, or spacing commands.
 
 === Length budget (measured by actually compiling the original) ===
@@ -520,10 +431,10 @@ def _length_budget_text(baseline: CompileResult) -> str:
     m = baseline.measure
     if m.page_count == 1:
         return (
-            f"The original ALREADY compiles to exactly one page, with about {m.first_page_capacity} lines of "
-            "text on it. Your edited version must be no longer than the original: net length must stay equal "
-            "or shorter. Every bullet you lengthen or add must be paid for by cutting or tightening something "
-            "else. Do not add new bullets, entries, or lines unless you remove at least as much."
+            f"The original already compiles to exactly one page, with about {m.first_page_capacity} lines of "
+            "text on it. That is your budget, not a reason to leave it alone: re-rank and reword within the same "
+            "length. Every bullet you lengthen must be paid for by tightening or cutting a less relevant one. "
+            "Net length must stay equal or shorter."
         )
     return (
         f"The original compiles to {m.page_count} pages: page 1 holds about {m.first_page_capacity} lines, and "
@@ -556,6 +467,8 @@ class LatexFitResult:
     overflow_lines: int | None = None  # lines past page 1 on the returned document (0 when it fits)
     original_page_count: int | None = None
     guard_warnings: list[str] = field(default_factory=list)  # resume_guard.py fact-check results
+    change_summary: str = ""  # resume_latex.content_diff() - what actually changed vs the original
+    comments_restored: int = 0  # %-lines the model dropped and restore_comments() put back
 
 
 def _better(candidate: CompileResult, best: CompileResult | None) -> bool:
@@ -607,7 +520,7 @@ def optimize_latex_resume_one_page(
     )
     if text.endswith(TRUNCATION_MARKER):
         raise ValueError("the optimized LaTeX got cut off before finishing - try again, or shorten the original source")
-    current_latex = _strip_code_fence(text)
+    current_latex, restored_total = restore_comments(original_latex, _strip_code_fence(text))
 
     best: CompileResult | None = None
     best_latex = current_latex
@@ -629,7 +542,8 @@ def optimize_latex_resume_one_page(
             if fix_text.endswith(TRUNCATION_MARKER):
                 notes.append(f"attempt {attempt}: fix attempt got cut off - stopping here")
                 break
-            current_latex = _strip_code_fence(fix_text)
+            current_latex, n = restore_comments(original_latex, _strip_code_fence(fix_text))
+            restored_total += n
             continue
 
         over = result.overflow_lines or 0
@@ -641,10 +555,9 @@ def optimize_latex_resume_one_page(
             best, best_latex = result, current_latex
 
         if result.page_count == 1:
-            return LatexFitResult(
-                latex=current_latex, pdf_bytes=result.pdf_bytes, page_count=1, fit=True, attempts=attempt,
-                notes=notes, overflow_lines=0, original_page_count=baseline.page_count,
-                guard_warnings=check_resume_output(current_latex, [original_latex, extra_facts]),
+            return _finalize_fit(
+                current_latex, original_latex, extra_facts, result, fit=True, attempts=attempt, notes=notes,
+                baseline=baseline, restored=restored_total,
             )
 
         if attempt == max_attempts:
@@ -660,17 +573,44 @@ def optimize_latex_resume_one_page(
         if shrink_text.endswith(TRUNCATION_MARKER):
             notes.append(f"attempt {attempt}: shrink attempt got cut off - stopping here")
             break
-        current_latex = _strip_code_fence(shrink_text)
+        current_latex, n = restore_comments(original_latex, _strip_code_fence(shrink_text))
+        restored_total += n
 
     notes.append(
         f"couldn't automatically reach exactly one page in {attempts_used} attempt(s) - returning the closest real compile"
     )
     logger.warning("one-page fit gave up after %d attempts; best pages=%s", attempts_used, best.page_count if best else None)
+    return _finalize_fit(
+        best_latex, original_latex, extra_facts, best, fit=False, attempts=attempts_used, notes=notes,
+        baseline=baseline, restored=restored_total,
+    )
+
+
+def _finalize_fit(
+    latex: str, original_latex: str, extra_facts: str, result: CompileResult | None, *, fit: bool,
+    attempts: int, notes: list[str], baseline: CompileResult, restored: int,
+) -> LatexFitResult:
+    """Attach the deterministic post-checks to a fit result: what changed
+    (so an unchanged pass-through can't masquerade as tailoring), how many
+    of the owner's comment lines were put back, and the fact-check guard."""
+    diff = content_diff(original_latex, latex)
+    guard = check_resume_output(latex, [original_latex, extra_facts])
+    if diff.unchanged:
+        guard.insert(0, "tailoring check: the model returned your resume without content changes - nothing was "
+                        "re-ranked or reworded for this job. Try again, or use Detailed mode.")
+    if diff.headings_added:
+        guard.insert(0, f"tailoring check: {diff.headings_added} entry heading(s) were ADDED - a job/project the "
+                        "original didn't have. Review before using.")
+    notes.append(f"changes vs original: {diff.summary()}")
+    if restored:
+        notes.append(f"restored {restored} commented-out line(s) the model had dropped (your archived alternatives)")
+    logger.info("one-page fit finalize: fit=%s attempts=%d diff=%s restored=%d", fit, attempts, diff.summary(), restored)
     return LatexFitResult(
-        latex=best_latex, pdf_bytes=best.pdf_bytes if best else None,
-        page_count=best.page_count if best else None, fit=False, attempts=attempts_used, notes=notes,
-        overflow_lines=best.overflow_lines if best else None, original_page_count=baseline.page_count,
-        guard_warnings=check_resume_output(best_latex, [original_latex, extra_facts]),
+        latex=latex, pdf_bytes=result.pdf_bytes if result else None,
+        page_count=result.page_count if result else None, fit=fit, attempts=attempts, notes=notes,
+        overflow_lines=(0 if fit else (result.overflow_lines if result else None)),
+        original_page_count=baseline.page_count, guard_warnings=guard,
+        change_summary=diff.summary(), comments_restored=restored,
     )
 
 

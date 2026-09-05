@@ -23,7 +23,7 @@ def test_converges_using_measured_overflow():
     assert result.original_page_count == 1 and result.overflow_lines == 0
     assert result.pdf_bytes.startswith(b"%PDF")
     # the first prompt told the model the original already fits (length budget)
-    assert "ALREADY compiles to exactly one page" in llm.calls[0]["user_input"]
+    assert "already compiles to exactly one page" in llm.calls[0]["user_input"]
     # the shrink prompt carried the real measured overflow, not just "2 pages"
     shrink = llm.calls[1]["user_input"]
     assert "spilled past it" in shrink and "Remove content worth AT LEAST" in shrink
@@ -38,7 +38,7 @@ def test_gives_up_returns_best_real_compile_not_last():
     assert result.fit is False and result.page_count == 2
     assert result.latex.strip() == slightly_over.strip()  # fewest overflow lines wins among equal page counts
     assert result.overflow_lines is not None and result.overflow_lines > 0
-    assert result.notes[-1].startswith("couldn't automatically reach exactly one page")
+    assert any(n.startswith("couldn't automatically reach exactly one page") for n in result.notes)
 
 
 @requires_latex
@@ -70,8 +70,8 @@ def test_fabricated_numbers_surface_as_guard_warnings():
     llm = ScriptedLLM([fabricated])
     result = optimize_latex_resume_one_page(llm, ONE_PAGE, max_attempts=1)
     assert result.fit is True
-    assert len(result.guard_warnings) == 1
-    assert "300" in result.guard_warnings[0] and "43" in result.guard_warnings[0]
+    numbers = [w for w in result.guard_warnings if w.startswith("fact check:") and "number" in w]
+    assert len(numbers) == 1 and "300" in numbers[0] and "43" in numbers[0]
 
 
 def test_analyze_parses_json_and_fence():
@@ -111,3 +111,23 @@ def test_generate_fit_result_has_no_suggestions():
     blocks = [FitBlock("exp-a", "Experience", "A", "entry", "A", 90, "High", "", True)]
     result = generate_latex_from_selection(ScriptedLLM([ONE_PAGE]), ONE_PAGE, blocks, [FitSelection("exp-a", True)])
     assert result.fit is True and result.cut_suggestions == [] and result.overflow_lines == 0
+
+
+@requires_latex
+def test_pass_through_is_flagged_and_stash_restored():
+    stash = ONE_PAGE.replace("\\end{itemize}", "% \\item archived alternative bullet\n\\end{itemize}")
+    llm = ScriptedLLM([ONE_PAGE])  # model returns the original minus the comment
+    result = optimize_latex_resume_one_page(llm, stash, job_context="backend role", max_attempts=1)
+    assert result.fit is True
+    assert result.comments_restored == 1 and "% \\item archived alternative bullet" in result.latex
+    assert any(w.startswith("tailoring check: the model returned your resume without content changes") for w in result.guard_warnings)
+    assert "no content changes" in result.change_summary
+    # the first prompt now demands tailoring, not just fitting
+    assert "RE-RANK" in llm.calls[0]["user_input"] and "REWORD" in llm.calls[0]["user_input"]
+
+
+@requires_latex
+def test_reworded_output_reports_changes():
+    reworded = ONE_PAGE.replace("Bullet number 0:", "Led item 0 for the target:")
+    result = optimize_latex_resume_one_page(ScriptedLLM([reworded]), ONE_PAGE, max_attempts=1)
+    assert "1 reworded" in result.change_summary and not any("without content changes" in w for w in result.guard_warnings)

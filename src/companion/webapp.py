@@ -12,7 +12,6 @@ import base64
 import logging
 from dataclasses import asdict
 from functools import cached_property
-from pathlib import Path
 
 from anthropic import Anthropic
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -34,7 +33,6 @@ from companion.job_applications import (
     analyze_latex_resume_fit,
     draft_application_material,
     generate_latex_from_selection,
-    optimize_full_resume,
     optimize_latex_resume_one_page,
 )
 from companion.job_autofill import GreenhouseAutofillEngine
@@ -44,14 +42,11 @@ from companion.llm import AnthropicLLM, LazyBackends, build_llm
 from companion.memory import ChromaMemoryStore
 from companion.memory_notes import MarkdownMemoryNotesStore
 from companion.news import TechNewsTool
+from companion.paths import GENERATED_RESUMES_DIR as RESUME_PDF_DIR
 from companion.paths import WEB_DIR
 from companion.persona import KYRA
 from companion.profile import load_profile, save_profile
 from companion.reminders import RemindersStore
-from companion.resume_format import ResumeFormatError
-from companion.resume_guard import check_resume_output
-from companion.resume_pdf import OUTPUT_DIR as RESUME_PDF_DIR
-from companion.resume_pdf import render_pdf
 from companion.router import TurnRouter, route_and_answer_verbose
 from companion.science import ScienceFactsTool
 from companion.voice import FasterWhisperSTT, KokoroTTS, decode_uploaded_audio, encode_wav_bytes
@@ -257,7 +252,7 @@ class DraftOut(BaseModel):
     background_chars: int
     style_chars: int
     warnings: list[str] = []
-    pdf_url: str | None = None  # set for material_type in {"full_resume", "latex_resume"}
+    pdf_url: str | None = None  # set for material_type == "latex_resume"
     # One-page fit status for the LaTeX path - None for non-resume
     # material. Surfaced as its own field (not buried in warnings) so
     # the UI can show an unmissable pass/fail, since "it came back as 2
@@ -324,27 +319,6 @@ class ResumeFitGenerateOut(BaseModel):
     cut_suggestions: list[FitBlockIO] = []
     notes: list[str] = []
     warnings: list[str] = []
-
-
-def _resume_doc_preview(doc) -> str:
-    """Flattens a ResumeDoc into readable plain text for the UI's text
-    preview - the PDF is the real deliverable, this is just so the
-    existing output box shows something meaningful instead of nothing.
-    """
-    lines = [doc.name]
-    if doc.contact:
-        lines.append(doc.contact)
-    for section in doc.sections:
-        lines.append(f"\n{section.title.upper()}")
-        for entry in section.entries:
-            header = " | ".join(p for p in (entry.heading, entry.date) if p)
-            if header:
-                lines.append(header)
-            if entry.subheading:
-                lines.append(entry.subheading)
-            for bullet in entry.bullets:
-                lines.append(f"- {bullet}")
-    return "\n".join(lines)
 
 
 def _get_or_add_document(
@@ -470,8 +444,8 @@ def _pick_resume_source(
 
 def _save_generated_pdf(pdf_bytes: bytes) -> str:
     """Writes already-rendered PDF bytes to the same generated-resumes
-    directory render_pdf() uses, so both resume paths serve through the
-    one /api/job/resume-pdf/{filename} endpoint. Returns the filename
+    directory both LaTeX paths serve through the one
+    /api/job/resume-pdf/{filename} endpoint. Returns the filename
     (not the full path) for building that URL.
     """
     import uuid
@@ -480,39 +454,6 @@ def _save_generated_pdf(pdf_bytes: bytes) -> str:
     filename = f"{uuid.uuid4().hex[:12]}.pdf"
     (RESUME_PDF_DIR / filename).write_bytes(pdf_bytes)
     return filename
-
-
-def _full_resume_draft(
-    job_context: str, background_text: str, background_document_ids: str, resume: UploadFile | None,
-    include_github: bool = False,
-) -> DraftOut:
-    resume_text, extra_facts, warnings = _pick_resume_source(background_text, background_document_ids, resume)
-
-    if not resume_text:
-        return DraftOut(
-            draft="", background_chars=0, style_chars=0,
-            warnings=warnings + ["nothing to optimize - upload a resume, pick one from your document library, or paste its text in Extra background"],
-        )
-
-    if include_github:
-        github_text, github_warnings = _fetch_github_context()
-        warnings.extend(github_warnings)
-        if github_text:
-            extra_facts = f"{extra_facts}\n\n{github_text}" if extra_facts else github_text
-
-    try:
-        doc = optimize_full_resume(_resume_llm, resume_text, job_context, extra_facts)
-    except ResumeFormatError as e:
-        return DraftOut(draft="", background_chars=len(resume_text), style_chars=0, warnings=warnings + [str(e)])
-
-    pdf_path = render_pdf(doc)
-    pdf_filename = Path(pdf_path).name
-    preview = _resume_doc_preview(doc)
-    warnings.extend(check_resume_output(preview, [resume_text, extra_facts]))
-    return DraftOut(
-        draft=preview, background_chars=len(resume_text), style_chars=0,
-        warnings=warnings, pdf_url=f"/api/job/resume-pdf/{pdf_filename}",
-    )
 
 
 def _latex_resume_draft(
@@ -524,7 +465,7 @@ def _latex_resume_draft(
     - see job_applications.py::optimize_latex_resume_one_page for why
     this needs a real compile-measure-iterate loop rather than a single
     blind rewrite. Editing the source directly (rather than going
-    through resume_format.py/resume_pdf.py) also sidesteps a real
+    through a generic text->HTML->PDF renderer) also sidesteps a real
     text-extraction fidelity issue found testing on Duc's actual PDF
     (dropped underscores, spurious spaces around ordinal superscripts) -
     there's nothing to extract when editing the source. Returns both the
@@ -667,16 +608,10 @@ def job_draft(
     upload (which also gets saved into the library so it's there next
     time - the old flow lost every upload the moment the request ended).
 
-    material_type == "full_resume" is a genuinely different path, not
-    a variant of the paragraph-drafting flow above: it needs exactly
-    one clean original resume as ground truth, not several sources
-    blended together, and it returns a rendered PDF rather than text
-    for the output box to display.
+    material_type == "latex_resume" is a different path from the
+    paragraph-drafting flow: one clean LaTeX source as ground truth,
+    compiled for real, returned with a PDF preview.
     """
-    if material_type == "full_resume":
-        return _full_resume_draft(
-            job_context, background_text, background_document_ids, resume, include_github
-        )
     if material_type == "latex_resume":
         return _latex_resume_draft(
             job_context, background_text, background_document_ids, resume, include_github
