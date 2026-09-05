@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from companion.job_boards import check_boards, load_watchlist, render_report
 from companion.learning import LearningStore
 from companion.logging_setup import configure_logging
 from companion.news import TechNewsTool
@@ -66,7 +67,18 @@ def build_digest(news_per_source: int = 2) -> tuple[str, str]:
     if not headlines:
         lines.append("- (no news fetched)")
 
-    summary = f"{len(due_reminders)} due, {len(reviews)} reviews, {len(headlines)} headlines"
+    watchlist = load_watchlist()
+    new_postings = 0
+    if watchlist:
+        try:
+            report = check_boards(watchlist)
+            new_postings = len(report.new)
+            lines += ["", render_report(report)]
+        except Exception as e:  # never let a board hiccup kill the digest
+            logger.warning("board watch failed: %s", e)
+            lines += ["", "## Job boards", f"- (board watch failed: {e})"]
+
+    summary = f"{len(due_reminders)} due, {len(reviews)} reviews, {new_postings} new postings, {len(headlines)} headlines"
     return "\n".join(lines) + "\n", summary
 
 
