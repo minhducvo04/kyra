@@ -246,6 +246,11 @@ def test_default_listings_are_today_relative_and_history_seeds():
     assert history_for("save_learning_item", random.Random(1))[1]["role"] == "assistant"
     assert history_for("draft_application_material", random.Random(1))[0]["content"].startswith(("Here", "Background", "For"))
     assert history_for("add_reminder", random.Random(1)) == []
+    # the seeded explanation matches the topic the message names, not a random one
+    named = history_for("save_learning_item", random.Random(1), "add the one about SQL joins to my queue")
+    assert "join" in named[0]["content"].lower() and "inner join" in named[1]["content"].lower()
+    assert "vaccine" in history_for("save_learning_item", random.Random(3), "remember this, its about how vaccines work")[0]["content"]
+    assert all(r["due_at"] for r in lst["list_reminders"]["reminders"])  # "push it back" needs something to push
 
 
 def test_trace_history_lands_in_rows(schemas):
@@ -254,3 +259,40 @@ def test_trace_history_lands_in_rows(schemas):
               [{"name": "save_learning_item", "args": {"topic": "X", "summary": "X is", "key_takeaway": "x"}, "result": {"id": 1}}], "Saved.", history=hist)
     rows = trace_to_rows(t, to_openai_tools(schemas))
     assert [m["role"] for m in rows[0]["messages"]] == ["system", "user", "assistant", "user", "assistant"]
+
+
+def test_row_token_lengths_measures_real_rows(schemas):
+    from companion.agent_ft import row_token_lengths
+
+    short = trace_to_rows(Trace("hey", "no_tool_casual", "none", FIXED_TODAY, [], "Hey!"), to_openai_tools(schemas))
+    long = trace_to_rows(Trace("the dentist one is done", "find_then_act", "tool", FIXED_TODAY, [
+        {"name": "list_reminders", "args": {}, "result": default_listings(FIXED_TODAY)["list_reminders"]},
+        {"name": "complete_reminder", "args": {"id": 3}, "result": {"ok": True}},
+    ], "Ticked it off."), to_openai_tools(schemas))
+    lengths = row_token_lengths(short + long)
+    assert len(lengths) == 4
+    assert all(n > 1500 for n in lengths)  # the tool schemas alone are ~2k tokens
+    assert lengths[-1] > lengths[0]  # a two-call trace's final row is the longest
+    assert max(lengths) < 4096  # the training --max-seq-length default
+
+
+def test_registry_results_are_recorded_including_errors(schemas):
+    reg = FakeRegistry(schemas)
+    reg.run("tech_news")
+    with pytest.raises(TypeError):
+        reg.run("complete_reminder")
+    assert len(reg.results) == 2 and "headlines" in reg.results[0]
+    assert "error" in reg.results[1] and "missing required" in reg.results[1]["error"]
+
+
+def test_multi_step_categories_need_more_than_one_call(schemas):
+    one = Trace("the dentist one is done", "find_then_act", "tool", FIXED_TODAY,
+                [{"name": "list_reminders", "args": {}, "result": {"reminders": []}}], "I don't see it - which one?")
+    assert trace_is_clean(one, schemas) == (False, "find_then_act needs more than one call")
+    two = Trace("the dentist one is done", "find_then_act", "tool", FIXED_TODAY, [
+        {"name": "list_reminders", "args": {}, "result": {"reminders": [{"id": 3}]}},
+        {"name": "complete_reminder", "args": {"id": 3}, "result": {"ok": True}}], "Done.")
+    assert trace_is_clean(two, schemas) == (True, "")
+    errored = Trace("x", "add_reminder", "tool", FIXED_TODAY,
+                    [{"name": "add_reminder", "args": {"text": "x"}, "result": {"error": "TypeError: ..."}}], "Saved.")
+    assert trace_is_clean(errored, schemas)[1] == "a call was rejected by the registry"

@@ -5,8 +5,8 @@ _Run 2026-09-06 on an Apple M5 Max (36 GB), MLX 0.32 / mlx-lm 0.31.3. Code: `src
 
 ## The question
 
-Every `tool` turn today goes to Claude through the real Anthropic tool-use loop, carrying ~7K tokens of tool
-schemas. `docs/router-model-benchmark.md` (2026-09-02) found Qwen2.5-7B flawless on an 11-case tool suite and
+Every `tool` turn today goes to Claude through the real Anthropic tool-use loop, carrying ~2,020 tokens of tool
+schemas (measured with the student's own tokenizer: 158-token prompt without them, 2,178 with). `docs/router-model-benchmark.md` (2026-09-02) found Qwen2.5-7B flawless on an 11-case tool suite and
 called that too small and too clean to act on. This is the harder suite, the distillation, and the measurement:
 can a local model, LoRA-tuned on Claude's own traces, make the same calls with the same arguments - and refuse to
 call anything on keyword bait - at $0/turn?
@@ -28,7 +28,7 @@ call anything on keyword bait - at $0/turn?
   realistic default results, records every call, and raises `TypeError` on missing/unknown arguments exactly as
   the real registry would - so the model sees the same error path Claude does in production.
 - **Teacher:** production Sonnet 5 through the real `AnthropicLLM.respond_with_tools` loop against the fake
-  registry. Tool schemas now carry `cache_control` (a production change, not harness-only: the 7K-token schema
+  registry. Tool schemas now carry `cache_control` (a production change, not harness-only: the schema
   prefix is cached on every tool turn).
 - **Student:** `LocalToolLLM` - `LocalLLM` plus the same `respond_with_tools` contract, using the tokenizer's chat
   template to render tools and Qwen's `<tool_call>{json}</tool_call>` wire format. Zero-shot 7B is the baseline.
