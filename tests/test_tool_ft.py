@@ -262,6 +262,9 @@ def test_trace_history_lands_in_rows(schemas):
 
 
 def test_row_token_lengths_measures_real_rows(schemas):
+    # Needs the student's tokenizer (transformers + a Hugging Face download). CI installs the web
+    # requirements only, so this skips there and runs on the Mac, like the LaTeX-backed tests.
+    pytest.importorskip("transformers", reason="transformers not installed (CI installs the web stack only)")
     from companion.agent_ft import row_token_lengths
 
     short = trace_to_rows(Trace("hey", "no_tool_casual", "none", FIXED_TODAY, [], "Hey!"), to_openai_tools(schemas))
