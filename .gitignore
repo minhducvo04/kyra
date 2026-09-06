@@ -11,7 +11,7 @@ build/
 .env
 
 # Vector store / data
-data/
+/data/
 *.sqlite3
 chroma_db/
 
