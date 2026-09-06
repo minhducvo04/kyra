@@ -315,3 +315,24 @@ def test_evaluate_uses_the_requested_system_prompt(schemas):
     backend = ScriptedToolBackend({"ugh long day": ([], "Rough one.")})
     evaluate(backend, schemas, [ToolCase("ugh long day", [])], "x", production_system)
     assert "Durable facts" in backend.seen_systems[0]
+
+
+def test_gen_hints_constrain_the_hard_categories():
+    from companion.agent_ft import GEN_HINTS
+
+    assert "greenhouse.io" in GEN_HINTS["autofill_job_application"]
+    # find-then-act messages must point at items that actually exist in the fixture
+    assert "book dentist appointment" in GEN_HINTS["find_then_act"] and "Stripe" in GEN_HINTS["find_then_act"]
+    assert "CAP theorem" in GEN_HINTS["save_learning_item"]
+    calls = []
+
+    class Recorder(ScriptedLLM):
+        def respond(self, system, history, user_input):
+            calls.append(user_input)
+            return "[]"
+
+    # generation walks GEN_CATEGORIES in its own order, so match on content, not position
+    generate_messages(Recorder([]), 2, [], categories=["autofill_job_application", "add_reminder"])
+    assert len(calls) == 2
+    hinted = [c for c in calls if "greenhouse.io" in c]
+    assert len(hinted) == 1 and "autofill_job_application" in hinted[0]  # the hint reached its own prompt only

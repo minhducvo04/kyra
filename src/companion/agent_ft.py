@@ -417,9 +417,11 @@ def generate_messages(
     for cat, (expect, desc, seeds) in GEN_CATEGORIES.items():
         if categories and cat not in categories:
             continue
+        hint = GEN_HINTS.get(cat)
+        prompt = GEN_PROMPT.format(n=per_category, cat=cat, desc=desc + (f". {hint}" if hint else ""), seeds=json.dumps(seeds))
         raw = llm.respond(
             system="You write realistic user messages for training a small assistant. JSON array of strings only.",
-            history=[], user_input=GEN_PROMPT.format(n=per_category, cat=cat, desc=desc, seeds=json.dumps(seeds)),
+            history=[], user_input=prompt,
         )
         kept = 0
         for msg in parse_json_array(raw):
@@ -473,6 +475,45 @@ def history_for(category: str, rng: random.Random, message: str = "") -> list[di
     if category == "draft_application_material":
         return [{"role": "user", "content": rng.choice(SEED_BACKGROUNDS)}, {"role": "assistant", "content": "Got it, I'll use that as your background for drafts."}]
     return []
+
+
+# Category-specific constraints on the GENERATED messages. Without these the
+# generator writes messages the teacher cannot answer, and the trace is dropped -
+# which cost the hardest categories the most data in the first full run:
+# autofill messages with no URL, find-then-act messages naming items that aren't in
+# the fixture ("the plumber", "mom's birthday"), two-tool messages missing the role,
+# save-this messages naming a topic the seeded history never explained. The generator
+# has to know the world the teacher operates in.
+_FIXTURE = default_listings(FIXED_TODAY)
+_FIXTURE_ITEMS = (
+    "reminders: " + ", ".join(f'"{r["text"]}"' for r in _FIXTURE["list_reminders"]["reminders"])
+    + "; applications: " + ", ".join(f'{a["company"]} ({a["role"]})' for a in _FIXTURE["list_job_applications"]["applications"])
+    + "; review items: " + ", ".join(f'"{d["topic"]}"' for d in _FIXTURE["due_learning_reviews"]["due"])
+)
+
+GEN_HINTS: dict[str, str] = {
+    "autofill_job_application": (
+        "EVERY message must contain a complete Greenhouse URL, e.g. "
+        "https://boards.greenhouse.io/<company>/jobs/<7 digits> - without a URL there is nothing to fill."
+    ),
+    "find_then_act": (
+        "The message must refer to one of these EXISTING items by description (never by id), using the user's own "
+        f"wording rather than the exact text: {_FIXTURE_ITEMS}."
+    ),
+    "two_tools": (
+        "Include every detail both tools need: a job application needs BOTH company and role; a reminder needs a "
+        "concrete day or time. A message missing one of them is a question, not a two-tool request."
+    ),
+    "save_learning_item": (
+        "The user is asking to save something that was JUST explained in the conversation. Refer to it generically "
+        '("save that", "add this to my review queue") or name one of exactly these topics: '
+        + ", ".join(topic for topic, _keys, _text in SEED_EXPLANATIONS) + "."
+    ),
+    "draft_application_material": (
+        "The role must be a software, data, or ML engineering role, and the message should describe the posting "
+        "briefly (company plus what they want) - the saved background is an engineering one."
+    ),
+}
 
 
 def random_today(rng: random.Random) -> str:
