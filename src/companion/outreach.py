@@ -51,11 +51,12 @@ DB_PATH = DATA_DIR / "outreach.db"
 STATUSES = ("drafted", "sent", "accepted", "replied", "call_done", "referred", "no_reply")
 FOLLOW_UP_DAYS = 4  # nudge if no acceptance/reply by then
 NO_REPLY_DAYS = 10  # after the nudge, call it and move on
-# LinkedIn's connection-note limit is 300 characters, and free accounts have
-# been reported capped at 200 - 200 is enforced so the note fits either
-# way, and shorter notes get answered more anyway.
-NOTE_LIMIT = 200
-NOTE_TARGET = 180
+# LinkedIn's connection-note box is 300 characters on Premium and 200 on a
+# free account (Duc has Premium Career as of 2026-09-06). The limit is the
+# hard post-condition; the target is what the prompt aims for, because
+# short notes get answered more.
+NOTE_LIMIT = 300
+NOTE_TARGET = 200
 
 
 class OutreachNoteTooLong(ValueError):
