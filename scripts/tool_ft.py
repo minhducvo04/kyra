@@ -62,7 +62,12 @@ def _read_jsonl(path: Path) -> list[dict]:
 
 def cmd_gen(args):
     cats = [c.strip() for c in args.categories.split(",") if c.strip()] if args.categories else None
-    rows = generate_messages(_teacher(), args.per_category, [c.message for c in load_suite()], categories=cats)
+    # Block the held-out suite always, and anything already generated when topping up,
+    # so a second pass adds new messages instead of re-tracing ones already recorded.
+    blocked = [c.message for c in load_suite()]
+    if args.append and MESSAGES.exists():
+        blocked += [r["message"] for r in _read_jsonl(MESSAGES)]
+    rows = generate_messages(_teacher(), args.per_category, blocked, categories=cats)
     FT_DIR.mkdir(parents=True, exist_ok=True)
     mode = "a" if args.append else "w"
     with MESSAGES.open(mode, encoding="utf-8") as f:
@@ -124,6 +129,13 @@ def cmd_train(args):
            "--batch-size", str(args.batch_size), "--num-layers", str(args.num_layers), "--learning-rate", str(args.lr),
            "--max-seq-length", str(args.max_seq_length), "--mask-prompt", "--steps-per-eval", "50",
            "--steps-per-report", "20", "--save-every", "100", "--seed", "7"]
+    # Tool-calling rows are long (a two-call trace with a listing result is ~3.6k tokens
+    # against the router fine-tune's ~100), so a 7B at batch 2 ran the GPU out of memory
+    # on the first step. Gradient checkpointing recomputes activations in the backward
+    # pass instead of storing them - slower per step, but it is what makes these row
+    # lengths trainable at all without truncating the assistant turn being learned.
+    if args.grad_checkpoint:
+        cmd.append("--grad-checkpoint")
     print(" ".join(cmd))
     subprocess.run(cmd, check=True, cwd=PROJECT_ROOT)
     print(f"adapter -> {adapter}")
@@ -181,10 +193,12 @@ def main():
     tr.add_argument("--model", required=True)
     tr.add_argument("--data", default="full")
     tr.add_argument("--iters", type=int, default=400)
-    tr.add_argument("--batch-size", type=int, default=2)
+    tr.add_argument("--batch-size", type=int, default=1)
     tr.add_argument("--num-layers", type=int, default=8)
     tr.add_argument("--lr", type=float, default=1e-4)
     tr.add_argument("--max-seq-length", type=int, default=4096)
+    tr.add_argument("--no-grad-checkpoint", dest="grad_checkpoint", action="store_false",
+                    help="store activations instead of recomputing them (faster, much more memory)")
     tr.set_defaults(fn=cmd_train)
     e = sub.add_parser("eval")
     e.add_argument("--teacher", action="store_true")
