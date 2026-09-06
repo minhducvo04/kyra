@@ -274,31 +274,39 @@ class OutreachChannel(ABC):
     """How a drafted note reaches the place Duc sends it from. Never sends."""
 
     @abstractmethod
-    def deliver(self, text: str, profile_url: str | None) -> DeliveryResult: ...
+    def deliver(self, text: str, profile_url: str | None, open_profile: bool = False) -> DeliveryResult: ...
 
 
 class ClipboardChannel(OutreachChannel):
-    """macOS: pbcopy the text, `open` the profile. Same pattern as handoff.py."""
+    """macOS: pbcopy the text and, only when asked, `open` the profile. Same
+    pattern as handoff.py. Opening is off by default - `open` lands in the
+    default browser's frontmost window, which Duc found interrupting while
+    he was working there; the URL is returned instead so he clicks it when
+    he is ready to paste."""
 
     def __init__(self, run: Callable = subprocess.run):
         self._run = run
 
-    def deliver(self, text: str, profile_url: str | None) -> DeliveryResult:
+    def deliver(self, text: str, profile_url: str | None, open_profile: bool = False) -> DeliveryResult:
         copied = opened = False
         try:
             self._run(["pbcopy"], input=text.encode(), check=True, timeout=5)
             copied = True
         except Exception:
             logger.warning("pbcopy failed", exc_info=True)
-        if profile_url:
+        if profile_url and open_profile:
             try:
                 self._run(["open", profile_url], check=True, timeout=5)
                 opened = True
             except Exception:
                 logger.warning("open %s failed", profile_url, exc_info=True)
-        msg = ("copied to clipboard" if copied else "clipboard copy FAILED - here is the text to paste") + (
-            " and opened the profile" if opened else (" (no profile URL to open)" if not profile_url else " - could not open the profile")
-        )
+        msg = "copied to clipboard" if copied else "clipboard copy FAILED - here is the text to paste"
+        if opened:
+            msg += " and opened the profile"
+        elif profile_url and open_profile:
+            msg += " - could not open the profile"
+        elif profile_url:
+            msg += f"; paste it at {profile_url}"
         return DeliveryResult(copied=copied, opened=opened, message=msg)
 
 
@@ -389,15 +397,17 @@ class DraftOutreachNoteTool(Tool):
 class CopyOutreachNoteTool(Tool):
     name = "copy_outreach_note"
     description = (
-        "Put a contact's drafted connection note (or follow-up message) on Duc's clipboard and open their "
-        "profile in the browser, so he can paste and press Send himself. Does not send anything and does not "
-        "change the contact's status - call update_outreach_status once Duc says he sent it."
+        "Put a contact's drafted connection note (or follow-up message) on Duc's clipboard so he can paste "
+        "and press Send himself; returns the profile URL. Only opens the profile in the browser if asked "
+        "(open_profile) - it pops a tab over whatever he is doing. Does not send anything and does not change "
+        "the contact's status - call update_outreach_status once Duc says he sent it."
     )
     input_schema = {
         "type": "object",
         "properties": {
             "id": {"type": "integer"},
             "which": {"type": "string", "enum": ["note", "follow_up"], "description": "default: note"},
+            "open_profile": {"type": "boolean", "description": "also open the profile URL in the browser (default false)"},
         },
         "required": ["id"],
     }
@@ -405,15 +415,15 @@ class CopyOutreachNoteTool(Tool):
     def __init__(self, store: OutreachStore, channel: OutreachChannel):
         self._store, self._channel = store, channel
 
-    def run(self, id: int, which: str = "note") -> dict:
+    def run(self, id: int, which: str = "note", open_profile: bool = False) -> dict:
         c = self._store.get(id)
         if c is None:
             return {"error": f"no outreach contact with id {id}"}
         text = c.follow_up if which == "follow_up" else c.note
         if not text:
             return {"error": f"contact {id} has no {which} drafted yet - call draft_outreach_note first"}
-        r = self._channel.deliver(text, c.profile_url)
-        return {"id": id, "which": which, "text": text, **asdict(r)}
+        r = self._channel.deliver(text, c.profile_url, open_profile=open_profile)
+        return {"id": id, "which": which, "text": text, "profile_url": c.profile_url, **asdict(r)}
 
 
 class UpdateOutreachStatusTool(Tool):
