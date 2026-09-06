@@ -100,11 +100,14 @@ def test_clipboard_channel_copies_and_opens():
         calls.append((argv, kw.get("input")))
 
     channel = ClipboardChannel(run=fake_run)
+    # default: copy only, never pop a tab over what Duc is doing; the URL comes back in the message
     r = channel.deliver("Hi Alex,", "https://www.linkedin.com/in/alex-example/")
+    assert r.copied and not r.opened and "alex-example" in r.message
+    assert calls == [(["pbcopy"], b"Hi Alex,")]
+    r = channel.deliver("Hi Alex,", "https://www.linkedin.com/in/alex-example/", open_profile=True)
     assert r.copied and r.opened
-    assert calls[0][0] == ["pbcopy"] and calls[0][1] == b"Hi Alex,"
-    assert calls[1][0] == ["open", "https://www.linkedin.com/in/alex-example/"]
-    r2 = channel.deliver("Hi Alex,", None)
+    assert calls[-1][0] == ["open", "https://www.linkedin.com/in/alex-example/"]
+    r2 = channel.deliver("Hi Alex,", None, open_profile=True)
     assert r2.copied and not r2.opened
 
 
