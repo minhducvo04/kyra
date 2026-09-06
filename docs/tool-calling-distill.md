@@ -42,37 +42,75 @@ call anything on keyword bait - at $0/turn?
 
 ## Results
 
-| System | Accuracy | Sequence | Over-trigger | Under-trigger | Mean latency | p90 |
+Every system answers the same 70 held-out cases. "Specialist" is the compact prompt the student trains on;
+"production" is what `ConversationManager._build_system()` actually sends today.
+
+| System | Prompt | Accuracy | Sequence | Over-trigger | Under-trigger | Mean latency |
 |---|---|---|---|---|---|---|
-| teacher: Sonnet 5, production tool loop | 92.9% | 92.9% | 5.0% | 6.0% | 3.38s | 5.54s |
-| zero-shot Qwen2.5-7B-Instruct-4bit | 78.6% | 84.3% | 5.0% | 8.0% | 2.21s | 3.03s |
-| zero-shot Qwen2.5-7B, **production prompt** | 77.1% | 82.9% | 5.0% | 12.0% | 2.64s | 3.03s |
-| LoRA run 1 (qwen7b-tools, 800 steps @ batch 1) | 70.0% | 74.3% | **20.0%** | 4.0% | 2.96s | 4.51s |
+| **teacher: Sonnet 5** | specialist | **92.9%** | 92.9% | 5.0% | 6.0% | 3.38s |
+| **teacher: Sonnet 5** | production | **90.0%** | 90.0% | 10.0% | 6.0% | 3.57s |
+| zero-shot Qwen2.5-7B-4bit | specialist | 78.6% | 84.3% | 5.0% | 8.0% | 2.21s |
+| zero-shot Qwen2.5-7B-4bit | production | 77.1% | 82.9% | 5.0% | 12.0% | 2.64s |
+| LoRA run 1 (800 steps, batch 1, 80/20 data) | specialist | 70.0% | 74.3% | 20.0% | 4.0% | 2.96s |
+| LoRA run 2 (2,400 steps, balanced data) | specialist | 78.6% | 82.9% | 20.0% | 4.0% | 3.18s |
+| **LoRA run 2** | **production** | **80.0%** | 82.9% | 5.0% | 2.0% | 3.70s |
 
-**Teacher, the 5 misses** - kept as scored, not re-labelled to fit: two are the draft cases, where it asked for a
-background instead of calling `draft_application_material` with none saved (the harness has no profile; declining
-to invent is the production-correct move, so a student trained on its traces will inherit the same refusal); one is
-"snooze reminder 5 to Wednesday", where it listed first to verify id 5 existed, found the fake list empty, and asked
-(a suite artifact - the case scripts no reminders); one under-trigger ("Cursor rejected me :(" got sympathy and an
-offer to update, no call); one over-trigger ("what's the news with your day" fetched tech news). The activation bar
-is therefore **88.3% accuracy and 0 over-triggers**.
+Multi-call cases missed (13 in the suite): zero-shot **10**, run 1 **7**, run 2 **4**. Duplicate-call failures:
+run 1 had them on five cases, run 2 has none.
 
-**Zero-shot 7B, where the 15 misses are** (the exact behaviours the distillation has to teach): 6 wrong
-sequences - it skipped the listing step and *invented an id* (`complete_reminder(id=1)`, `update(id=1)`) on
-find-then-act cases; 4 wrong arguments - weekday arithmetic ("this Friday" → a Tuesday, "the 1st" → a date in the
-past, "Wednesday" → tomorrow); 4 under-triggers - all three "I remembered / forgot the X one" review phrasings and
-"Cursor rejected me :("; 1 over-trigger - fetched science headlines for "tell me something cool about black
-holes". It also saved a CAP-theorem summary as a memory note instead of a learning item.
+## Verdict: do not activate. Claude stays the Agent Specialist.
 
-**Prompt shift, measured not assumed.** The student trains on `SPECIALIST_SYSTEM`, but
-`ConversationManager._build_system()` sends something quite different on a real tool turn: Kyra's persona, the
-date, durable memory notes, and retrieved memories - and *no* tool guidance at all. `production_system()`
-reproduces that shape so both prompts can be evaluated. Zero-shot, the shift costs 1.5 points of accuracy and
-raises under-triggering from 8% to 12%. That is the reference point for judging whether a LoRA adapter has
-over-fitted to its training prompt: an adapter that drops much further under the production prompt is telling us
-the specialist prompt has to be passed explicitly on the tool path, not that the adapter failed.
+The bar was set before the numbers: ≥95% of the teacher's accuracy and zero over-triggers. The best student
+reaches 80.0% against the teacher's 90.0% on the same prompt, and still over-triggers on 1 no-tool case in 20.
+It is not close enough to put a local model in front of tools that write to Duc's real reminders, applications,
+and memory notes. This is the same verdict as the 2026-09-02 benchmark, but now earned against a 70-case
+adversarial suite and a real trained model rather than 11 clean cases.
 
-## What the pilot fixed (harness bugs, not model failures)
+What the distillation *did* buy, and it is not nothing: the behaviour it was aimed at. Find-then-act and two-tool
+sequences went from 10 misses to 4, under-triggering halved, and the invent-an-id failure ("complete_reminder
+id=1" with no listing) is gone. A local model can be taught to look before it acts. It just is not yet reliable
+enough overall.
+
+## Three findings worth more than the score
+
+**1. The training prompt was biasing the student toward calling.** The same adapter over-triggers on 20% of
+no-tool cases under `SPECIALIST_SYSTEM` and 5% under the production prompt - and scores *higher* in production
+(80.0% vs 78.6%). The specialist prompt's "when the user's message asks for something a tool does, call the tool"
+reads as a push once the model has been trained to comply, while the production prompt carries no tool guidance
+and lets the learned judgement show. The obvious worry with a fine-tune - that it over-fits its training prompt
+and collapses in production - was measured, and the truth here is the opposite.
+
+**2. Row expansion silently skewed the class balance, and fixing it was worth 8.6 points.** Expanding a trace
+into one row per assistant turn (required so `--mask-prompt` trains every turn) multiplies tool traces by their
+call count while a no-tool trace stays a single row. Run 1's first decision said "call a tool" 80% of the time;
+after ~640 more no-tool traces it says 49%. Accuracy 70.0% → 78.6%, wrong-sequence misses 12 → 6, duplicate calls
+gone. Counting what each row teaches *at its decision point* found this; the row totals looked balanced.
+
+**3. Sizing a run needs the trainer's own definition of a step.** In mlx-lm one `--iters` step consumes one batch
+of `--batch-size` rows and `--grad-accumulation-steps` only delays the optimizer update, so at batch 1 iters ==
+rows. Run 1's 800 iters was 0.45 of an epoch. A 600-iter "two epoch" run 2 would have been a *quarter* epoch -
+caught before launching by doing the arithmetic, not after by reading a bad result.
+
+Memory forced batch 1 in the first place: a tool-calling row with a listing result runs to ~3.4k tokens against
+the router fine-tune's ~100, and batch 2 with stored activations ran the GPU out of memory on step 1. Gradient
+checkpointing brought peak memory to ~10.6 GB.
+
+## Where each system actually fails
+
+**Teacher (5 misses).** Two are the draft cases, where it asked for a background instead of drafting with none
+saved - the harness has no profile, and declining to invent is the production-correct move. One listed reminders
+to verify an id the fixture does not contain. One sympathised with "Cursor rejected me :(" and offered to update
+rather than updating. One fetched tech news for "what's the news with your day".
+
+**Zero-shot 7B (15 misses).** Six wrong sequences, and the shape matters: it skipped the listing step and
+*invented an id* (`complete_reminder(id=1)`, `update_job_application_status(id=1)`). Four argument errors, all
+date arithmetic. Four under-triggers, including all three "I remembered / forgot the X one" review phrasings.
+
+**Run 2 (15 misses).** No invented ids and no duplicate calls. Four over-triggers, all keyword bait. Three
+argument errors, still mostly weekday arithmetic. Six wrong sequences, mostly listing before an id the user
+already gave ("snooze reminder 5" → list, then snooze).
+
+## The pilot's job was to catch the harness, not the model
 
 The first 40-trace pilot kept 31 traces, and several keepers were actively harmful examples. All four causes were
 in the harness:
@@ -80,50 +118,39 @@ in the harness:
 | Symptom | Cause | Fix |
 |---|---|---|
 | Every find-then-act trace ended "I don't see that reminder" | listing tools returned empty lists | realistic, today-relative default listings |
-| "save the one about SQL joins" refused by the teacher | the seeded explanation was chosen at random, so the history was about something else | seed matched to the topic the message names |
+| "save the one about SQL joins" refused by the teacher | the seeded explanation was picked at random, so the history was about something else | seed matched to the topic the message names |
 | A call the registry rejected was recorded as a success | `record_trace` recomputed results instead of keeping what was returned | the registry records the real result or error per call; traces containing a rejected call are dropped |
 | find-then-act traces kept with a single call | "called at least one tool" was the only rule | multi-step categories require more than one call |
 
-Rerun on the same 40 messages: **36 kept**, and every multi-step chain (`list_reminders → snooze_reminder`,
-`due_learning_reviews → mark_learning_reviewed`, `list_job_applications → update_job_application_status`) correct.
-The remaining four drops are legitimate teacher refusals - an engineering background against an HR generalist
-posting, and a two-tool message whose role was genuinely missing.
+Rerun on the same 40 messages: **36 kept**, every multi-step chain correct. Training on the first pilot's data
+would have produced a student that lists and then apologises.
 
-This is the part worth keeping from the whole exercise: **the pilot's job was to catch the harness, not the
-model.** Training on the first pilot's data would have produced a student that lists and then apologizes.
+A second, later round of the same lesson: the full run's drop rate was *inverted*, with the categories the
+student most needs (find-then-act 22% kept, draft 35%, save-a-learning-item 42%, autofill 45%) losing the most
+data, because the generator wrote messages the teacher could not answer - an autofill request with no URL, a
+find-then-act naming an item absent from the fixture, a two-tool message missing the role. `GEN_HINTS` gives
+those categories the fixture's real contents and the required fields; find-then-act went from 9 usable traces
+to 57.
 
-## Run 1: the adapter got worse, and the data says why
+## What would change the verdict
 
-**70.0%, below the 78.6% zero-shot baseline.** Recorded rather than quietly retried, because the shape of the
-regression is the finding:
+In rough order of expected value per hour spent:
 
-| | zero-shot | LoRA run 1 |
-|---|---|---|
-| over-trigger (called a tool when it must not) | 5% | **20%** |
-| under-trigger | 8% | 4% |
-| multi-call cases missed | 10 | **7** |
+1. **Keyword-bait hard negatives, targeted at the observed failures.** All four remaining over-triggers are
+   past-tense or conversational uses of a tool verb: "I applied a patch yesterday", "my review at work went
+   fine", "remember when we talked about black holes". This is exactly the lever that moved the router fine-tune
+   (86.9% → 88.5%). Worth noting honestly: fixing all four would reach 84.3%, still short of the bar, so this
+   alone does not decide it.
+2. **More epochs.** Run 2 was one epoch and its validation loss was still falling at the end (0.868 at step
+   2,400, the best of the run). Two or three epochs is ~5 hours on this machine.
+3. **A larger student.** Qwen2.5-14B is already on disk and is the conversational default; it would roughly
+   double training time.
+4. **Argument-level work.** Three misses are argument errors, mostly weekday arithmetic ("this Friday" landing on
+   a Tuesday). A date-resolution helper in the prompt, or synthetic date drills, would be cheap.
 
-The training *did* teach the target behaviour - multi-step find-then-act improved, and under-triggering halved.
-It also taught the model to reach for a tool far too readily, and to keep calling: `list_job_applications` twice
-in a row, `mark_learning_reviewed` three times, and a five-call loop on "anything I still have to do today?". It
-also learned to list before acting even when the user *gave* the id ("snooze reminder 5" → list, then snooze).
+## Cost of the experiment
 
-Counting what each training row actually teaches at its decision point explains the first half exactly:
-
-| Decision point | Rows | Says "call a tool" |
-|---|---|---|
-| after the user's message | 903 | **80%** |
-| after a tool result | 874 | 17% |
-
-Expanding a trace into one row per assistant turn (needed so `--mask-prompt` trains every turn) also multiplies
-tool traces by their call count, while a no-tool trace stays one row. The result was a training set whose first
-decision says "call something" four times out of five, against a suite where 20 of 70 cases must call nothing.
-The model learned the prior, not the judgement.
-
-The repetition has a second, separate cause: 800 steps at batch size 1 is **0.45 of an epoch**, each gradient
-estimated from a single example. Memory forced batch 1 (rows reach 3.6k tokens), so run 2 uses gradient
-accumulation for an effective batch of 4 without the memory cost.
-
-**Run 2 changes exactly two things** so the comparison stays readable: ~490 more no-tool traces to bring the
-first decision near 50/50, and a real training schedule (effective batch 4, about two epochs). Nothing about the
-suite, the scoring, or the model changes.
+About 2,000 Sonnet 5 calls: 1,834 teacher traces (1,645 kept, 189 dropped), 280 evaluation turns across four
+teacher runs, and 32 generation calls. Roughly 4.5 hours of local training across two runs on the M5 Max, plus
+~25 minutes of local evaluation. The tool-schema `cache_control` added here is a permanent saving on every
+production tool turn, not just a data-generation one.
