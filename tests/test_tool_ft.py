@@ -296,3 +296,22 @@ def test_multi_step_categories_need_more_than_one_call(schemas):
     errored = Trace("x", "add_reminder", "tool", FIXED_TODAY,
                     [{"name": "add_reminder", "args": {"text": "x"}, "result": {"error": "TypeError: ..."}}], "Saved.")
     assert trace_is_clean(errored, schemas)[1] == "a call was rejected by the registry"
+
+
+def test_production_system_is_the_shape_the_app_sends():
+    from companion.agent_ft import SYSTEM_PROMPTS, production_system
+
+    prod = production_system(FIXED_TODAY)
+    assert "Kyra" in prod and "Sunday, September 6, 2026" in prod
+    assert "Durable facts" in prod and "AI-pipeline learning project" in prod
+    # the production prompt carries NO tool guidance - that is exactly the shift being measured
+    assert "call the tool" not in prod and "listing tool" not in prod
+    assert SYSTEM_PROMPTS["specialist"](FIXED_TODAY) != prod
+
+
+def test_evaluate_uses_the_requested_system_prompt(schemas):
+    from companion.agent_ft import production_system
+
+    backend = ScriptedToolBackend({"ugh long day": ([], "Rough one.")})
+    evaluate(backend, schemas, [ToolCase("ugh long day", [])], "x", production_system)
+    assert "Durable facts" in backend.seen_systems[0]
