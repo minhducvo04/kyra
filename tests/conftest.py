@@ -18,6 +18,9 @@ os.environ["KYRA_DATA_DIR"] = str(_SCRATCH)
 # at import (webapp.py, default_tools.py) can be imported. No test may
 # make a real API call - every LLM in tests is a ScriptedLLM (fakes.py).
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-not-real")
+# Settings also reads the developer's real .env; pin the knobs a test must not inherit
+# (a configured fine-tuned classifier would silently change which router path tests exercise).
+os.environ["KYRA_CLASSIFIER_ADAPTER"] = ""
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 

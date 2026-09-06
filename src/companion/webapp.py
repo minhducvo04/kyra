@@ -23,6 +23,7 @@ from companion.config import require_api_key
 from companion.conversation import ConversationManager
 from companion.default_tools import default_tool_registry
 from companion.doc_text import UnsupportedDocumentType, extract_text
+from companion.errors import ApiError, install_error_handlers
 from companion.github_profile import extract_username as extract_github_username
 from companion.github_profile import fetch_github_projects
 from companion.job_applications import (
@@ -51,6 +52,7 @@ from companion.router import TurnRouter, route_and_answer_verbose
 from companion.science import ScienceFactsTool
 
 app = FastAPI(title="Kyra")
+install_error_handlers(app)
 
 # A resume or writing sample is a few hundred KB at most; a bound keeps
 # a mis-dropped file (a video, a giant PDF) from being read into memory
@@ -194,7 +196,7 @@ def set_backend(body: BackendIn) -> dict:
     global _current_backend
     name = body.backend
     if name not in ("claude", "local", "auto"):
-        return {"error": f"unknown backend {name!r}"}
+        raise ApiError(400, "unknown_backend", f"unknown backend {name!r}", {"allowed": ["claude", "local", "auto"]})
     if name in ("claude", "local"):
         _rt.conversation.llm = _backends[name]  # first switch to local loads the model - can take a while
     _current_backend = name
@@ -726,14 +728,14 @@ def add_job_document(
         filename = file.filename
         extracted, file_bytes, warn = _extract_upload(file)
         if warn:
-            return {"error": warn}
+            raise ApiError(400, "unreadable_file", warn)
         body_text = extracted
     if not body_text:
-        return {"error": "no text or file content given"}
+        raise ApiError(400, "empty_document", "no text or file content given")
     try:
         doc, is_new = _get_or_add_document(label=label, kind=kind, text=body_text, source_filename=filename, file_bytes=file_bytes)
     except ValueError as e:
-        return {"error": str(e)}
+        raise ApiError(400, "invalid_document", str(e)) from e
     result = asdict(doc)
     result["reused_existing"] = not is_new
     return result
@@ -828,9 +830,11 @@ class UpdateJobApplicationStatusIn(BaseModel):
 @app.post("/api/job/applications/status")
 def update_job_application_status(body: UpdateJobApplicationStatusIn) -> dict:
     if body.status not in VALID_STATUSES:
-        return {"error": f"status must be one of {sorted(VALID_STATUSES)}"}
+        raise ApiError(400, "invalid_status", f"status must be one of {sorted(VALID_STATUSES)}", {"allowed": sorted(VALID_STATUSES)})
     result = _job_store.update_status(body.id, body.status, body.notes)
-    return asdict(result) if result else {"error": f"no application with id {body.id}"}
+    if not result:
+        raise ApiError(404, "not_found", f"no application with id {body.id}")
+    return asdict(result)
 
 
 class AutofillIn(BaseModel):
@@ -842,11 +846,11 @@ def job_autofill(body: AutofillIn) -> dict:
     profile = load_profile()
     missing = profile.is_ready_for_autofill()
     if missing:
-        return {"error": "profile isn't ready for autofill", "missing_fields": missing}
+        raise ApiError(409, "profile_incomplete", "profile isn't ready for autofill", {"missing_fields": missing})
     try:
         report = _autofill_engine.fill(body.url, profile)
     except Exception as e:
-        return {"error": f"autofill failed: {e}"}
+        raise ApiError(502, "autofill_failed", f"autofill failed: {e}") from e
     return {
         "url": body.url,
         "filled": [asdict(f) for f in report.filled],
@@ -923,4 +927,6 @@ class MarkReviewedIn(BaseModel):
 @app.post("/api/learning/{item_id}/review")
 def mark_learning_reviewed(item_id: int, body: MarkReviewedIn) -> dict:
     result = _learning_store.mark_reviewed(item_id, body.remembered)
-    return result if result else {"error": f"no learning item with id {item_id}"}
+    if not result:
+        raise ApiError(404, "not_found", f"no learning item with id {item_id}")
+    return result

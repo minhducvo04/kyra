@@ -17,15 +17,14 @@ black box, and doubles as future preference-tuning data (see
 docs/agentic-roadmap.md, Q2/Q3).
 """
 import json
-import os
 import re
 import time
 from dataclasses import dataclass, field
 
-import companion.config  # noqa: F401 - loads .env so KYRA_CLASSIFIER_ADAPTER is visible regardless of import order
 from companion.llm import LocalLLM
 from companion.router_log import log_turn
 from companion.session_state import get_mode
+from companion.settings import get_settings
 from companion.tools import ToolRegistry
 
 # Small and fast on purpose - this runs before every auto-mode turn, so it
@@ -119,7 +118,7 @@ class TurnRouter:
         self._tools = tool_registry
         self._classifier = classifier  # lazy - only loaded the first time auto-mode classification is actually needed
         # "model_repo:adapter_dir" -> fine-tuned compact-prompt path; None/"" -> few-shot path
-        self._adapter_spec = os.environ.get("KYRA_CLASSIFIER_ADAPTER", "") if adapter_spec is None else adapter_spec
+        self._adapter_spec = get_settings().classifier_adapter if adapter_spec is None else adapter_spec
 
     def route(self, user_input: str) -> RoutingDecision:
         t0 = time.time()

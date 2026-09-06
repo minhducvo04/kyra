@@ -15,10 +15,11 @@ stdin isn't a real interactive terminal - see voice_chat.py's barge-in
 code for why that fallback matters: piped/closed stdin must never look
 like a keypress.
 """
-import os
 import select
 import sys
 from dataclasses import dataclass
+
+from companion.settings import get_settings
 
 try:
     import termios
@@ -45,8 +46,8 @@ class Keybindings:
     @classmethod
     def from_env(cls) -> "Keybindings":
         return cls(
-            ptt_key=resolve_key(os.environ.get("KYRA_PTT_KEY"), ENTER),
-            interrupt_key=resolve_key(os.environ.get("KYRA_INTERRUPT_KEY"), ENTER),
+            ptt_key=resolve_key(get_settings().ptt_key, ENTER),
+            interrupt_key=resolve_key(get_settings().interrupt_key, ENTER),
         )
 
     def describe(self, key: str) -> str:

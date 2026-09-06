@@ -1,0 +1,12 @@
+.git
+.venv
+data
+scratchpad
+tests
+docs
+deploy
+*.pyc
+__pycache__
+.env
+.env.*
+!.env.example

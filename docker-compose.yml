@@ -1,0 +1,22 @@
+# Local v2 shape: stateless API + Postgres (unused until slice 2 wires DATABASE_URL).
+services:
+  api:
+    build: .
+    ports: ["8420:8420"]
+    env_file: .env
+    environment:
+      KYRA_DATA_DIR: /data
+      DATABASE_URL: postgresql://kyra:kyra@db:5432/kyra
+    volumes: ["kyra-data:/data"]
+    depends_on: [db]
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kyra
+      POSTGRES_PASSWORD: kyra
+      POSTGRES_DB: kyra
+    volumes: ["kyra-pg:/var/lib/postgresql/data"]
+    ports: ["5432:5432"]
+volumes:
+  kyra-data:
+  kyra-pg:

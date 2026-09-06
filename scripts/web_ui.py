@@ -22,8 +22,11 @@ from companion.logging_setup import configure_logging
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--port", type=int, default=8420)
-    parser.add_argument("--host", default="127.0.0.1")
+    from companion.settings import get_settings
+
+    settings = get_settings()
+    parser.add_argument("--port", type=int, default=settings.port)
+    parser.add_argument("--host", default=settings.host)
     args = parser.parse_args()
 
     configure_logging()

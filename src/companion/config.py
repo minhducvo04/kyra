@@ -1,16 +1,7 @@
-"""Configuration loading for the companion project."""
-import os
-
-from dotenv import load_dotenv
-
-load_dotenv()
-
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+"""Backward-compatible shim: the real configuration lives in settings.py.
+`require_api_key()` is kept because nine call sites and CLAUDE.md name it."""
+from companion.settings import get_settings
 
 
 def require_api_key() -> str:
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY is not set. Copy .env.example to .env and fill it in."
-        )
-    return ANTHROPIC_API_KEY
+    return get_settings().require_api_key()

@@ -25,7 +25,9 @@ def test_index_injects_mtime_cache_busters(client):
 
 
 def test_backend_switch_validation(client):
-    assert client.post("/api/backend", json={"backend": "nope"}).json()["error"].startswith("unknown backend")
+    res = client.post("/api/backend", json={"backend": "nope"})
+    assert res.status_code == 400 and res.json()["error"]["code"] == "unknown_backend"
+    assert res.json()["error"]["details"]["allowed"] == ["claude", "local", "auto"]
     assert client.get("/api/backend").json()["backend"] == "auto"
 
 
@@ -50,14 +52,18 @@ def test_learning_roundtrip(client):
     item = client.post("/api/learning", json={"topic": "t", "summary": "s", "key_takeaway": "k"}).json()
     assert item["review_count"] == 0
     assert client.post(f"/api/learning/{item['id']}/review", json={"remembered": True}).json()["review_count"] == 1
-    assert "error" in client.post("/api/learning/99999/review", json={"remembered": True}).json()
+    missing = client.post("/api/learning/99999/review", json={"remembered": True})
+    assert missing.status_code == 404 and missing.json()["error"]["code"] == "not_found"
 
 
 def test_tracker_roundtrip(client):
     app_ = client.post("/api/job/applications", json={"company": "Stripe", "role": "SDE"}).json()
     assert app_["status"] == "applied"
-    bad = client.post("/api/job/applications/status", json={"id": app_["id"], "status": "hired"}).json()
-    assert "error" in bad
+    bad = client.post("/api/job/applications/status", json={"id": app_["id"], "status": "hired"})
+    assert bad.status_code == 400 and bad.json()["error"]["code"] == "invalid_status"
+    assert "offer" in bad.json()["error"]["details"]["allowed"]
+    gone = client.post("/api/job/applications/status", json={"id": 999999, "status": "offer"})
+    assert gone.status_code == 404
     ok = client.post("/api/job/applications/status", json={"id": app_["id"], "status": "offer"}).json()
     assert ok["status"] == "offer"
     assert any(a["id"] == app_["id"] for a in client.get("/api/job/applications?status=offer").json()["applications"])
@@ -68,23 +74,25 @@ def test_documents_add_dedup_delete(client):
     assert a["reused_existing"] is False
     b = client.post("/api/job/documents", data={"label": "n2", "kind": "style_sample", "text": "same content"}).json()
     assert b["reused_existing"] is True and b["id"] == a["id"]
-    assert "error" in client.post("/api/job/documents", data={"kind": "note", "text": ""}).json()
-    assert "error" in client.post("/api/job/documents", data={"kind": "bogus", "text": "x"}).json()
+    assert client.post("/api/job/documents", data={"kind": "note", "text": ""}).status_code == 400
+    bogus = client.post("/api/job/documents", data={"kind": "bogus", "text": "x"})
+    assert bogus.status_code == 400 and bogus.json()["error"]["code"] == "invalid_document"
     up = client.post(
         "/api/job/documents", data={"kind": "resume"}, files={"file": ("r.txt", b"resume text", "text/plain")}
     ).json()
     assert up["text"] == "resume text" and up["file_path"]
-    assert "error" in client.post(
+    unreadable = client.post(
         "/api/job/documents", data={"kind": "resume"}, files={"file": ("r.xyz", b"?", "application/octet-stream")}
-    ).json()
+    )
+    assert unreadable.status_code == 400 and unreadable.json()["error"]["code"] == "unreadable_file"
     assert client.delete(f"/api/job/documents/{a['id']}").json()["deleted"] is True
     assert client.delete(f"/api/job/documents/{a['id']}").json()["deleted"] is False
 
 
 def test_upload_size_cap(client):
     big = b"x" * (webapp.MAX_UPLOAD_BYTES + 1)
-    res = client.post("/api/job/documents", data={"kind": "note"}, files={"file": ("big.txt", big, "text/plain")}).json()
-    assert "larger than" in res["error"]
+    res = client.post("/api/job/documents", data={"kind": "note"}, files={"file": ("big.txt", big, "text/plain")})
+    assert res.status_code == 400 and "larger than" in res.json()["error"]["message"]
 
 
 def test_profile_partial_update(client):
@@ -93,7 +101,17 @@ def test_profile_partial_update(client):
     after = client.post("/api/profile", json={"first_name": "Duc"}).json()
     assert after["profile"]["first_name"] == "Duc"
     assert after["profile"]["email"] == before["profile"]["email"]  # untouched field kept
-    assert client.post("/api/job/autofill", json={"url": "https://x"}).json()["error"].startswith("profile isn't ready")
+    res = client.post("/api/job/autofill", json={"url": "https://x"})
+    assert res.status_code == 409 and res.json()["error"]["code"] == "profile_incomplete"
+    assert "resume_path" in res.json()["error"]["details"]["missing_fields"]
+
+
+def test_every_error_uses_the_one_envelope(client):
+    # HTTPException raised by the PDF route renders the same shape as ApiError
+    res = client.get("/api/job/resume-pdf/doesnotexist.pdf")
+    assert res.status_code == 404 and res.json() == {"error": {"code": "not_found", "message": "not found"}}
+    res = client.get("/api/job/resume-pdf/evil.txt")
+    assert res.status_code == 400 and res.json()["error"]["code"] == "bad_request"
 
 
 def test_draft_material_paragraph_uses_draft_llm(client, monkeypatch):

@@ -15,11 +15,12 @@ deployment can mount a volume anywhere.
 Modules keep their own `DEFAULT_*` constants (public names other code
 already imports) but derive them from DATA_DIR here.
 """
-import os
 from pathlib import Path
 
+from companion.settings import get_settings
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = Path(os.environ.get("KYRA_DATA_DIR") or (PROJECT_ROOT / "data")).resolve()
+DATA_DIR = Path(get_settings().data_dir).resolve()
 WEB_DIR = PROJECT_ROOT / "web"
 
 # Compiled one-page resume PDFs served by /api/job/resume-pdf/{filename}.

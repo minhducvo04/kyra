@@ -421,6 +421,19 @@ document.querySelectorAll(".jobs-tab").forEach((tab) => {
   });
 });
 
+/* Every API error is {error: {code, message, details}} with a real status
+   code (v2). readJson turns that into a thrown Error carrying the server's
+   message, so each fetch site shows the reason instead of "server returned 400". */
+async function readJson(res) {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = data && data.error;
+    const msg = err ? (err.details && err.details.missing_fields ? `${err.message}: ${err.details.missing_fields.join(", ")}` : err.message) : `server returned ${res.status}`;
+    const e = new Error(msg); e.code = err && err.code; e.details = err && err.details; throw e;
+  }
+  return data;
+}
+
 /* -- draft -- */
 
 const draftMaterialType = document.getElementById("draft-material-type");
@@ -476,8 +489,7 @@ draftGenerateBtn.addEventListener("click", async () => {
     if (draftStyle.files[0]) form.append("style_sample", draftStyle.files[0]);
 
     const res = await fetch("/api/job/draft", { method: "POST", body: form });
-    if (!res.ok) throw new Error(`server returned ${res.status}`);
-    const data = await res.json();
+    const data = await readJson(res);
 
     if (data.warnings && data.warnings.length) {
       draftWarnings.textContent = data.warnings.join(" · ");
@@ -865,14 +877,18 @@ autofillRunBtn.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),
     });
-    const data = await res.json();
     autofillResult.innerHTML = "";
-    if (data.error) {
+    let data;
+    try {
+      data = await readJson(res);
+    } catch (err) {
       const p = document.createElement("p");
       p.style.color = "var(--danger)";
-      p.textContent = data.missing_fields ? `${data.error}: ${data.missing_fields.join(", ")}` : data.error;
+      p.textContent = err.message; // readJson already folds details.missing_fields into the message
       autofillResult.appendChild(p);
-    } else {
+      data = null;
+    }
+    if (data) {
       const summary = document.createElement("p");
       summary.textContent = `filled ${data.filled.length}, skipped ${data.skipped.length}. Nothing submitted.`;
       autofillResult.appendChild(summary);
@@ -1095,16 +1111,12 @@ docAddBtn.addEventListener("click", async () => {
     if (fileInput.files[0]) form.append("file", fileInput.files[0]);
 
     const res = await fetch("/api/job/documents", { method: "POST", body: form });
-    const data = await res.json();
-    if (data.error) {
-      addLine("error", `couldn't add document — ${data.error}`);
-    } else {
-      document.getElementById("doc-label").value = "";
-      document.getElementById("doc-text").value = "";
-      fileInput.value = "";
-      await loadDocumentList();
-      await loadResumePicker(); // a newly-uploaded resume file should show up here immediately
-    }
+    await readJson(res); // throws with the server's message on 4xx, handled below
+    document.getElementById("doc-label").value = "";
+    document.getElementById("doc-text").value = "";
+    fileInput.value = "";
+    await loadDocumentList();
+    await loadResumePicker(); // a newly-uploaded resume file should show up here immediately
   } catch (err) {
     addLine("error", `couldn't add document — ${err.message}`);
   } finally {

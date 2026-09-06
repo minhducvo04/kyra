@@ -13,13 +13,14 @@ loop in particular benefits - "attempt 2 compiled to 2 pages, 9 lines
 over" is exactly what you want in a log line when a result looks off.
 """
 import logging
-import os
+
+from companion.settings import get_settings
 
 DEFAULT_FORMAT = "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
 
 
 def configure_logging(level: str | None = None) -> None:
-    level_name = (level or os.environ.get("KYRA_LOG_LEVEL") or "INFO").upper()
+    level_name = (level or get_settings().log_level).upper()
     logging.basicConfig(level=getattr(logging, level_name, logging.INFO), format=DEFAULT_FORMAT)
     # Third-party chatter that drowns out our own lines at INFO.
     for noisy in ("httpx", "httpx2", "httpcore", "urllib3", "chromadb", "sentence_transformers", "PIL"):

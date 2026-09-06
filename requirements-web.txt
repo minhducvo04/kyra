@@ -1,0 +1,16 @@
+# Web/API layer only - what the container installs. No torch / mlx-lm / voice stack:
+# local models and audio stay on the Mac (see docs/v2-outline.md); in a container the
+# router's local classifier is unavailable and route() falls back to Claude (already
+# handled: "classifier error, defaulted to claude").
+anthropic>=0.40.0
+python-dotenv>=1.0.0
+pydantic>=2.0
+pydantic-settings>=2.0
+fastapi>=0.115.0
+uvicorn>=0.30.0
+python-multipart>=0.0.9
+pypdf>=4.0.0
+python-docx>=1.1.0
+chromadb>=0.5.0
+sentence-transformers>=3.0.0
+playwright>=1.47.0
