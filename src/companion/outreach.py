@@ -178,13 +178,15 @@ How Duc writes, plus what Kyra knows about him (his own rules and facts, follow 
 {voice}
 
 1. CONNECTION NOTE - the note on a LinkedIn connection request. Hard limit {limit} characters, aim under {target}.
-   Open with "Hi {first_name}," and name the shared ground in the first sentence. Say what he is applying to
-   (respecting the application status above - never say he applied if he has not) and ask for 15 minutes.
-   Mutual connections are people you both know, not an introduction - do not claim anyone connected you.
-   No referral ask here - that comes later.
+   Plain first-person sentences, the shape "Hi {first_name}, I'm a fellow <shared ground>. I'm about to apply for
+   <role> and would love <a short chat about their team>." No telegram style ("alum here"), no parenthetical
+   asides, no fragments. Respect the application status above - never say he applied if he has not. Mutual
+   connections are people you both know, not an introduction; leave them out unless there is a real reason.
+   No referral ask.
 2. FOLLOW-UP - the message after they accept. Three to five sentences. One real question only an insider can
    answer (how new grads get staffed, what the first months look like, the C++/Python split on their team).
-   Only in the last sentence, plainly, ask whether they would be comfortable referring him.
+   Do not ask for a referral in writing - the referral comes up in the conversation. At most, close by saying
+   he would welcome any pointers on the process.
 
 Output exactly this shape and nothing else:
 NOTE:
