@@ -94,3 +94,22 @@ def test_route_classifier_failure_defaults_safely():
 def test_decision_log_fields_are_stable():
     fields = RoutingDecision(path="text", backend="local", reason="r").as_log_fields()
     assert set(fields) == {"path", "backend", "reason", "overridden", "decompose_biased", "error"}
+
+
+def test_adapter_spec_uses_compact_prompt_and_same_decision_shape():
+    from companion.router_ft import COMPACT_SYSTEM
+
+    class Recording(FakeClassifier):
+        def respond(self, system, history, user_input):
+            self.seen = (system, user_input)
+            return super().respond(system, history, user_input)
+
+    set_mode("auto")
+    clf = Recording('{"path":"tool","backend":"claude"}')
+    r = TurnRouter(ToolRegistry([]), classifier=clf, adapter_spec="mlx-community/x:/tmp/adapter")
+    d = r.route("remind me to stretch")
+    assert d.path == "tool" and clf.seen[0] == COMPACT_SYSTEM and clf.seen[1] == "remind me to stretch"
+    # few-shot path still sends the long prompt with the message embedded
+    clf2 = Recording('{"path":"text","backend":"local"}')
+    TurnRouter(ToolRegistry([]), classifier=clf2, adapter_spec="").route("hi")
+    assert clf2.seen[0] == "" and "User message: hi" in clf2.seen[1]

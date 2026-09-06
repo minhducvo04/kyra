@@ -156,12 +156,22 @@ class LocalLLM(LLMBackend):
     same as FasterWhisperSTT/KokoroTTS.
     """
 
-    def __init__(self, repo: str = DEFAULT_LOCAL_MODEL, max_tokens: int = 500):
+    def __init__(self, repo: str = DEFAULT_LOCAL_MODEL, max_tokens: int = 500, adapter_path: str | None = None):
         from mlx_lm import load
 
         self._repo = repo
         self._max_tokens = max_tokens
-        self._model, self._tokenizer = load(repo)
+        # adapter_path: a LoRA adapter directory produced by `mlx_lm.lora`
+        # (see router_ft.py) - the base weights stay untouched, the adapter
+        # is applied on load. None = the plain instruct model.
+        self._model, self._tokenizer = load(repo, adapter_path=adapter_path)
+
+    def prompt_token_count(self, system: str, user_input: str) -> int:
+        """How many tokens the chat-templated prompt costs - the number a
+        fine-tune is trying to shrink versus a few-shot prompt."""
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": user_input}]
+        prompt = self._tokenizer.apply_chat_template(messages, add_generation_prompt=True)
+        return len(prompt) if not isinstance(prompt, str) else len(self._tokenizer.encode(prompt))
 
     def respond(self, system: str, history: list[Message], user_input: str) -> str:
         from mlx_lm import generate

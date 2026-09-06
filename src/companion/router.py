@@ -17,6 +17,7 @@ black box, and doubles as future preference-tuning data (see
 docs/agentic-roadmap.md, Q2/Q3).
 """
 import json
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -31,6 +32,12 @@ from companion.tools import ToolRegistry
 # default (Qwen2.5-14B) - classification is a much narrower task than
 # holding a conversation, see docs/agentic-roadmap.md's "queued for later".
 CLASSIFIER_MODEL = "mlx-community/Llama-3.2-3B-Instruct-4bit"
+
+# Optional fine-tuned classifier (see router_ft.py): "model_repo:adapter_dir".
+# When set, the router loads that model with the LoRA adapter and drives it
+# with router_ft.COMPACT_SYSTEM instead of the few-shot CLASSIFIER_PROMPT -
+# same decision, ~15x fewer prompt tokens. Unset = the shipped few-shot path.
+CLASSIFIER_ADAPTER = os.environ.get("KYRA_CLASSIFIER_ADAPTER", "")
 
 OVERRIDE_PHRASES = {
     "ask claude": "claude", "use claude": "claude", "claude please": "claude",
@@ -106,9 +113,11 @@ class RoutingDecision:
 
 
 class TurnRouter:
-    def __init__(self, tool_registry: ToolRegistry, classifier: LocalLLM | None = None):
+    def __init__(self, tool_registry: ToolRegistry, classifier: LocalLLM | None = None, adapter_spec: str | None = None):
         self._tools = tool_registry
         self._classifier = classifier  # lazy - only loaded the first time auto-mode classification is actually needed
+        # "model_repo:adapter_dir" -> fine-tuned compact-prompt path; None/"" -> few-shot path
+        self._adapter_spec = CLASSIFIER_ADAPTER if adapter_spec is None else adapter_spec
 
     def route(self, user_input: str) -> RoutingDecision:
         t0 = time.time()
@@ -137,11 +146,19 @@ class TurnRouter:
 
     def _classify(self, user_input: str) -> RoutingDecision:
         try:
-            if self._classifier is None:
-                self._classifier = LocalLLM(repo=CLASSIFIER_MODEL, max_tokens=120)
-            tool_desc = "\n".join(f"- {t.name}: {t.description}" for t in self._tools) or "(none available)"
-            prompt = CLASSIFIER_PROMPT.format(tools=tool_desc, message=user_input)
-            raw = self._classifier.respond(system="", history=[], user_input=prompt)
+            if self._adapter_spec:
+                if self._classifier is None:
+                    repo, adapter_dir = self._adapter_spec.split(":", 1)
+                    self._classifier = LocalLLM(repo=repo, max_tokens=40, adapter_path=adapter_dir)
+                from companion.router_ft import COMPACT_SYSTEM
+
+                raw = self._classifier.respond(system=COMPACT_SYSTEM, history=[], user_input=user_input)
+            else:
+                if self._classifier is None:
+                    self._classifier = LocalLLM(repo=CLASSIFIER_MODEL, max_tokens=120)
+                tool_desc = "\n".join(f"- {t.name}: {t.description}" for t in self._tools) or "(none available)"
+                prompt = CLASSIFIER_PROMPT.format(tools=tool_desc, message=user_input)
+                raw = self._classifier.respond(system="", history=[], user_input=prompt)
         except Exception as e:
             # Classifier itself failing is not a reason to fail the turn -
             # fall back to the safest default (Claude, text path) and say why.
