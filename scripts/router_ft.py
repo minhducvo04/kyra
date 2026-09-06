@@ -38,20 +38,27 @@ def cmd_gen(args):
     from companion.llm import AnthropicLLM
 
     llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=8000)
-    rows = generate_synthetic(llm, args.per_category, load_testset())
+    cats = [c.strip() for c in args.categories.split(",") if c.strip()] if args.categories else None
+    rows = generate_synthetic(llm, args.per_category, load_testset(), categories=cats)
     FT_DIR.mkdir(parents=True, exist_ok=True)
-    with SYNTH.open("w", encoding="utf-8") as f:
+    out = FT_DIR / args.out
+    with out.open("w", encoding="utf-8") as f:
         for e in rows:
             f.write(json.dumps(e.__dict__) + "\n")
-    print(f"wrote {len(rows)} examples -> {SYNTH}")
+    print(f"wrote {len(rows)} examples -> {out}")
 
 
-def _load_synth() -> list[Example]:
-    return [Example(**json.loads(line)) for line in SYNTH.read_text(encoding="utf-8").splitlines() if line.strip()]
+def _load_synth(names: list[str]) -> list[Example]:
+    rows: list[Example] = []
+    for name in names:
+        path = FT_DIR / name
+        rows += [Example(**json.loads(line)) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return rows
 
 
 def cmd_build(args):
-    train, valid = split(_load_synth(), limit=args.limit)
+    sources = [s.strip() for s in args.sources.split(",") if s.strip()]
+    train, valid = split(_load_synth(sources), limit=args.limit, cap_per_category=args.cap_per_category)
     out = FT_DIR / f"data-{args.name}"
     write_mlx_dataset(out, train, valid, load_testset())
     print(f"{out}: train={len(train)} valid={len(valid)} test={len(load_testset())}")
@@ -103,9 +110,13 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
     g = sub.add_parser("gen")
     g.add_argument("--per-category", type=int, default=45)
+    g.add_argument("--categories", default="", help="comma-separated subset of CATEGORIES (default: all)")
+    g.add_argument("--out", default="synthetic.jsonl", help="output file name under data/router_ft/")
     g.set_defaults(fn=cmd_gen)
     b = sub.add_parser("build")
     b.add_argument("--limit", type=int)
+    b.add_argument("--cap-per-category", type=int, help="class-balance ablation: keep at most N per category")
+    b.add_argument("--sources", default="synthetic.jsonl", help="comma-separated jsonl files under data/router_ft/")
     b.add_argument("--name", default="full")
     b.set_defaults(fn=cmd_build)
     t = sub.add_parser("train")

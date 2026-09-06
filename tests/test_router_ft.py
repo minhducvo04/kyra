@@ -78,3 +78,15 @@ def test_score_metrics():
     assert r.n == 4 and r.accuracy == 0.5 and r.path_accuracy == 0.75
     assert abs(r.mean_latency_s - 0.2) < 1e-9 and r.mean_prompt_tokens == 60 and len(r.misses) == 2
     assert "50.0%" in r.row()
+
+
+def test_split_cap_per_category_balances_before_split():
+    rows = [Example(f"t{i}", "tool", "claude", "tool_a") for i in range(50)] + [Example(f"x{i}", "text", "local", "text_b") for i in range(10)]
+    train, valid = split(rows, valid_frac=0.1, seed=1, cap_per_category=10)
+    kept = train + valid
+    assert sum(e.category == "tool_a" for e in kept) == 10 and sum(e.category == "text_b" for e in kept) == 10
+
+
+def test_generate_restricts_to_requested_categories():
+    rows = generate_synthetic(ScriptedLLM(['["only this"]']), 1, [], categories=["text_hard_negative_claude"])
+    assert [r.category for r in rows] == ["text_hard_negative_claude"] and rows[0].backend == "claude"

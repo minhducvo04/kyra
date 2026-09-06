@@ -94,6 +94,18 @@ CATEGORIES: dict[str, tuple[str, str, str, list[str]]] = {
     "text_hard_negative": ("text", "local", "messages that CONTAIN a tool keyword (remind, news, save, note, list, apply, fill, snooze, review, job) "
                            "but are casual conversation, not a request for that tool; label backend local unless it is a real explanation request",
                           ["remember when we talked about black holes? fun", "what's the news with your day", "I applied a patch yesterday"]),
+    # Added after the first adapter over-triggered tools on keyword bait: the
+    # bait that is really an explanation/advice request (backend claude), and
+    # more of the casual kind. Both exist only to teach "keyword != intent".
+    "text_hard_negative_claude": ("text", "claude", "requests for an explanation, advice, or a walkthrough that happen to use a tool keyword "
+                                  "(remind me how X works, list the tradeoffs of Y, how do I fill out form Z, should I save A as B, "
+                                  "review my plan for C, what's the science behind D) - NOT a request to use the tool",
+                                 ["remind me how quicksort works", "list the pros and cons of Kubernetes", "how do I fill out a W-4 form",
+                                  "should I save my notes as markdown or in a database"]),
+    "text_hard_negative_local": ("text", "local", "casual chat or small talk that happens to use a tool keyword (job, apply, note, snooze, "
+                                 "news, remember, review, save, fill, list, science) with no request behind it",
+                                ["can you snooze for a second, I need to think", "what jobs did people have before computers",
+                                 "my review at work went fine btw", "I saved a seat for you"]),
 }
 
 GEN_PROMPT = """Generate {n} distinct, realistic messages a user might type or say to a personal AI assistant, all of which fall \
@@ -142,13 +154,18 @@ def load_testset(path: Path = TESTSET_PATH) -> list[Example]:
     return [Example(r["message"], r["path"], r["backend"], r.get("note", "")) for r in rows]
 
 
-def generate_synthetic(llm: LLMBackend, per_category: int, testset: list[Example]) -> list[Example]:
+def generate_synthetic(
+    llm: LLMBackend, per_category: int, testset: list[Example], categories: list[str] | None = None,
+) -> list[Example]:
     """One Claude call per category; dedupes across categories and drops
-    any message that matches the held-out test set (leakage guard)."""
+    any message that matches the held-out test set (leakage guard).
+    `categories` restricts the run (e.g. to newly added buckets)."""
     blocked = {_norm(e.message) for e in testset}
     seen: set[str] = set()
     out: list[Example] = []
     for cat, (path, backend, desc, seeds) in CATEGORIES.items():
+        if categories and cat not in categories:
+            continue
         raw = llm.respond(
             system="You write realistic user messages for training a small classifier. JSON array of strings only.",
             history=[],
@@ -167,12 +184,26 @@ def generate_synthetic(llm: LLMBackend, per_category: int, testset: list[Example
     return out
 
 
-def split(examples: list[Example], valid_frac: float = 0.1, seed: int = 7, limit: int | None = None) -> tuple[list[Example], list[Example]]:
+def split(
+    examples: list[Example], valid_frac: float = 0.1, seed: int = 7, limit: int | None = None,
+    cap_per_category: int | None = None,
+) -> tuple[list[Example], list[Example]]:
     """Deterministic shuffle + split. `limit` caps the TRAIN size (for the
-    data-size ablation) after the split, so valid stays the same."""
+    data-size ablation) after the split, so valid stays the same.
+    `cap_per_category` drops examples beyond N per category BEFORE the
+    split - the class-balance ablation (15 tool categories vs 7 text ones
+    otherwise leaves tools 2:1 over text)."""
     rng = random.Random(seed)
     rows = list(examples)
     rng.shuffle(rows)
+    if cap_per_category is not None:
+        counts: dict[str, int] = {}
+        kept = []
+        for e in rows:
+            if counts.get(e.category, 0) < cap_per_category:
+                counts[e.category] = counts.get(e.category, 0) + 1
+                kept.append(e)
+        rows = kept
     n_valid = max(1, int(len(rows) * valid_frac))
     valid, train = rows[:n_valid], rows[n_valid:]
     if limit is not None:

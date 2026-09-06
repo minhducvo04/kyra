@@ -22,6 +22,7 @@ import re
 import time
 from dataclasses import dataclass, field
 
+import companion.config  # noqa: F401 - loads .env so KYRA_CLASSIFIER_ADAPTER is visible regardless of import order
 from companion.llm import LocalLLM
 from companion.router_log import log_turn
 from companion.session_state import get_mode
@@ -33,11 +34,12 @@ from companion.tools import ToolRegistry
 # holding a conversation, see docs/agentic-roadmap.md's "queued for later".
 CLASSIFIER_MODEL = "mlx-community/Llama-3.2-3B-Instruct-4bit"
 
-# Optional fine-tuned classifier (see router_ft.py): "model_repo:adapter_dir".
-# When set, the router loads that model with the LoRA adapter and drives it
-# with router_ft.COMPACT_SYSTEM instead of the few-shot CLASSIFIER_PROMPT -
-# same decision, ~15x fewer prompt tokens. Unset = the shipped few-shot path.
-CLASSIFIER_ADAPTER = os.environ.get("KYRA_CLASSIFIER_ADAPTER", "")
+# Optional fine-tuned classifier (see router_ft.py, docs/router-finetune.md):
+# env KYRA_CLASSIFIER_ADAPTER="model_repo:adapter_dir". When set, TurnRouter
+# loads that model with the LoRA adapter and drives it with
+# router_ft.COMPACT_SYSTEM instead of the few-shot CLASSIFIER_PROMPT - same
+# decision, 17x fewer prompt tokens, 4x faster, +15 points on the held-out set.
+# Read at TurnRouter construction (not import) so .env ordering can't hide it.
 
 OVERRIDE_PHRASES = {
     "ask claude": "claude", "use claude": "claude", "claude please": "claude",
@@ -117,7 +119,7 @@ class TurnRouter:
         self._tools = tool_registry
         self._classifier = classifier  # lazy - only loaded the first time auto-mode classification is actually needed
         # "model_repo:adapter_dir" -> fine-tuned compact-prompt path; None/"" -> few-shot path
-        self._adapter_spec = CLASSIFIER_ADAPTER if adapter_spec is None else adapter_spec
+        self._adapter_spec = os.environ.get("KYRA_CLASSIFIER_ADAPTER", "") if adapter_spec is None else adapter_spec
 
     def route(self, user_input: str) -> RoutingDecision:
         t0 = time.time()
