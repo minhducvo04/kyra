@@ -114,7 +114,7 @@ When adding a new subsystem, follow the same shape: a one-or-two-method ABC, a c
 
 ## Verified vs. not (as of 2026-09-04 — update this section as things get confirmed)
 
-**2026-09-07 (overnight)**: posting signals, target-posting tool, invented-number fix pass, repost/age in the watch, digest outreach section; `pytest` , `ruff` clean; real runs: Northwind fit loop, Netic Ashby fetch, digest dry run.
+**2026-09-07 (overnight)**: posting signals, target-posting tool, invented-number fix pass, repost/age in the watch, digest outreach section; `pytest` 133 passed, `ruff` clean; real runs: Northwind fit loop, Netic Ashby fetch, digest dry run.
 
 **2026-09-06 (later)**: outreach assist slice 1 built and verified with a real draft for a real contact; `pytest` 121 passed, `ruff` clean.
 
