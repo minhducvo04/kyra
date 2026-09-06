@@ -5,13 +5,14 @@ out of sync with each other - before this existed, `ToolRegistry(...)`
 was constructed three times with the same tool list typed out separately
 in each file.
 """
-from companion.job_applications import job_application_tools
+from companion.job_applications import JobApplicationStore, job_application_tools
 from companion.job_autofill import job_autofill_tools
 from companion.learning import learning_tools
 from companion.llm import AnthropicLLM
-from companion.memory_notes import memory_note_tools
+from companion.memory_notes import MarkdownMemoryNotesStore, memory_note_tools
 from companion.news import TechNewsTool
-from companion.reminders import reminder_tools
+from companion.outreach import outreach_tools
+from companion.reminders import RemindersStore, reminder_tools
 from companion.science import ScienceFactsTool
 from companion.tools import ToolRegistry
 
@@ -30,11 +31,18 @@ def default_tool_registry(draft_backend: AnthropicLLM | None = None) -> ToolRegi
 
         draft_backend = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=2500)
 
+    # Shared stores: marking an outreach contact "sent" schedules a follow-up reminder, and the outreach
+    # draft reads the tracked application's status so it never claims Duc applied when he is only targeting.
+    reminders = RemindersStore()
+    applications = JobApplicationStore()
     return ToolRegistry(
-        reminder_tools()
+        reminder_tools(reminders)
         + learning_tools()
-        + job_application_tools(llm=draft_backend)
+        + job_application_tools(applications, llm=draft_backend)
         + job_autofill_tools()
         + memory_note_tools()
+        + outreach_tools(
+            llm=draft_backend, reminders=reminders, memory_notes=MarkdownMemoryNotesStore(), applications=applications
+        )
         + [TechNewsTool(), ScienceFactsTool()]
     )

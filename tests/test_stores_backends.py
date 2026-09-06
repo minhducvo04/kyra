@@ -73,3 +73,18 @@ def test_job_queue_on_backend(engine):
     q.fail(jid, "nope")
     j = q.get(jid)
     assert j.status == "failed" and j.progress == ["p"] and j.error == "nope"
+
+
+def test_outreach_on_backend(engine):
+    from datetime import UTC, datetime, timedelta
+
+    from companion.outreach import FOLLOW_UP_DAYS, OutreachStore
+
+    store = OutreachStore(engine=engine)
+    now = datetime(2026, 9, 6, 12, 0, tzinfo=UTC)
+    c = store.add("Alex Rivera", "Northwind", relation="Berkeley")
+    assert store.set_draft(c.id, "note", "follow").follow_up == "follow"
+    sent = store.update_status(c.id, "sent", now=now)
+    assert sent.follow_up_at == (now + timedelta(days=FOLLOW_UP_DAYS)).isoformat()
+    assert [d.id for d in store.due_follow_ups(now=now + timedelta(days=FOLLOW_UP_DAYS))] == [c.id]
+    assert store.update_status(10**6, "sent") is None

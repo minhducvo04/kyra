@@ -802,7 +802,7 @@ const trackerLink = document.getElementById("tracker-link");
 const trackerAddBtn = document.getElementById("tracker-add");
 const trackerList = document.getElementById("tracker-list");
 
-const STATUSES = ["applied", "interviewing", "offer", "rejected", "withdrawn"];
+const STATUSES = ["targeting", "applied", "referral_pending", "interviewing", "offer", "rejected", "withdrawn"];
 
 async function loadTrackerList() {
   trackerList.textContent = "loading…";

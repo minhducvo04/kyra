@@ -42,7 +42,9 @@ class ToolRegistry:
         """Pass this straight as `tools=` to client.messages.create()."""
         return [t.to_schema() for t in self._tools.values()]
 
-    def run(self, name: str, **kwargs) -> Any:
+    def run(self, name: str, /, **kwargs) -> Any:
+        # `name` is positional-only so a tool whose input schema has its own `name` field
+        # (add_outreach_contact) can be called - found the first time such a tool existed.
         if name not in self._tools:
             raise KeyError(f"no such tool: {name!r} (have: {sorted(self._tools)})")
         return self._tools[name].run(**kwargs)
