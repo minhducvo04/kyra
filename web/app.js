@@ -434,6 +434,39 @@ async function readJson(res) {
   return data;
 }
 
+
+/* Submit the DRAFT form as a background job and stream its progress.
+   Contract (companion/jobs.py + webapp.py): POST /api/jobs/draft -> {id};
+   GET /api/jobs/{id}/events is SSE with events "progress" (text line),
+   "done" (JSON result, same shape as POST /api/job/draft) and "error". */
+function runDraftJob(form) {
+  const live = document.getElementById("draft-live");
+  live.innerHTML = "";
+  live.hidden = false;
+  // A previous run's result must not sit under the live list while this one runs.
+  draftText.textContent = "";
+  document.getElementById("draft-pdf-link").hidden = true;
+  document.getElementById("draft-fit-status").hidden = true;
+  document.getElementById("draft-notes-wrap").hidden = true;
+  draftOutput.hidden = false;
+  return new Promise(async (resolve, reject) => {
+    let job;
+    try {
+      job = await readJson(await fetch("/api/jobs/draft", { method: "POST", body: form }));
+    } catch (err) { live.hidden = true; return reject(err); }
+    const es = new EventSource(`/api/jobs/${job.id}/events`);
+    es.addEventListener("progress", (e) => {
+      const li = document.createElement("li"); li.textContent = e.data; live.appendChild(li);
+    });
+    es.addEventListener("done", (e) => { es.close(); resolve(JSON.parse(e.data)); });
+    es.addEventListener("error", (e) => {
+      es.close();
+      reject(new Error(e.data || "job failed"));
+    });
+    es.onerror = () => { es.close(); reject(new Error("lost connection to the job stream")); };
+  });
+}
+
 /* -- draft -- */
 
 const draftMaterialType = document.getElementById("draft-material-type");
@@ -488,8 +521,14 @@ draftGenerateBtn.addEventListener("click", async () => {
     if (draftResume.files[0]) form.append("resume", draftResume.files[0]);
     if (draftStyle.files[0]) form.append("style_sample", draftStyle.files[0]);
 
-    const res = await fetch("/api/job/draft", { method: "POST", body: form });
-    const data = await readJson(res);
+    let data;
+    if (draftMaterialType.value === "latex_resume") {
+      // v2: the one-page loop runs as a background job; progress streams in over SSE.
+      data = await runDraftJob(form);
+    } else {
+      const res = await fetch("/api/job/draft", { method: "POST", body: form });
+      data = await readJson(res);
+    }
 
     if (data.warnings && data.warnings.length) {
       draftWarnings.textContent = data.warnings.join(" · ");

@@ -6,7 +6,18 @@ services:
     env_file: .env
     environment:
       KYRA_DATA_DIR: /data
-      DATABASE_URL: postgresql://kyra:kyra@db:5432/kyra
+      KYRA_INLINE_WORKER: "false"
+      DATABASE_URL: postgresql+psycopg://kyra:kyra@db:5432/kyra
+    volumes: ["kyra-data:/data"]
+    depends_on: [db]
+  worker:
+    # Same image, different entrypoint: drains the jobs table the api enqueues into.
+    build: .
+    command: ["python", "scripts/worker.py"]
+    env_file: .env
+    environment:
+      KYRA_DATA_DIR: /data
+      DATABASE_URL: postgresql+psycopg://kyra:kyra@db:5432/kyra
     volumes: ["kyra-data:/data"]
     depends_on: [db]
   db:

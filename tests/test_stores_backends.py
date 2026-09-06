@@ -61,3 +61,15 @@ def test_job_applications_on_backend(engine):
     assert store.update_status(10**6, "offer") is None
     with pytest.raises(ValueError):
         store.update_status(a.id, "hired")
+
+
+def test_job_queue_on_backend(engine):
+    from companion.jobs import DbJobQueue
+
+    q = DbJobQueue(engine)
+    jid = q.enqueue("k", {"a": 1})
+    assert q.claim().id == jid and q.claim() is None
+    q.progress(jid, "p")
+    q.fail(jid, "nope")
+    j = q.get(jid)
+    assert j.status == "failed" and j.progress == ["p"] and j.error == "nope"

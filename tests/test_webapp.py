@@ -185,3 +185,33 @@ def test_resume_fit_analyze_bad_json_is_a_warning_not_500(client, monkeypatch):
     monkeypatch.setattr(webapp, "_resume_llm", ScriptedLLM(["not json at all"]))
     a = client.post("/api/job/resume-fit/analyze", json={"background_document_ids": doc["id"]}).json()
     assert a["blocks"] == [] and any("valid JSON" in w for w in a["warnings"])
+
+
+@requires_latex
+def test_draft_job_streams_progress_and_result(client, monkeypatch):
+    from companion.jobs import run_one
+
+    doc = client.post("/api/job/documents", data={"label": "texjob", "kind": "resume", "text": ONE_PAGE + "%job"}).json()
+    monkeypatch.setattr(webapp, "_resume_llm", ScriptedLLM([ONE_PAGE]))
+    created = client.post(
+        "/api/jobs/draft", data={"material_type": "latex_resume", "job_context": "SDE", "background_document_ids": doc["id"]}
+    ).json()
+    assert created["status"] == "queued" and isinstance(created["id"], int)
+    assert client.get(f"/api/jobs/{created['id']}").json()["status"] == "queued"
+    # the worker runs it (tests drive the queue directly; the inline thread is off in conftest)
+    assert run_one(webapp._queue, webapp.HANDLERS) is True
+    job = client.get(f"/api/jobs/{created['id']}").json()
+    assert job["status"] == "done" and job["result"]["fit"] is True and job["result"]["pdf_url"]
+    assert any("attempt 1" in line for line in job["progress"])
+    # SSE replays the progress lines and ends with a done event carrying the result
+    with client.stream("GET", f"/api/jobs/{created['id']}/events") as res:
+        text = "".join(res.iter_text())
+    assert "event: progress" in text and "event: done" in text and '"fit": true' in text
+    (webapp.RESUME_PDF_DIR / job["result"]["pdf_url"].rsplit("/", 1)[1]).unlink()
+
+
+def test_draft_job_rejects_synchronous_kinds_and_unknown_ids(client):
+    res = client.post("/api/jobs/draft", data={"material_type": "cover_letter"})
+    assert res.status_code == 400 and res.json()["error"]["code"] == "not_a_job"
+    assert client.get("/api/jobs/999999").status_code == 404
+    assert client.get("/api/jobs/999999/events").status_code == 404

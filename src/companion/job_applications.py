@@ -16,6 +16,7 @@ import json
 import logging
 import math
 import re
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -462,7 +463,7 @@ def _better(candidate: CompileResult, best: CompileResult | None) -> bool:
 
 def optimize_latex_resume_one_page(
     llm: AnthropicLLM, original_latex: str, job_context: str = "", extra_facts: str = "",
-    max_attempts: int = DEFAULT_FIT_ATTEMPTS,
+    max_attempts: int = DEFAULT_FIT_ATTEMPTS, on_progress: Callable[[str], None] | None = None,
 ) -> LatexFitResult:
     """Generates an edit, actually compiles it with a real local LaTeX
     engine (latex_compile.py), and iterates against the real page count
@@ -482,13 +483,21 @@ def optimize_latex_resume_one_page(
     extra_facts = extra_facts.strip() or "(none)"
     notes: list[str] = []
 
+    def note(msg: str) -> None:
+        """Every attempt line goes to the result AND, when a job is watching,
+        out live (v2 slice 3) - the user sees "attempt 2: 2 pages, 9 lines
+        over" while the loop is still running instead of a spinner."""
+        notes.append(msg)
+        if on_progress:
+            on_progress(msg)
+
     baseline = compile_latex(original_latex)
     if baseline.success and baseline.measure is not None:
-        notes.append(
+        note(
             f"original compiles to {baseline.page_count} page(s), {baseline.measure.first_page_capacity} lines on page 1"
         )
     else:
-        notes.append("original didn't compile cleanly - proceeding without a measured length budget")
+        note("original didn't compile cleanly - proceeding without a measured length budget")
     logger.info("one-page fit: baseline pages=%s overflow=%s", baseline.page_count, baseline.overflow_lines)
 
     text = llm.respond(
@@ -511,7 +520,7 @@ def optimize_latex_resume_one_page(
         result = compile_latex(current_latex)
 
         if not result.success:
-            notes.append(f"attempt {attempt}: compile failed, asking Claude to fix the LaTeX")
+            note(f"attempt {attempt}: compile failed, asking Claude to fix the LaTeX")
             logger.warning("one-page fit attempt %d: compile failed", attempt)
             if attempt == max_attempts:
                 break
@@ -520,14 +529,14 @@ def optimize_latex_resume_one_page(
                 user_input=LATEX_FIX_PROMPT.format(error_log=result.log_tail, current_latex=current_latex),
             )
             if fix_text.endswith(TRUNCATION_MARKER):
-                notes.append(f"attempt {attempt}: fix attempt got cut off - stopping here")
+                note(f"attempt {attempt}: fix attempt got cut off - stopping here")
                 break
             current_latex, n = restore_comments(original_latex, _strip_code_fence(fix_text))
             restored_total += n
             continue
 
         over = result.overflow_lines or 0
-        notes.append(
+        note(
             f"attempt {attempt}: compiled to {result.page_count} page(s)" + (f", {over} line(s) over" if over else "")
         )
         logger.info("one-page fit attempt %d: pages=%s overflow=%s", attempt, result.page_count, over)
@@ -551,12 +560,12 @@ def optimize_latex_resume_one_page(
             ),
         )
         if shrink_text.endswith(TRUNCATION_MARKER):
-            notes.append(f"attempt {attempt}: shrink attempt got cut off - stopping here")
+            note(f"attempt {attempt}: shrink attempt got cut off - stopping here")
             break
         current_latex, n = restore_comments(original_latex, _strip_code_fence(shrink_text))
         restored_total += n
 
-    notes.append(
+    note(
         f"couldn't automatically reach exactly one page in {attempts_used} attempt(s) - returning the closest real compile"
     )
     logger.warning("one-page fit gave up after %d attempts; best pages=%s", attempts_used, best.page_count if best else None)
@@ -786,7 +795,7 @@ Output the complete, edited LaTeX source now - nothing else."""
 
 def generate_latex_from_selection(
     llm: AnthropicLLM, original_latex: str, blocks: list[FitBlock], selections: list[FitSelection],
-    job_context: str = "", extra_facts: str = "",
+    job_context: str = "", extra_facts: str = "", on_progress: Callable[[str], None] | None = None,
 ) -> ResumeFitGenerateResult:
     """Second half of "Detailed" mode: edits the LaTeX to match exactly
     what Duc checked/unchecked in the UI, compiles it for real
@@ -822,15 +831,21 @@ def generate_latex_from_selection(
     current_latex = _strip_code_fence(text)
 
     notes: list[str] = []
+
+    def note(msg: str) -> None:
+        notes.append(msg)
+        if on_progress:
+            on_progress(msg)
+
     result = compile_latex(current_latex)
     if not result.success:
-        notes.append("compile failed, asking Claude to fix the LaTeX")
+        note("compile failed, asking Claude to fix the LaTeX")
         fix_text = llm.respond(
             system=RESUME_FIT_GENERATE_SYSTEM, history=[],
             user_input=LATEX_FIX_PROMPT.format(error_log=result.log_tail, current_latex=current_latex),
         )
         if fix_text.endswith(TRUNCATION_MARKER):
-            notes.append("fix attempt got cut off - returning the broken version so you can see what happened")
+            note("fix attempt got cut off - returning the broken version so you can see what happened")
             return ResumeFitGenerateResult(
                 latex=current_latex, pdf_bytes=None, page_count=None, fit=False, cut_suggestions=[], notes=notes,
             )
@@ -838,13 +853,13 @@ def generate_latex_from_selection(
         result = compile_latex(current_latex)
 
     if not result.success:
-        notes.append("still didn't compile after one fix attempt - review the LaTeX yourself")
+        note("still didn't compile after one fix attempt - review the LaTeX yourself")
         return ResumeFitGenerateResult(
             latex=current_latex, pdf_bytes=None, page_count=None, fit=False, cut_suggestions=[], notes=notes,
         )
 
     over = result.overflow_lines or 0
-    notes.append(f"compiled to {result.page_count} page(s)" + (f", {over} line(s) over" if over else ""))
+    note(f"compiled to {result.page_count} page(s)" + (f", {over} line(s) over" if over else ""))
     logger.info("detailed generate: pages=%s overflow=%s", result.page_count, over)
     fit = result.page_count == 1
     cut_suggestions: list[FitBlock] = []

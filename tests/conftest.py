@@ -21,6 +21,8 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-not-real")
 # Settings also reads the developer's real .env; pin the knobs a test must not inherit
 # (a configured fine-tuned classifier would silently change which router path tests exercise).
 os.environ["KYRA_CLASSIFIER_ADAPTER"] = ""
+# Tests drive the job queue explicitly with run_one(); no background thread racing them.
+os.environ["KYRA_INLINE_WORKER"] = "false"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 

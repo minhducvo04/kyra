@@ -49,3 +49,21 @@ job_applications = Table(
     Column("created_at", String(64), nullable=False),
     Column("updated_at", String(64), nullable=False),
 )
+
+# v2 slice 3: the job queue. One row per long-running task (a resume fit loop
+# runs 1-2 minutes with several model calls and must not sit inside an HTTP
+# request). payload/progress/result are JSON text so the table is portable
+# across SQLite and Postgres; a worker claims rows by flipping status.
+jobs = Table(
+    "jobs", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("kind", String(64), nullable=False),
+    Column("status", String(16), nullable=False, server_default="queued"),  # queued|running|done|failed
+    Column("payload", Text, nullable=False),
+    Column("progress", Text, nullable=False, server_default="[]"),
+    Column("result", Text),
+    Column("error", Text),
+    Column("created_at", String(64), nullable=False),
+    Column("started_at", String(64)),
+    Column("finished_at", String(64)),
+)

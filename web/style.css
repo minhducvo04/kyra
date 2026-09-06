@@ -1052,3 +1052,8 @@ body {
 }
 .fit-notes summary { cursor: pointer; }
 .fit-notes ul { margin: 0.3rem 0 0 1rem; padding: 0; }
+
+/* Live job progress (v2 slice 3): attempt lines stream in while the resume
+   loop runs, so a 90-second job reads as work happening, not a frozen button. */
+.draft-live { margin: 0.7rem; padding-left: 1rem; font-size: 0.75rem; opacity: 0.85; list-style: "› "; }
+.draft-live li { margin: 0.15rem 0; }

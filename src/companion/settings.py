@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     interrupt_key: str | None = Field(default=None, validation_alias="KYRA_INTERRUPT_KEY")
     # Slice 2 switches the SQLite stores to this when it points at Postgres.
     database_url: str = Field(default="", validation_alias="DATABASE_URL")
+    # v2 slice 3: run the job worker as a thread inside the web process (laptop
+    # default). The container sets this False and runs scripts/worker.py.
+    inline_worker: bool = Field(default=True, validation_alias="KYRA_INLINE_WORKER")
     host: str = Field(default="127.0.0.1", validation_alias="KYRA_HOST")
     port: int = Field(default=8420, validation_alias="KYRA_PORT")
 

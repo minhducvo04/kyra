@@ -9,18 +9,21 @@ AUTO, which hands every turn to the same TurnRouter chat.py/voice_chat.py
 use - one router, three front doors.
 """
 import base64
+import json
 import logging
+import time
 from dataclasses import asdict
 from functools import cached_property
 
 from anthropic import Anthropic
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from companion.config import require_api_key
 from companion.conversation import ConversationManager
+from companion.db import engine_for_store
 from companion.default_tools import default_tool_registry
 from companion.doc_text import UnsupportedDocumentType, extract_text
 from companion.errors import ApiError, install_error_handlers
@@ -38,18 +41,20 @@ from companion.job_applications import (
 )
 from companion.job_autofill import GreenhouseAutofillEngine
 from companion.job_documents import JobDocumentStore
+from companion.jobs import DbJobQueue, Handler, start_inline_worker
 from companion.learning import LearningStore
 from companion.llm import AnthropicLLM, LazyBackends, build_llm
 from companion.memory import ChromaMemoryStore
 from companion.memory_notes import MarkdownMemoryNotesStore
 from companion.news import TechNewsTool
+from companion.paths import DATA_DIR, WEB_DIR
 from companion.paths import GENERATED_RESUMES_DIR as RESUME_PDF_DIR
-from companion.paths import WEB_DIR
 from companion.persona import KYRA
 from companion.profile import load_profile, save_profile
 from companion.reminders import RemindersStore
 from companion.router import TurnRouter, route_and_answer_verbose
 from companion.science import ScienceFactsTool
+from companion.settings import get_settings
 
 app = FastAPI(title="Kyra")
 install_error_handlers(app)
@@ -533,6 +538,121 @@ def get_resume_pdf(filename: str):
     if not path.is_file():
         raise HTTPException(status_code=404, detail="not found")
     return FileResponse(path, media_type="application/pdf", filename="optimized_resume.pdf")
+
+
+# ---------------- background jobs (v2 slice 3) ----------------
+# The one-page resume loop runs 1-2 minutes with several model calls. As a
+# background job it no longer sits inside an HTTP request: the client gets
+# an id back at once and streams progress lines over SSE while the worker
+# (a thread here; scripts/worker.py in the container) does the work.
+_queue = DbJobQueue(engine_for_store(DATA_DIR / "kyra.db"))
+
+
+def _run_latex_resume_job(payload: dict, on_progress) -> dict:
+    """Job handler: same inputs and output shape as the synchronous
+    latex_resume draft, plus live progress. A one-off upload was already
+    saved to the document library by the enqueue endpoint, so the payload
+    only carries ids and text."""
+    latex_text, extra_facts, warnings = _pick_resume_source(
+        payload.get("background_text", ""), payload.get("background_document_ids", ""), None
+    )
+    if not latex_text:
+        raise ApiError(400, "no_resume_source", "nothing to optimize - pick a resume from your document library or paste it")
+    if payload.get("include_github"):
+        github_text, github_warnings = _fetch_github_context()
+        warnings.extend(github_warnings)
+        if github_text:
+            extra_facts = f"{extra_facts}\n\n{github_text}" if extra_facts else github_text
+    result = optimize_latex_resume_one_page(
+        _resume_llm, latex_text, payload.get("job_context", ""), extra_facts, on_progress=on_progress
+    )
+    warnings.extend(result.guard_warnings)
+    if not result.fit:
+        warnings.append(
+            f"NOT one page: the best attempt compiled to {result.page_count} page(s)"
+            + (f" with {result.overflow_lines} line(s) over" if result.overflow_lines else "")
+            + " - use Resume — Detailed to pick what to cut, or try again"
+        )
+    pdf_url = f"/api/job/resume-pdf/{_save_generated_pdf(result.pdf_bytes)}" if result.pdf_bytes else None
+    return DraftOut(
+        draft=result.latex, background_chars=len(latex_text), style_chars=0, warnings=warnings, pdf_url=pdf_url,
+        fit=result.fit, page_count=result.page_count, overflow_lines=result.overflow_lines, notes=result.notes,
+    ).model_dump()
+
+
+HANDLERS: dict[str, Handler] = {"latex_resume": _run_latex_resume_job}
+
+
+@app.on_event("startup")
+def _start_worker() -> None:
+    if get_settings().inline_worker:
+        start_inline_worker(_queue, HANDLERS)
+        logger.info("inline job worker started")
+
+
+@app.post("/api/jobs/draft")
+def enqueue_draft_job(
+    material_type: str = Form(...),
+    job_context: str = Form(""),
+    background_text: str = Form(""),
+    background_document_ids: str = Form(""),
+    resume: UploadFile | None = File(None),
+    include_github: bool = Form(False),
+) -> dict:
+    """Same form as POST /api/job/draft, but returns a job id immediately.
+    Only the long-running material type is a job; the others stay synchronous."""
+    if material_type != "latex_resume":
+        raise ApiError(400, "not_a_job", f"material_type {material_type!r} runs synchronously via /api/job/draft")
+    doc_ids = [i.strip() for i in background_document_ids.split(",") if i.strip()]
+    resume_text, resume_bytes, warn = _extract_upload(resume)
+    if warn:
+        raise ApiError(400, "unreadable_file", warn)
+    if resume_text:
+        saved, _ = _get_or_add_document(
+            label=resume.filename, kind="resume", text=resume_text, source_filename=resume.filename, file_bytes=resume_bytes
+        )
+        doc_ids.insert(0, saved.id)
+    job_id = _queue.enqueue("latex_resume", {
+        "job_context": job_context, "background_text": background_text,
+        "background_document_ids": ",".join(doc_ids), "include_github": include_github,
+    })
+    return {"id": job_id, "kind": "latex_resume", "status": "queued"}
+
+
+@app.get("/api/jobs/{job_id}")
+def get_job(job_id: int) -> dict:
+    job = _queue.get(job_id)
+    if job is None:
+        raise ApiError(404, "not_found", f"no job {job_id}")
+    return asdict(job)
+
+
+@app.get("/api/jobs/{job_id}/events")
+def job_events(job_id: int):
+    """Server-sent events: every new progress line as it lands, then one
+    terminal 'done' (with the full result) or 'error' event. Polls the
+    queue table - cheap at this volume, and it works on SQLite and Postgres
+    alike; a pub/sub channel is a later optimization, not a correctness fix."""
+    if _queue.get(job_id) is None:
+        raise ApiError(404, "not_found", f"no job {job_id}")
+
+    def stream():
+        sent = 0
+        while True:
+            job = _queue.get(job_id)
+            for line in job.progress[sent:]:
+                yield f"event: progress\ndata: {line}\n\n"
+            sent = len(job.progress)
+            if job.status == "done":
+                yield f"event: done\ndata: {json.dumps(job.result)}\n\n"
+                return
+            if job.status == "failed":
+                yield f"event: error\ndata: {(job.error or 'job failed').splitlines()[0]}\n\n"
+                return
+            yield ": keepalive\n\n"
+            time.sleep(0.7)
+
+    return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.post("/api/job/resume-fit/analyze", response_model=ResumeFitAnalyzeOut)
