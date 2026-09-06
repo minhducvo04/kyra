@@ -1,5 +1,7 @@
 # Distilling the Agent Specialist into a local model (plan, 2026-09-06)
 
+**Status: COMPLETE 2026-09-06 - measured, verdict is do-not-activate. See `docs/tool-calling-distill.md`.**
+
 **Goal.** Today every `tool` turn goes to Claude (`AnthropicLLM.respond_with_tools`). Measure whether a local
 model, LoRA-tuned on Claude's own tool-calling traces, can make the same calls with the same arguments on a
 handwritten held-out suite - and switch it in behind the existing interface only if it clears a stated bar.
