@@ -83,6 +83,19 @@ Legend: ✅ done tonight · 🟡 partially done / next step noted · ⏭ deliber
 |---|---|---|---|
 | ✅ | Decisions lived in CLAUDE.md prose (good) but the *standards* were implicit. | This file, plus `v2-outline.md` and `needs-your-input.md`. | Architecture Decision Records: write down *why*, so the next person (or you in three months) doesn't undo a deliberate choice. CLAUDE.md already did this well; this file makes the standards themselves explicit. |
 
+## 10. Deployment (added 2026-09-06, v2 slice 4)
+
+| | Before | After | Why |
+|---|---|---|---|
+| ✅ **Infrastructure as code** | No cloud footprint; the deploy story was a paragraph in `v2-outline.md`. | `deploy/aws/` Terraform: VPC, ECS Fargate api + worker, RDS, EFS, ALB, Secrets Manager, CloudWatch, ECR, IAM. One `apply`, one `teardown.sh`. | **Reproducible, reviewable, destroyable.** Click-built infrastructure can't be diffed, code-reviewed, or torn down with confidence; IaC makes the environment a PR like any other. |
+| ✅ **No long-lived cloud keys in CI** | — | GitHub Actions assumes an IAM role through OIDC, scoped to `repo:<owner/name>:ref:refs/heads/master`, with permissions limited to one ECR repo and two ECS services. | A stored access key is a standing credential that leaks in logs and forks; a short-lived token bound to a specific repo and branch is the current baseline (GitHub + AWS both document it as the default). |
+| ✅ **Secrets outside state and git** | The API key lived in `.env` on the laptop. | Secrets Manager; the Anthropic secret is created *empty* by Terraform and filled by CLI, so the value is never in `.tfstate`. ECS injects it as an env var at start. | Terraform state is plaintext; anything you put in it is as exposed as the state file. The DB password *is* in state (unavoidable when Terraform creates the DB), which is why state stays local and gitignored, with the S3-backend note for a second operator. |
+| ✅ **A hard boundary where auth is missing** | — | `allowed_cidrs` is a required variable and a validation rule rejects `0.0.0.0/0`. | A missing control has to be replaced by an explicit one, not a comment. Until OIDC auth (Phase 2), the network allow-list is the only thing between the internet and a paid API key plus personal data. |
+| ✅ **Sandboxed compile of untrusted input** | `pdflatex` ran with its default *restricted* shell escape. | `-no-shell-escape` always (`compile_argv`), plus a test that plants `\write18{touch …}` in a source and checks nothing ran. | The resume source is model-written and user-uploaded: untrusted input to a program with a shell hook. Same principle as the guard in §2 - a post-condition in code, not a hope. |
+| ✅ **Shared state made explicit** | One process, one disk; the api and worker sharing `data/` was an accident of running on one laptop. | EFS mounted at `/data` on both tasks; the reason (document library, memory notes, PDFs) is written down next to the resource. | The first multi-container deploy is where "it worked on my machine" breaks. Naming the shared-filesystem dependency now is what lets a later slice replace it store-by-store with object storage. |
+| ⏭ **SQS / S3** | Planned for this slice. | Deferred, reasons in `deploy/aws/README.md`. | Don't provision what nothing reads. The DB queue already gives durable jobs and streamable progress; EFS already covers the PDFs. Adding a queue and a bucket would be résumé-driven infrastructure. |
+| 🟡 **Verification** | — | `terraform validate` in CI only; never applied. | An `apply` spends money and needs an account the operator owns; that's a decision, not a build step. |
+
 ---
 
 ## Verification of tonight's work (what was actually run)
