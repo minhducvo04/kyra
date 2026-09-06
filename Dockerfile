@@ -13,6 +13,9 @@ RUN pip install -r requirements-web.txt
 COPY src ./src
 COPY web ./web
 COPY scripts/web_ui.py scripts/worker.py ./scripts/
+# Alembic, so `alembic upgrade head` can run as a one-shot task against RDS (deploy/aws/README.md).
+COPY alembic.ini ./
+COPY migrations ./migrations
 VOLUME ["/data"]
 EXPOSE 8420
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8420/api/backend',timeout=3)" || exit 1

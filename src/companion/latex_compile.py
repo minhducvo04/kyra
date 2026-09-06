@@ -124,6 +124,18 @@ def _extract_error_context(log_text: str) -> str:
     return context[-LOG_TAIL_CHARS:] if len(context) > LOG_TAIL_CHARS else context
 
 
+def compile_argv(engine: str, tex_name: str = "resume.tex") -> list[str]:
+    """The exact command line the compiler runs with. `-no-shell-escape` is
+    the sandbox line that matters: the source being compiled was written by
+    a model (or uploaded), and TeX's \\write18 can run arbitrary shell
+    commands when shell escape is on. pdflatex's default is already the
+    *restricted* mode (an allowlist of programs); this turns it off outright
+    so a resume can never execute anything, on the laptop or in the
+    container. Non-stop mode + halt-on-error keep a broken document from
+    waiting on an interactive prompt."""
+    return [engine, "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", tex_name]
+
+
 def compile_latex(
     latex_source: str, engine: str | None = None, timeout: int = DEFAULT_TIMEOUT_SECONDS
 ) -> CompileResult:
@@ -143,8 +155,7 @@ def compile_latex(
 
         try:
             proc = subprocess.run(
-                [engine, "-interaction=nonstopmode", "-halt-on-error", "resume.tex"],
-                cwd=tmpdir, capture_output=True, timeout=timeout, text=True,
+                compile_argv(engine), cwd=tmpdir, capture_output=True, timeout=timeout, text=True,
             )
         except FileNotFoundError:
             return CompileResult(

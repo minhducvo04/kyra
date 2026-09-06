@@ -54,3 +54,47 @@ jobs:
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8420/api/backend && break; sleep 2; done
           curl -sf http://127.0.0.1:8420/api/backend | grep -q '"backend"'
           docker logs kyra | tail -20
+
+  terraform:
+    # Terraform isn't installed on the dev Mac either; this is the real syntax/schema check for deploy/aws.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - name: Format check
+        run: terraform -chdir=deploy/aws fmt -check -diff -recursive
+      - name: Validate (no backend, no credentials)
+        run: |
+          terraform -chdir=deploy/aws init -backend=false -input=false
+          terraform -chdir=deploy/aws validate
+
+  deploy:
+    # Skipped until the repository variables AWS_ROLE_ARN and AWS_REGION exist (deploy/aws/README.md step 4).
+    # Authenticates with a short-lived OIDC token via the role Terraform created - no AWS keys in GitHub.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && vars.AWS_ROLE_ARN != ''
+    needs: [test, docker, terraform]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push the image (:latest and :<sha>)
+        env:
+          REPO: ${{ steps.ecr.outputs.registry }}/kyra
+        run: |
+          docker build -t "$REPO:latest" -t "$REPO:${GITHUB_SHA}" .
+          docker push "$REPO:latest"
+          docker push "$REPO:${GITHUB_SHA}"
+      - name: Roll both services onto the new image
+        run: |
+          aws ecs update-service --cluster kyra --service kyra-api --force-new-deployment --no-cli-pager
+          aws ecs update-service --cluster kyra --service kyra-worker --force-new-deployment --no-cli-pager

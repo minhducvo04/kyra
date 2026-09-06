@@ -1,4 +1,11 @@
-from companion.latex_compile import CompileResult, PageMeasure, _extract_error_context, compile_latex, detect_engine
+from companion.latex_compile import (
+    CompileResult,
+    PageMeasure,
+    _extract_error_context,
+    compile_argv,
+    compile_latex,
+    detect_engine,
+)
 from tests.latex_docs import make_doc, requires_latex
 
 
@@ -49,3 +56,19 @@ def test_compile_failure_returns_error_context():
     bad = compile_latex(r"\documentclass{article}\begin{document}\undefinedmacro\end{document}")
     assert not bad.success and bad.pdf_bytes is None
     assert "Undefined control sequence" in bad.log_tail
+
+
+def test_compile_argv_disables_shell_escape():
+    argv = compile_argv("pdflatex")
+    assert argv[0] == "pdflatex" and "-no-shell-escape" in argv and argv[-1] == "resume.tex"
+    assert "-interaction=nonstopmode" in argv and "-halt-on-error" in argv
+
+
+@requires_latex
+def test_write18_in_source_cannot_run_a_command(tmp_path):
+    # A model-written resume must never execute anything: \write18 is TeX's shell hook.
+    marker = tmp_path / "pwned"
+    doc = make_doc(3, extra_preamble=f"\\immediate\\write18{{touch {marker}}}\n")
+    result = compile_latex(doc)
+    assert result.success and result.page_count == 1
+    assert not marker.exists()

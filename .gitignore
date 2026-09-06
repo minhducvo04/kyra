@@ -24,3 +24,10 @@ handoff/
 # IDE
 .vscode/
 .idea/
+
+# Terraform (deploy/aws): local state holds the DB password; tfvars holds your IP/account
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
