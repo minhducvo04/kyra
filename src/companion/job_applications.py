@@ -25,9 +25,9 @@ from sqlalchemy import Engine, insert, select, update
 
 from companion.db import engine_for_store
 from companion.latex_compile import CompileResult, compile_latex
-from companion.llm import TRUNCATION_MARKER, AnthropicLLM
+from companion.llm import TRUNCATION_MARKER, AnthropicLLM, LLMBackend
 from companion.paths import DATA_DIR
-from companion.resume_guard import check_resume_output
+from companion.resume_guard import check_resume_output, unsupported_numbers
 from companion.resume_latex import content_diff, restore_comments
 from companion.schema import job_applications as JA
 from companion.tools import Tool
@@ -343,7 +343,11 @@ LATEX_ONE_PAGE_SYSTEM = (
     "GPA, one more course added to an existing coursework line) - never use them to add a brand-new standalone "
     "entry (a new job, project, certification, or section) that wasn't already its own entry in the original, "
     "even if the fact is true and relevant - adding a new entry to a real application document is Duc's call to "
-    "make by hand, not something to infer automatically. Output only valid, complete LaTeX source - no "
+    "make by hand, not something to infer automatically. A good bullet reads: strong verb + what was done + the "
+    "measured result (how much faster, how many, how much saved) - lead with the result when the original has "
+    "one. When the original bullet has no number, keep it factual WITHOUT one: never add, estimate, or round a "
+    "number, because Duc will be asked to defend every figure in an interview and a later step asks him for the "
+    "missing ones. Output only valid, complete LaTeX source - no "
     "commentary, no markdown code fences, nothing before or after it."
 )
 
@@ -352,7 +356,8 @@ LATEX_ONE_PAGE_PROMPT = """Tailor this LaTeX resume to the job/role context belo
 Do all of these, not just the last one:
 1. RE-RANK: within each section, put the entries and bullets most relevant to the target first.
 2. REWORD: rewrite kept bullets to lead with what the target cares about, using the target's own terms where \
-they are truthful descriptions of what the bullet already says. Keep each bullet roughly its original length.
+they are truthful descriptions of what the bullet already says - strong verb + what + the measured result the \
+original already states. No new numbers, ever. Keep each bullet roughly its original length.
 3. CUT: drop or tighten the least relevant material - an older or less relevant project, a course, a weaker \
 bullet - so the page still fits. Never shrink the layout to make room.
 If no job context is given, tailor for a general AI/software engineering audience and still re-rank and reword.
@@ -396,6 +401,37 @@ touch margins/font/spacing commands, keep the LaTeX structure intact.
 {current_latex}
 
 Output the complete, edited LaTeX source now - nothing else."""
+
+LATEX_NUMBER_FIX_PROMPT = """This tailored LaTeX resume contains numbers that do not appear in any source it was \
+allowed to use: {numbers}
+
+Remove each of those numbers, or restore the source's own wording for that bullet - a number the sources do not \
+contain must not survive, even if it is plausible. Change nothing else: same structure, same other bullets, every \
+%-comment line untouched.
+
+=== Sources (the only place a number may come from) ===
+{sources}
+
+=== Current LaTeX source ===
+{current_latex}
+
+Output the complete, corrected LaTeX source now - nothing else."""
+
+METRIC_QUESTIONS_SYSTEM = (
+    "You review resume bullets and never propose numbers yourself - you only ask the owner the question that would "
+    "surface a real one."
+)
+METRIC_QUESTIONS_PROMPT = """Below is Duc's tailored resume (LaTeX). List the bullets that describe a task without a \
+measured result - no number, percentage, time, count, or scale. For each, write the ONE question Duc should answer \
+from memory to add a real figure (how much faster, how many, how much saved, over what period). Never suggest a \
+value. Skip coursework and skills lines.
+
+Output at most 6 lines, one per bullet, exactly in this form:
+BULLET: <first 8 words of the bullet> | ASK: <the question>
+If every bullet already has a measured result, output exactly: NONE
+
+=== LaTeX ===
+{latex}"""
 
 LATEX_FIX_PROMPT = """This LaTeX failed to compile with the error below. Fix the LaTeX syntax only - keep the same \
 content decisions (what was kept, cut, or reworded), don't undo those edits, don't invent anything new.
@@ -463,6 +499,8 @@ class LatexFitResult:
     guard_warnings: list[str] = field(default_factory=list)  # resume_guard.py fact-check results
     change_summary: str = ""  # resume_latex.content_diff() - what actually changed vs the original
     comments_restored: int = 0  # %-lines the model dropped and restore_comments() put back
+    numbers_removed: list[str] = field(default_factory=list)  # invented numbers the fix pass took back out
+    questions: list[str] = field(default_factory=list)  # bullets that would benefit from a real number - ask Duc, never guess
 
 
 def _better(candidate: CompileResult, best: CompileResult | None) -> bool:
@@ -559,7 +597,7 @@ def optimize_latex_resume_one_page(
         if result.page_count == 1:
             return _finalize_fit(
                 current_latex, original_latex, extra_facts, result, fit=True, attempts=attempt, notes=notes,
-                baseline=baseline, restored=restored_total,
+                baseline=baseline, restored=restored_total, llm=llm,
             )
 
         if attempt == max_attempts:
@@ -584,19 +622,78 @@ def optimize_latex_resume_one_page(
     logger.warning("one-page fit gave up after %d attempts; best pages=%s", attempts_used, best.page_count if best else None)
     return _finalize_fit(
         best_latex, original_latex, extra_facts, best, fit=False, attempts=attempts_used, notes=notes,
-        baseline=baseline, restored=restored_total,
+        baseline=baseline, restored=restored_total, llm=llm,
     )
+
+
+def _remove_invented_numbers(
+    llm: LLMBackend, latex: str, sources: list[str], result: CompileResult | None, notes: list[str],
+) -> tuple[str, CompileResult | None, list[str]]:
+    """Duc's rule (2026-09-06): never a number that is not his. The guard
+    used to only warn; this is the post-condition - one fix pass that
+    strips every unsupported number, recompiled for real, kept only if
+    it compiles to no more pages than before. If the pass fails the
+    original stays and the guard warning stands, so nothing is hidden."""
+    bad = unsupported_numbers(latex, sources)
+    if not bad:
+        return latex, result, []
+    try:
+        fixed = _strip_code_fence(llm.respond(
+            system=LATEX_ONE_PAGE_SYSTEM, history=[],
+            user_input=LATEX_NUMBER_FIX_PROMPT.format(
+                numbers=", ".join(bad), sources="\n\n".join(src for src in sources if src.strip()), current_latex=latex,
+            ),
+        ))
+    except Exception as e:  # the resume itself must survive a failed fix call; the guard warning still shows the numbers
+        logger.warning("invented-number fix pass failed: %s", e)
+        notes.append(f"invented number(s) found and the fix pass failed ({type(e).__name__}) - review by hand: {', '.join(bad)}")
+        return latex, result, []
+    fixed, _ = restore_comments(latex, fixed)
+    still = unsupported_numbers(fixed, sources)
+    if still:
+        notes.append(f"could not remove invented number(s) automatically - review by hand: {', '.join(still)}")
+        return latex, result, []
+    compiled = compile_latex(fixed)
+    if not compiled.success or (result and compiled.page_count and result.page_count and compiled.page_count > result.page_count):
+        notes.append(f"invented number(s) found but the corrected version did not compile as well - review by hand: {', '.join(bad)}")
+        return latex, result, []
+    notes.append(f"removed {len(bad)} number(s) not in your sources: {', '.join(bad)}")
+    return fixed, compiled, bad
+
+
+def metric_questions(llm: LLMBackend, latex: str) -> list[str]:
+    """Bullets that state a task without a result -> one question each
+    for Duc. The model is told never to propose a value; the answer is
+    parsed strictly so a stray suggestion cannot pass as a question."""
+    text = llm.respond(system=METRIC_QUESTIONS_SYSTEM, history=[], user_input=METRIC_QUESTIONS_PROMPT.format(latex=latex))
+    out = []
+    for line in text.splitlines():
+        m = re.match(r"\s*BULLET:\s*(.+?)\s*\|\s*ASK:\s*(.+?)\s*$", line)
+        if m:
+            out.append(f"{m.group(1).strip()} - {m.group(2).strip()}")
+    return out[:6]
 
 
 def _finalize_fit(
     latex: str, original_latex: str, extra_facts: str, result: CompileResult | None, *, fit: bool,
-    attempts: int, notes: list[str], baseline: CompileResult, restored: int,
+    attempts: int, notes: list[str], baseline: CompileResult, restored: int, llm: LLMBackend | None = None,
 ) -> LatexFitResult:
-    """Attach the deterministic post-checks to a fit result: what changed
-    (so an unchanged pass-through can't masquerade as tailoring), how many
-    of the owner's comment lines were put back, and the fact-check guard."""
+    """Attach the post-checks to a fit result: what changed (so an
+    unchanged pass-through can't masquerade as tailoring), how many of
+    the owner's comment lines were put back, the invented-number fix
+    pass, the fact-check guard, and the questions for Duc."""
+    sources = [original_latex, extra_facts]
+    removed: list[str] = []
+    questions: list[str] = []
+    if llm is not None:
+        latex, result, removed = _remove_invented_numbers(llm, latex, sources, result, notes)
+        fit = bool(result and result.success and result.page_count == 1)
+        try:
+            questions = metric_questions(llm, latex)
+        except Exception as e:  # a failed questions pass must never cost the resume itself
+            logger.warning("metric questions pass failed: %s", e)
     diff = content_diff(original_latex, latex)
-    guard = check_resume_output(latex, [original_latex, extra_facts])
+    guard = check_resume_output(latex, sources)
     if diff.unchanged:
         guard.insert(0, "tailoring check: the model returned your resume without content changes - nothing was "
                         "re-ranked or reworded for this job. Try again, or use Detailed mode.")
@@ -612,7 +709,7 @@ def _finalize_fit(
         page_count=result.page_count if result else None, fit=fit, attempts=attempts, notes=notes,
         overflow_lines=(0 if fit else (result.overflow_lines if result else None)),
         original_page_count=baseline.page_count, guard_warnings=guard,
-        change_summary=diff.summary(), comments_restored=restored,
+        change_summary=diff.summary(), comments_restored=restored, numbers_removed=removed, questions=questions,
     )
 
 

@@ -25,6 +25,7 @@ from companion.job_boards import check_boards, load_watchlist, render_report
 from companion.learning import LearningStore
 from companion.logging_setup import configure_logging
 from companion.news import TechNewsTool
+from companion.outreach import OutreachStore
 from companion.paths import DATA_DIR
 from companion.reminders import RemindersStore
 
@@ -55,6 +56,16 @@ def build_digest(news_per_source: int = 2) -> tuple[str, str]:
     lines.append(f"## Open reminders ({len(open_reminders)})")
     lines += [f"- {r.text}" + (f" (due {r.due_at})" if r.due_at else "") for r in open_reminders[:10]] or ["- none"]
     lines.append("")
+    try:
+        outreach = OutreachStore()
+        due_follow_ups = outreach.due_follow_ups()
+        awaiting = [c for c in outreach.list(status="sent") if c not in due_follow_ups]
+    except Exception as e:  # a missing/locked outreach db must not kill the digest
+        logger.warning("outreach section failed: %s", e)
+        due_follow_ups, awaiting = [], []
+    lines.append(f"## Outreach ({len(due_follow_ups)} follow-ups due, {len(awaiting)} awaiting a reply)")
+    lines += [f"- [ ] nudge {c.name} at {c.company} (sent {c.sent_at[:10] if c.sent_at else '?'})" for c in due_follow_ups] or ["- no follow-ups due"]
+    lines.append("")
     lines.append(f"## Reviews due ({len(reviews)})")
     lines += [f"- **{i.topic}** — {i.key_takeaway}" for i in reviews] or ["- none"]
     lines.append("")
@@ -78,7 +89,7 @@ def build_digest(news_per_source: int = 2) -> tuple[str, str]:
             logger.warning("board watch failed: %s", e)
             lines += ["", "## Job boards", f"- (board watch failed: {e})"]
 
-    summary = f"{len(due_reminders)} due, {len(reviews)} reviews, {new_postings} new postings, {len(headlines)} headlines"
+    summary = f"{len(due_reminders)} due, {len(due_follow_ups)} follow-ups, {len(reviews)} reviews, {new_postings} new postings, {len(headlines)} headlines"
     return "\n".join(lines) + "\n", summary
 
 

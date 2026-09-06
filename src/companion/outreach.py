@@ -186,8 +186,10 @@ How Duc writes, plus what Kyra knows about him (his own rules and facts, follow 
    asides, no fragments. Respect the application status above - never say he applied if he has not. Mutual
    connections are people you both know, not an introduction; leave them out unless there is a real reason.
    No referral ask.
-2. FOLLOW-UP - the message after they accept. Three to five sentences. One real question only an insider can
-   answer (how new grads get staffed, what the first months look like, the C++/Python split on their team).
+2. FOLLOW-UP - the message after they accept. Three to five sentences. Ask about THEIR experience, not for
+   anything: one real question only an insider can answer - what the team is working on right now, what was
+   hardest when they joined, what made them stay, or how new grads get staffed. People like talking about
+   their own work; a job ask up front gets ignored.
    Do not ask for a referral in writing - the referral comes up in the conversation. At most, close by saying
    he would welcome any pointers on the process.
 
@@ -316,20 +318,16 @@ class ClipboardChannel(OutreachChannel):
 
 class AddOutreachContactTool(Tool):
     name = "add_outreach_contact"
-    description = (
-        "Add a person Duc wants to reach out to at a company he is applying to (usually a fellow alum found "
-        "on LinkedIn). Kyra never contacts anyone - this only records who, so a note can be drafted and "
-        "follow-ups tracked."
-    )
+    description = 'Record a person at a company Duc is targeting (usually a fellow alum) so a note can be drafted and follow-ups tracked. Kyra never contacts anyone.'
     input_schema = {
         "type": "object",
         "properties": {
             "name": {"type": "string"},
             "company": {"type": "string"},
-            "role": {"type": "string", "description": "Their title/team if known"},
-            "profile_url": {"type": "string", "description": "LinkedIn profile URL if given"},
-            "relation": {"type": "string", "description": "Shared ground, e.g. 'Berkeley EECS alum'"},
-            "application_id": {"type": "integer", "description": "id from list_job_applications, if tracked"},
+            "role": {"type": "string"},
+            "profile_url": {"type": "string"},
+            "relation": {"type": "string", "description": "shared ground, e.g. Berkeley alum"},
+            "application_id": {"type": "integer"},
         },
         "required": ["name", "company"],
     }
@@ -344,21 +342,14 @@ class AddOutreachContactTool(Tool):
 
 class DraftOutreachNoteTool(Tool):
     name = "draft_outreach_note"
-    description = (
-        "Draft the LinkedIn connection note (under 200 characters) and the follow-up message for an outreach "
-        "contact, in Duc's own voice, and save them on the contact. Duc sends them himself - use "
-        "copy_outreach_note to put one on his clipboard."
-    )
+    description = "Draft the LinkedIn connection note (short) and follow-up for a contact in Duc's voice and save them. Duc sends them himself."
     input_schema = {
         "type": "object",
         "properties": {
-            "id": {"type": "integer", "description": "contact id from add_outreach_contact / list_outreach"},
-            "job_context": {"type": "string", "description": "The role Duc is applying to, a line or two"},
-            "mutual_connections": {"type": "string", "description": "Names of mutual connections, if any"},
-            "personal_angle": {
-                "type": "string",
-                "description": "One true, specific thing about this person (their path, their team's work) to build the ask around",
-            },
+            "id": {"type": "integer"},
+            "job_context": {"type": "string", "description": "the role, a line or two"},
+            "mutual_connections": {"type": "string"},
+            "personal_angle": {"type": "string", "description": "one true, specific thing about them to build the ask around"},
         },
         "required": ["id"],
     }
@@ -397,12 +388,7 @@ class DraftOutreachNoteTool(Tool):
 
 class CopyOutreachNoteTool(Tool):
     name = "copy_outreach_note"
-    description = (
-        "Put a contact's drafted connection note (or follow-up message) on Duc's clipboard so he can paste "
-        "and press Send himself; returns the profile URL. Only opens the profile in the browser if asked "
-        "(open_profile) - it pops a tab over whatever he is doing. Does not send anything and does not change "
-        "the contact's status - call update_outreach_status once Duc says he sent it."
-    )
+    description = "Copy a contact's drafted note or follow-up to Duc's clipboard and return the profile URL; opens it only if asked. Sends nothing."
     input_schema = {
         "type": "object",
         "properties": {
@@ -429,10 +415,7 @@ class CopyOutreachNoteTool(Tool):
 
 class UpdateOutreachStatusTool(Tool):
     name = "update_outreach_status"
-    description = (
-        "Record what happened with an outreach contact: sent (Duc sent the request - schedules a follow-up "
-        f"reminder {FOLLOW_UP_DAYS} days out), accepted, replied, call_done, referred, or no_reply."
-    )
+    description = 'Record what happened with a contact: sent (schedules a follow-up reminder), accepted, replied, call_done, referred, or no_reply.'
     input_schema = {
         "type": "object",
         "properties": {"id": {"type": "integer"}, "status": {"type": "string", "enum": list(STATUSES)}},
@@ -458,7 +441,7 @@ class UpdateOutreachStatusTool(Tool):
 
 class ListOutreachTool(Tool):
     name = "list_outreach"
-    description = "List outreach contacts, optionally by company or status, or only those whose follow-up is due."
+    description = 'List outreach contacts by company or status, or only those whose follow-up is due.'
     input_schema = {
         "type": "object",
         "properties": {

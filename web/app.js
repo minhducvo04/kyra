@@ -448,6 +448,7 @@ function runDraftJob(form) {
   document.getElementById("draft-pdf-link").hidden = true;
   document.getElementById("draft-fit-status").hidden = true;
   document.getElementById("draft-notes-wrap").hidden = true;
+  document.getElementById("draft-questions-wrap").hidden = true;
   draftOutput.hidden = false;
   return new Promise(async (resolve, reject) => {
     let job;
@@ -537,6 +538,7 @@ draftGenerateBtn.addEventListener("click", async () => {
     draftText.textContent = data.draft;
     renderFitStatus(document.getElementById("draft-fit-status"), data);
     renderNotes(document.getElementById("draft-notes-wrap"), document.getElementById("draft-notes"), data.notes);
+    renderNotes(document.getElementById("draft-questions-wrap"), document.getElementById("draft-questions"), data.questions);
     const pdfLink = document.getElementById("draft-pdf-link");
     if (data.pdf_url) {
       pdfLink.href = data.pdf_url;

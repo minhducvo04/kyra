@@ -269,6 +269,7 @@ class DraftOut(BaseModel):
     style_chars: int
     warnings: list[str] = []
     pdf_url: str | None = None  # set for material_type == "latex_resume"
+    questions: list[str] = []  # bullets that would benefit from a real number - Duc answers, Kyra never guesses
     # One-page fit status for the LaTeX path - None for non-resume
     # material. Surfaced as its own field (not buried in warnings) so
     # the UI can show an unmissable pass/fail, since "it came back as 2
@@ -524,6 +525,7 @@ def _latex_resume_draft(
     return DraftOut(
         draft=result.latex, background_chars=len(latex_text), style_chars=0, warnings=warnings, pdf_url=pdf_url,
         fit=result.fit, page_count=result.page_count, overflow_lines=result.overflow_lines, notes=result.notes,
+        questions=result.questions,
     )
 
 
@@ -577,6 +579,7 @@ def _run_latex_resume_job(payload: dict, on_progress) -> dict:
     return DraftOut(
         draft=result.latex, background_chars=len(latex_text), style_chars=0, warnings=warnings, pdf_url=pdf_url,
         fit=result.fit, page_count=result.page_count, overflow_lines=result.overflow_lines, notes=result.notes,
+        questions=result.questions,
     ).model_dump()
 
 

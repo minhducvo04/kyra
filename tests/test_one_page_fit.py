@@ -131,3 +131,28 @@ def test_reworded_output_reports_changes():
     reworded = ONE_PAGE.replace("Bullet number 0:", "Led item 0 for the target:")
     result = optimize_latex_resume_one_page(ScriptedLLM([reworded]), ONE_PAGE, max_attempts=1)
     assert "1 reworded" in result.change_summary and not any("without content changes" in w for w in result.guard_warnings)
+
+
+
+@requires_latex
+def test_invented_numbers_are_removed_and_missing_metrics_become_questions():
+
+    invented = ONE_PAGE.replace("Bullet number 3:", "Bullet number 3: raised throughput 300 percent and")
+    llm = ScriptedLLM([invented, ONE_PAGE, "BULLET: Bullet number 5: shipped a | ASK: how many units per week?\nNONE"])
+    result = optimize_latex_resume_one_page(llm, ONE_PAGE, job_context="backend role", max_attempts=2)
+    assert result.fit is True and "300" not in result.latex
+    assert result.numbers_removed and any("300" in n for n in result.numbers_removed)
+    assert any("removed 1 number(s) not in your sources" in n for n in result.notes)
+    assert not any("fact check" in w and "number" in w for w in result.guard_warnings)
+    assert result.questions == ["Bullet number 5: shipped a - how many units per week?"]
+    fix_prompt = llm.calls[1]["user_input"]
+    assert "do not appear in any source" in fix_prompt and "300" in fix_prompt
+    assert "never propose numbers" in llm.calls[2]["system"]
+
+
+def test_metric_questions_parse_strictly():
+    from companion.job_applications import metric_questions
+
+    assert metric_questions(ScriptedLLM(["NONE"]), "x") == []
+    llm = ScriptedLLM(["BULLET: Built the API | ASK: requests per second?\nSUGGESTION: say 2,000 rps\nBULLET: b | ASK: q"])
+    assert metric_questions(llm, "x") == ["Built the API - requests per second?", "b - q"]

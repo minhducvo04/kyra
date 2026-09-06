@@ -66,3 +66,19 @@ def test_watchlist_roundtrip_and_url_parsing(tmp_path):
     assert slug_from_url("https://jobs.ashbyhq.com/openai/8fb1615c") == ("ashby", "openai")
     assert slug_from_url("https://careers.publicisgroupe.com/jobs/148376") is None
     assert Posting("greenhouse", "A", "1", "t", "", "", "").key == "greenhouse:A:1"
+
+
+def test_repost_and_age_are_reported(tmp_path):
+    seen = tmp_path / "seen.json"
+    first = {"jobs": [{"id": 1, "title": "Software Engineer, New Grad", "location": {"name": "NYC"},
+                       "absolute_url": "https://x/1", "first_published": "2026-06-01T00:00:00-04:00"}]}
+    again = {"jobs": [{"id": 2, "title": "Software Engineer, New Grad", "location": {"name": "NYC"},
+                       "absolute_url": "https://x/2", "first_published": "2026-09-05T00:00:00-04:00"}]}
+    entries = [WatchEntry("Acme", "greenhouse", "acme", [])]
+    r1 = check_boards(entries, seen, {"greenhouse": GreenhouseBoard(lambda url: first)})
+    assert [p.id for p in r1.new] == ["1"] and r1.reposted == set()
+    assert r1.new[0].age_days(datetime.fromisoformat("2026-09-07T00:00:00-04:00")) == 98
+    assert "d old - shortlist likely" in render_report(r1)
+    r2 = check_boards(entries, seen, {"greenhouse": GreenhouseBoard(lambda url: again)})
+    assert [p.id for p in r2.new] == ["2"] and r2.reposted == {"greenhouse:Acme:2"}
+    assert "**REPOSTED**" in render_report(r2)

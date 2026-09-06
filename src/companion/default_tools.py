@@ -7,11 +7,13 @@ in each file.
 """
 from companion.job_applications import JobApplicationStore, job_application_tools
 from companion.job_autofill import job_autofill_tools
+from companion.job_posting_fetch import TargetPostingTool
 from companion.learning import learning_tools
 from companion.llm import AnthropicLLM
 from companion.memory_notes import MarkdownMemoryNotesStore, memory_note_tools
 from companion.news import TechNewsTool
 from companion.outreach import outreach_tools
+from companion.posting_signals import AnalyzePostingTool
 from companion.reminders import RemindersStore, reminder_tools
 from companion.science import ScienceFactsTool
 from companion.tools import ToolRegistry
@@ -44,5 +46,6 @@ def default_tool_registry(draft_backend: AnthropicLLM | None = None) -> ToolRegi
         + outreach_tools(
             llm=draft_backend, reminders=reminders, memory_notes=MarkdownMemoryNotesStore(), applications=applications
         )
+        + [AnalyzePostingTool(), TargetPostingTool(applications)]
         + [TechNewsTool(), ScienceFactsTool()]
     )

@@ -17,7 +17,7 @@ import logging
 import re
 import urllib.request
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -39,11 +39,27 @@ class Posting:
     title: str
     location: str
     url: str
-    updated_at: str  # ISO string as the board reports it, "" if absent
+    updated_at: str  # ISO string as the board reports it (publish date where the API has one), "" if absent
 
     @property
     def key(self) -> str:
         return f"{self.source}:{self.company}:{self.id}"
+
+    def age_days(self, now: datetime | None = None) -> int | None:
+        if not self.updated_at:
+            return None
+        try:
+            dt = datetime.fromisoformat(self.updated_at.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        now = now or datetime.now().astimezone()
+        if dt.tzinfo is None:
+            dt = dt.astimezone()
+        return max(0, (now - dt).days)
+
+
+def _norm_title(title: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
 
 
 def _get_json(url: str, timeout: int = 20):
@@ -75,7 +91,7 @@ class GreenhouseBoard(JobBoardSource):
             out.append(Posting(
                 source=self.name, company=company, id=str(j.get("id")), title=j.get("title", "").strip(),
                 location=(j.get("location") or {}).get("name", ""), url=j.get("absolute_url", ""),
-                updated_at=j.get("updated_at", "") or "",
+                updated_at=j.get("first_published") or j.get("updated_at", "") or "",
             ))
         return out
 
@@ -158,6 +174,7 @@ class WatchReport:
     new: list[Posting]
     still_open: int
     errors: list[str]
+    reposted: set[str] = field(default_factory=set)  # keys of new postings whose company+title was seen before under another id
 
 
 def check_boards(
@@ -174,8 +191,12 @@ def check_boards(
         seen = json.loads(seen_path.read_text(encoding="utf-8"))
     new: list[Posting] = []
     errors: list[str] = []
+    reposted: set[str] = set()
     still_open = 0
     now = datetime.now().astimezone().isoformat()
+    # Duc's note: the same role reappearing weeks later means nobody fit or the hire declined - both good
+    # for him. Detect it as "new id, but this company already had this title on file".
+    known_titles = {(v.get("company", ""), _norm_title(v.get("title", ""))): k for k, v in seen.items()}
     for entry in entries:
         src = sources.get(entry.source)
         if src is None:
@@ -193,17 +214,23 @@ def check_boards(
             still_open += 1
             if p.key not in seen:
                 new.append(p)
+                prior = known_titles.get((p.company, _norm_title(p.title)))
+                if prior and prior != p.key:
+                    reposted.add(p.key)
             seen[p.key] = {**asdict(p), "first_seen": seen.get(p.key, {}).get("first_seen", now), "last_seen": now}
     seen_path.parent.mkdir(parents=True, exist_ok=True)
     seen_path.write_text(json.dumps(seen, indent=2), encoding="utf-8")
     logger.info("board watch: %d watched, %d matching open, %d new, %d errors", len(entries), still_open, len(new), len(errors))
-    return WatchReport(checked_at=now, new=new, still_open=still_open, errors=errors)
+    return WatchReport(checked_at=now, new=new, still_open=still_open, errors=errors, reposted=reposted)
 
 
 def render_report(report: WatchReport) -> str:
     lines = [f"## Job boards ({len(report.new)} new, {report.still_open} matching open)"]
     for p in report.new:
-        lines.append(f"- **{p.company}**: {p.title} — {p.location or 'location n/a'} <{p.url}>")
+        age = p.age_days()
+        tag = " **REPOSTED**" if p.key in report.reposted else ""
+        stale = f" ({age}d old - shortlist likely)" if age is not None and age > 30 else (f" ({age}d)" if age is not None else "")
+        lines.append(f"- **{p.company}**: {p.title}{tag} — {p.location or 'location n/a'}{stale} <{p.url}>")
     if not report.new:
         lines.append("- nothing new since last check")
     for e in report.errors:
