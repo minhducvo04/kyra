@@ -33,7 +33,7 @@ USER_AGENT = "kyra-board-watch/1.0 (personal job search; contact via GitHub minh
 
 @dataclass(frozen=True)
 class Posting:
-    source: str  # "greenhouse" | "lever"
+    source: str  # "greenhouse" | "lever" | "ashby"
     company: str
     id: str
     title: str
@@ -102,7 +102,28 @@ class LeverBoard(JobBoardSource):
         return out
 
 
-SOURCES: dict[str, type[JobBoardSource]] = {"greenhouse": GreenhouseBoard, "lever": LeverBoard}
+class AshbyBoard(JobBoardSource):
+    """https://developers.ashbyhq.com/reference/jobpostingapi - public, no auth.
+    OpenAI, Ramp, Cursor and Perplexity are on it (checked 2026-09-06)."""
+
+    name = "ashby"
+
+    def __init__(self, fetch_json=_get_json):
+        self._fetch_json = fetch_json
+
+    def fetch(self, company: str, token: str) -> list[Posting]:
+        data = self._fetch_json(f"https://api.ashbyhq.com/posting-api/job-board/{token}")
+        out = []
+        for j in data.get("jobs", []):
+            out.append(Posting(
+                source=self.name, company=company, id=str(j.get("id")), title=(j.get("title") or "").strip(),
+                location=j.get("location") or "", url=j.get("jobUrl") or "",
+                updated_at=j.get("publishedAt") or "",
+            ))
+        return out
+
+
+SOURCES: dict[str, type[JobBoardSource]] = {"greenhouse": GreenhouseBoard, "lever": LeverBoard, "ashby": AshbyBoard}
 
 
 @dataclass
@@ -193,11 +214,14 @@ def render_report(report: WatchReport) -> str:
 def slug_from_url(url: str) -> tuple[str, str] | None:
     """Best-effort: turn a careers URL into (source, token) so a watchlist
     entry can be added from a link. Greenhouse: boards.greenhouse.io/<tok>
-    or job-boards.greenhouse.io/<tok>/...; Lever: jobs.lever.co/<tok>/..."""
+    or job-boards.greenhouse.io/<tok>/...; Lever: jobs.lever.co/<tok>/...; Ashby: jobs.ashbyhq.com/<tok>/..."""
     m = re.search(r"(?:boards|job-boards)\.greenhouse\.io/([A-Za-z0-9_-]+)", url)
     if m:
         return "greenhouse", m.group(1)
     m = re.search(r"jobs\.lever\.co/([A-Za-z0-9_-]+)", url)
     if m:
         return "lever", m.group(1)
+    m = re.search(r"jobs\.ashbyhq\.com/([A-Za-z0-9_-]+)", url)
+    if m:
+        return "ashby", m.group(1)
     return None

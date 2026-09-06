@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 
 from companion.job_boards import (
+    AshbyBoard,
     GreenhouseBoard,
     LeverBoard,
     Posting,
@@ -18,6 +19,12 @@ GH = {"jobs": [
     {"id": 2, "title": "Recruiter", "location": {"name": "NYC"}, "absolute_url": "https://x/2", "updated_at": "2026-09-01"},
 ]}
 LV = [{"id": "a", "text": "Software Engineer, AI", "categories": {"location": "Remote"}, "hostedUrl": "https://l/a", "createdAt": 1756728000000}]
+AB = {"jobs": [{"id": "8fb1", "title": "Software Engineer, New Grad", "location": "San Francisco", "jobUrl": "https://jobs.ashbyhq.com/o/8fb1", "publishedAt": "2026-03-12T16:38:15+00:00"}]}
+
+
+def test_ashby_parser_maps_fields():
+    ab = AshbyBoard(lambda url: AB).fetch("OpenAI", "openai")
+    assert ab == [Posting("ashby", "OpenAI", "8fb1", "Software Engineer, New Grad", "San Francisco", "https://jobs.ashbyhq.com/o/8fb1", "2026-03-12T16:38:15+00:00")]
 
 
 def test_parsers_map_fields():
@@ -56,5 +63,6 @@ def test_watchlist_roundtrip_and_url_parsing(tmp_path):
     assert load_watchlist(p) == [WatchEntry("Acme", "greenhouse", "acme", ["ml"])]
     assert slug_from_url("https://job-boards.greenhouse.io/anthropic/jobs/4613568008") == ("greenhouse", "anthropic")
     assert slug_from_url("https://jobs.lever.co/cursor/abc") == ("lever", "cursor")
+    assert slug_from_url("https://jobs.ashbyhq.com/openai/8fb1615c") == ("ashby", "openai")
     assert slug_from_url("https://careers.publicisgroupe.com/jobs/148376") is None
     assert Posting("greenhouse", "A", "1", "t", "", "", "").key == "greenhouse:A:1"
