@@ -101,6 +101,11 @@ class AnthropicLLM(LLMBackend):
         messages = [{"role": m.role, "content": m.content} for m in history]
         messages.append({"role": "user", "content": user_input})
         tools = registry.schemas()
+        if tools:
+            # Prompt caching: the schema block is ~7K tokens and identical on every
+            # tool turn; a cache_control marker on the last tool caches the whole
+            # tools prefix (5-minute TTL, 90% off on hits). No behaviour change.
+            tools = [*tools[:-1], {**tools[-1], "cache_control": {"type": "ephemeral"}}]
 
         response = None
         for _ in range(max_rounds):
