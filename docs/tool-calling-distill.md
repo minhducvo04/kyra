@@ -46,6 +46,7 @@ call anything on keyword bait - at $0/turn?
 |---|---|---|---|---|---|---|
 | teacher: Sonnet 5, production tool loop | 92.9% | 92.9% | 5.0% | 6.0% | 3.38s | 5.54s |
 | zero-shot Qwen2.5-7B-Instruct-4bit | 78.6% | 84.3% | 5.0% | 8.0% | 2.21s | 3.03s |
+| zero-shot Qwen2.5-7B, **production prompt** | 77.1% | 82.9% | 5.0% | 12.0% | 2.64s | 3.03s |
 
 **Teacher, the 5 misses** - kept as scored, not re-labelled to fit: two are the draft cases, where it asked for a
 background instead of calling `draft_application_material` with none saved (the harness has no profile; declining
@@ -61,3 +62,31 @@ find-then-act cases; 4 wrong arguments - weekday arithmetic ("this Friday" → a
 past, "Wednesday" → tomorrow); 4 under-triggers - all three "I remembered / forgot the X one" review phrasings and
 "Cursor rejected me :("; 1 over-trigger - fetched science headlines for "tell me something cool about black
 holes". It also saved a CAP-theorem summary as a memory note instead of a learning item.
+
+**Prompt shift, measured not assumed.** The student trains on `SPECIALIST_SYSTEM`, but
+`ConversationManager._build_system()` sends something quite different on a real tool turn: Kyra's persona, the
+date, durable memory notes, and retrieved memories - and *no* tool guidance at all. `production_system()`
+reproduces that shape so both prompts can be evaluated. Zero-shot, the shift costs 1.5 points of accuracy and
+raises under-triggering from 8% to 12%. That is the reference point for judging whether a LoRA adapter has
+over-fitted to its training prompt: an adapter that drops much further under the production prompt is telling us
+the specialist prompt has to be passed explicitly on the tool path, not that the adapter failed.
+
+## What the pilot fixed (harness bugs, not model failures)
+
+The first 40-trace pilot kept 31 traces, and several keepers were actively harmful examples. All four causes were
+in the harness:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Every find-then-act trace ended "I don't see that reminder" | listing tools returned empty lists | realistic, today-relative default listings |
+| "save the one about SQL joins" refused by the teacher | the seeded explanation was chosen at random, so the history was about something else | seed matched to the topic the message names |
+| A call the registry rejected was recorded as a success | `record_trace` recomputed results instead of keeping what was returned | the registry records the real result or error per call; traces containing a rejected call are dropped |
+| find-then-act traces kept with a single call | "called at least one tool" was the only rule | multi-step categories require more than one call |
+
+Rerun on the same 40 messages: **36 kept**, and every multi-step chain (`list_reminders → snooze_reminder`,
+`due_learning_reviews → mark_learning_reviewed`, `list_job_applications → update_job_application_status`) correct.
+The remaining four drops are legitimate teacher refusals - an engineering background against an HR generalist
+posting, and a two-tool message whose role was genuinely missing.
+
+This is the part worth keeping from the whole exercise: **the pilot's job was to catch the harness, not the
+model.** Training on the first pilot's data would have produced a student that lists and then apologizes.

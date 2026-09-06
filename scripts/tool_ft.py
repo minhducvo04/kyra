@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from companion.agent_ft import (
     FT_DIR,
     STUDENT_REPO,
+    SYSTEM_PROMPTS,
     Trace,
     evaluate,
     generate_messages,
@@ -134,18 +135,20 @@ def cmd_eval(args):
     if args.limit:
         suite = suite[: args.limit]
     results = []
+    system_fn = SYSTEM_PROMPTS[args.prompt]
+    tag = "" if args.prompt == "specialist" else f", {args.prompt} prompt"
     if args.teacher:
-        results.append(evaluate(_teacher(), schemas, suite, "teacher Sonnet 5"))
+        results.append(evaluate(_teacher(), schemas, suite, f"teacher Sonnet 5{tag}", system_fn))
         print(results[-1].row())
     from companion.local_tools import LocalToolLLM
 
     for model in args.zero_shot or []:
-        results.append(evaluate(LocalToolLLM(model), schemas, suite, f"zero-shot ({model.split('/')[-1]})"))
+        results.append(evaluate(LocalToolLLM(model), schemas, suite, f"zero-shot ({model.split('/')[-1]}){tag}", system_fn))
         print(results[-1].row())
     for spec in args.adapter or []:
         name, model = spec.split(":", 1)
         llm = LocalToolLLM(model, adapter_path=str(FT_DIR / "adapters" / name))
-        results.append(evaluate(llm, schemas, suite, f"LoRA {name} ({model.split('/')[-1]})"))
+        results.append(evaluate(llm, schemas, suite, f"LoRA {name} ({model.split('/')[-1]}){tag}", system_fn))
         print(results[-1].row())
     FT_DIR.mkdir(parents=True, exist_ok=True)
     out = FT_DIR / (args.out or "eval.json")
@@ -188,6 +191,8 @@ def main():
     e.add_argument("--zero-shot", action="append")
     e.add_argument("--adapter", action="append")
     e.add_argument("--limit", type=int)
+    e.add_argument("--prompt", choices=sorted(SYSTEM_PROMPTS), default="specialist",
+                   help="specialist = what the student trains on; production = what the app sends today")
     e.add_argument("--out")
     e.add_argument("--merge", action="store_true", help="append to an existing eval file instead of overwriting")
     e.set_defaults(fn=cmd_eval)

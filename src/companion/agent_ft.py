@@ -59,6 +59,45 @@ def specialist_system(today: str = FIXED_TODAY) -> str:
     return SPECIALIST_SYSTEM.format(weekday=dt.strftime("%A"), today=dt.strftime("%Y-%m-%d %H:%M"))
 
 
+# What ConversationManager._build_system() actually sends on a tool turn: persona,
+# date, durable notes, retrieved memories - and nothing tool-specific at all. A
+# student trained on SPECIALIST_SYSTEM sees a different prompt in production, so the
+# eval measures both rather than assuming the adapter transfers. Fixed sample notes
+# and memories keep the measurement reproducible.
+SAMPLE_NOTES = """## background
+- (2026-08-30) Duc is building Kyra as a hands-on AI-pipeline learning project.
+
+## career
+- (2026-09-01) Duc is targeting AI engineer roles for after graduation.
+
+## preferences
+- (2026-09-03) Duc prefers short replies unless he asks for detail."""
+
+SAMPLE_MEMORIES = [
+    "Duc said: can you explain how Raft elects a leader",
+    "Kyra replied: Followers wait a randomized timeout, then campaign for votes.",
+    "Duc said: I have an interview coming up",
+]
+
+
+def production_system(today: str = FIXED_TODAY) -> str:
+    """The prompt shape production sends today, for measuring prompt shift."""
+    from companion.persona import KYRA
+
+    dt = datetime.fromisoformat(today)
+    now_str = dt.strftime("%A, %B %-d, %Y, %-I:%M %p")
+    memory_block = "\n".join(f"- {m}" for m in SAMPLE_MEMORIES)
+    return (
+        f"{KYRA.system_prompt()}\n\n"
+        f"Current date and time: {now_str}\n\n"
+        f"Durable facts you've saved about Duc (always shown, not search-retrieved):\n{SAMPLE_NOTES}\n\n"
+        f"Relevant things you remember about Duc from past conversations:\n{memory_block}"
+    )
+
+
+SYSTEM_PROMPTS = {"specialist": specialist_system, "production": production_system}
+
+
 # ----------------------------------------------------------------------------- suite
 
 @dataclass
@@ -310,19 +349,19 @@ def summarize(system: str, results: list[CaseResult]) -> SuiteResult:
     )
 
 
-def run_case(backend, schemas: list[dict], case: ToolCase) -> CaseResult:
+def run_case(backend, schemas: list[dict], case: ToolCase, system_fn=specialist_system) -> CaseResult:
     registry = FakeRegistry(schemas, case.tool_results, today=case.today)
     history = [Message(role=h["role"], content=h["content"]) for h in case.history]
     t0 = time.perf_counter()
-    reply = backend.respond_with_tools(specialist_system(case.today), history, case.message, registry)
+    reply = backend.respond_with_tools(system_fn(case.today), history, case.message, registry)
     return score_case(case, registry.calls, reply, time.perf_counter() - t0)
 
 
-def evaluate(backend, schemas: list[dict], suite: list[ToolCase], name: str) -> SuiteResult:
+def evaluate(backend, schemas: list[dict], suite: list[ToolCase], name: str, system_fn=specialist_system) -> SuiteResult:
     """`backend` is anything with respond_with_tools(system, history, user_input, registry)."""
     results = []
     for i, case in enumerate(suite, 1):
-        r = run_case(backend, schemas, case)
+        r = run_case(backend, schemas, case, system_fn)
         results.append(r)
         logger.info("%s [%d/%d] %s %s", name, i, len(suite), "ok " if r.correct else "MISS", case.message[:60])
     return summarize(name, results)
