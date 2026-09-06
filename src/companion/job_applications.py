@@ -16,16 +16,19 @@ import json
 import logging
 import math
 import re
-import sqlite3
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from sqlalchemy import Engine, insert, select, update
+
+from companion.db import engine_for_store
 from companion.latex_compile import CompileResult, compile_latex
 from companion.llm import TRUNCATION_MARKER, AnthropicLLM
 from companion.paths import DATA_DIR
 from companion.resume_guard import check_resume_output
 from companion.resume_latex import content_diff, restore_comments
+from companion.schema import job_applications as JA
 from companion.tools import Tool
 
 DB_PATH = DATA_DIR / "job_applications.db"
@@ -108,65 +111,42 @@ class JobApplication:
 
 
 class JobApplicationStore:
-    def __init__(self, path: Path | str = DB_PATH):
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(path, check_same_thread=False)
-        self._conn.execute(
-            """CREATE TABLE IF NOT EXISTS job_applications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                company TEXT NOT NULL,
-                role TEXT NOT NULL,
-                link TEXT,
-                status TEXT NOT NULL DEFAULT 'applied',
-                notes TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )"""
-        )
-        self._conn.commit()
+    def __init__(self, path: Path | str | None = None, *, engine: Engine | None = None):
+        self._engine = engine or engine_for_store(DB_PATH, path)
 
     def add(self, company: str, role: str, link: str | None = None, notes: str | None = None) -> JobApplication:
         now = datetime.now(UTC).isoformat()
-        cur = self._conn.execute(
-            "INSERT INTO job_applications (company, role, link, status, notes, created_at, updated_at) "
-            "VALUES (?, ?, ?, 'applied', ?, ?, ?)",
-            (company, role, link, notes, now, now),
-        )
-        self._conn.commit()
+        with self._engine.begin() as conn:
+            res = conn.execute(insert(JA).values(
+                company=company, role=role, link=link, status="applied", notes=notes, created_at=now, updated_at=now,
+            ))
         return JobApplication(
-            id=cur.lastrowid, company=company, role=role, link=link, status="applied",
+            id=res.inserted_primary_key[0], company=company, role=role, link=link, status="applied",
             notes=notes, created_at=now, updated_at=now,
         )
 
     def list(self, status: str | None = None) -> list[JobApplication]:
-        q = "SELECT id, company, role, link, status, notes, created_at, updated_at FROM job_applications"
-        params = ()
+        q = select(JA)
         if status:
-            q += " WHERE status = ?"
-            params = (status,)
-        q += " ORDER BY updated_at DESC"
-        rows = self._conn.execute(q, params).fetchall()
-        return [JobApplication(*r) for r in rows]
+            q = q.where(JA.c.status == status)
+        q = q.order_by(JA.c.updated_at.desc())
+        with self._engine.connect() as conn:
+            rows = conn.execute(q).all()
+        return [JobApplication(**r._mapping) for r in rows]
 
     def update_status(self, app_id: int, status: str, notes: str | None = None) -> JobApplication | None:
         if status not in VALID_STATUSES:
             raise ValueError(f"status must be one of {sorted(VALID_STATUSES)}, got {status!r}")
-        row = self._conn.execute(
-            "SELECT company, role, link, notes, created_at FROM job_applications WHERE id = ?", (app_id,)
-        ).fetchone()
-        if row is None:
-            return None
-        now = datetime.now(UTC).isoformat()
-        new_notes = notes if notes is not None else row[3]
-        self._conn.execute(
-            "UPDATE job_applications SET status = ?, notes = ?, updated_at = ? WHERE id = ?",
-            (status, new_notes, now, app_id),
-        )
-        self._conn.commit()
+        with self._engine.begin() as conn:
+            row = conn.execute(select(JA).where(JA.c.id == app_id)).first()
+            if row is None:
+                return None
+            now = datetime.now(UTC).isoformat()
+            new_notes = notes if notes is not None else row.notes
+            conn.execute(update(JA).where(JA.c.id == app_id).values(status=status, notes=new_notes, updated_at=now))
         return JobApplication(
-            id=app_id, company=row[0], role=row[1], link=row[2], status=status,
-            notes=new_notes, created_at=row[4], updated_at=now,
+            id=app_id, company=row.company, role=row.role, link=row.link, status=status,
+            notes=new_notes, created_at=row.created_at, updated_at=now,
         )
 
 

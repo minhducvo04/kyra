@@ -16,3 +16,6 @@ ebooklib>=0.18   # book-reading pipeline - EPUB text extraction
 sentence-transformers>=3.0.0  # memory retrieval embedding model (see docs/design.md)
 playwright>=1.47.0  # job application autofill (scripts/setup_playwright.py runs `playwright install chromium` once)
 python-docx>=1.1.0  # resume/sample .docx text extraction for the web UI's job-draft upload (see doc_text.py)
+sqlalchemy>=2.0  # relational stores (SQLite default, Postgres via DATABASE_URL) - v2 slice 2
+alembic>=1.13    # schema migrations (migrations/)
+psycopg[binary]>=3.1  # Postgres driver

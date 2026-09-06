@@ -4,12 +4,15 @@ Local-only by design (see docs/agentic-roadmap.md, job #2) - pure CRUD,
 no reasoning needed, so this is exactly the kind of turn a TurnRouter
 should send to the local backend rather than spending a Claude call on it.
 """
-import sqlite3
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from sqlalchemy import Engine, insert, select, update
+
+from companion.db import engine_for_store
 from companion.paths import DATA_DIR
+from companion.schema import reminders as T
 from companion.tools import Tool
 
 DB_PATH = DATA_DIR / "reminders.db"
@@ -25,59 +28,40 @@ class Reminder:
 
 
 class RemindersStore:
-    def __init__(self, path: Path | str = DB_PATH):
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(path, check_same_thread=False)
-        self._conn.execute(
-            """CREATE TABLE IF NOT EXISTS reminders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                text TEXT NOT NULL,
-                due_at TEXT,
-                created_at TEXT NOT NULL,
-                done INTEGER NOT NULL DEFAULT 0
-            )"""
-        )
-        self._conn.commit()
+    def __init__(self, path: Path | str | None = None, *, engine: Engine | None = None):
+        self._engine = engine or engine_for_store(DB_PATH, path)
 
     def add(self, text: str, due_at: str | None = None) -> Reminder:
         now = datetime.now(UTC).isoformat()
-        cur = self._conn.execute(
-            "INSERT INTO reminders (text, due_at, created_at, done) VALUES (?, ?, ?, 0)",
-            (text, due_at, now),
-        )
-        self._conn.commit()
-        return Reminder(id=cur.lastrowid, text=text, due_at=due_at, created_at=now, done=False)
+        with self._engine.begin() as conn:
+            res = conn.execute(insert(T).values(text=text, due_at=due_at, created_at=now, done=0))
+        return Reminder(id=res.inserted_primary_key[0], text=text, due_at=due_at, created_at=now, done=False)
 
     def list(self, include_done: bool = False) -> list[Reminder]:
-        q = "SELECT id, text, due_at, created_at, done FROM reminders"
+        q = select(T)
         if not include_done:
-            q += " WHERE done = 0"
-        q += " ORDER BY (due_at IS NULL), due_at, created_at"
-        rows = self._conn.execute(q).fetchall()
-        return [Reminder(id=r[0], text=r[1], due_at=r[2], created_at=r[3], done=bool(r[4])) for r in rows]
+            q = q.where(T.c.done == 0)
+        q = q.order_by(T.c.due_at.is_(None), T.c.due_at, T.c.created_at)
+        with self._engine.connect() as conn:
+            rows = conn.execute(q).all()
+        return [Reminder(id=r.id, text=r.text, due_at=r.due_at, created_at=r.created_at, done=bool(r.done)) for r in rows]
 
     def complete(self, reminder_id: int) -> bool:
-        cur = self._conn.execute("UPDATE reminders SET done = 1 WHERE id = ?", (reminder_id,))
-        self._conn.commit()
-        return cur.rowcount > 0
+        with self._engine.begin() as conn:
+            return conn.execute(update(T).where(T.c.id == reminder_id).values(done=1)).rowcount > 0
 
     def snooze(self, reminder_id: int, new_due_at: str) -> bool:
-        cur = self._conn.execute("UPDATE reminders SET due_at = ? WHERE id = ?", (new_due_at, reminder_id))
-        self._conn.commit()
-        return cur.rowcount > 0
+        with self._engine.begin() as conn:
+            return conn.execute(update(T).where(T.c.id == reminder_id).values(due_at=new_due_at)).rowcount > 0
 
     def due_now(self) -> "list[Reminder]":
         """Not-done reminders due at or before now - for a proactive nudge
-        when a session starts, rather than a real push notification (that
-        needs a background scheduler - see docs/agentic-roadmap.md)."""
+        when a session starts (the 05:00 digest uses this)."""
         now = datetime.now(UTC).isoformat()
-        rows = self._conn.execute(
-            "SELECT id, text, due_at, created_at, done FROM reminders "
-            "WHERE done = 0 AND due_at IS NOT NULL AND due_at <= ? ORDER BY due_at",
-            (now,),
-        ).fetchall()
-        return [Reminder(id=r[0], text=r[1], due_at=r[2], created_at=r[3], done=bool(r[4])) for r in rows]
+        q = select(T).where(T.c.done == 0, T.c.due_at.is_not(None), T.c.due_at <= now).order_by(T.c.due_at)
+        with self._engine.connect() as conn:
+            rows = conn.execute(q).all()
+        return [Reminder(id=r.id, text=r.text, due_at=r.due_at, created_at=r.created_at, done=bool(r.done)) for r in rows]
 
 
 class AddReminderTool(Tool):
