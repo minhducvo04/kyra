@@ -66,7 +66,10 @@ def test_draft_runs_critique_pass_and_enforces_length():
     )
     assert d.note == note and d.follow_up == "follow up final"
     assert len(llm.calls) == 2
-    assert "Alex" in llm.calls[0]["user_input"] and "Sam" in llm.calls[0]["user_input"]
+    prompt = llm.calls[0]["user_input"]
+    assert "Alex" in prompt and "Sam" in prompt
+    # recipient facts are labelled as the recipient's - the first real run attributed Alex's degrees to Duc
+    assert "RECIPIENT" in prompt and "never Duc's" in prompt and "- role: Software Engineer" in prompt
     assert "AI-writing patterns" in llm.calls[1]["user_input"]  # the humanizer pass really ran
 
 

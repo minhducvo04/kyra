@@ -164,13 +164,17 @@ OUTREACH_SYSTEM = (
     "languages, technologies and qualities the notes state; do not reshape them to match the job."
 )
 
-OUTREACH_PROMPT = """Write two things for Duc to send to {first_name} ({name}{role_part}) at {company}.
+OUTREACH_PROMPT = """Write two things for Duc to send to {first_name} ({name}) at {company}.
 
-Duc is applying to: {job_context}
-Application status: {applied_line}
-Shared ground with {first_name}: {relation}{mutuals_part}
+About {first_name} - the RECIPIENT. These are their facts, never Duc's; do not attribute any of this to Duc:
+- role: {role}
+- shared ground / relation to Duc: {relation}{mutuals_part}
 
-How Duc writes (his own rules, follow them):
+About Duc - the SENDER. Only what is stated here and in the notes below is true of Duc:
+- applying to: {job_context}
+- application status: {applied_line}
+
+How Duc writes, plus what Kyra knows about him (his own rules and facts, follow them):
 {voice}
 
 1. CONNECTION NOTE - the note on a LinkedIn connection request. Hard limit {limit} characters, aim under {target}.
@@ -218,7 +222,7 @@ def draft_outreach_note(
     """
     fn = first_name(name)
     prompt = OUTREACH_PROMPT.format(
-        first_name=fn, name=name, role_part=f", {role}" if role else "", company=company,
+        first_name=fn, name=name, role=role or "(not given)", company=company,
         job_context=job_context.strip() or f"a role at {company}",
         relation=relation or "same school", mutuals_part=f"; mutual connections: {mutuals}" if mutuals else "",
         applied_line=(
