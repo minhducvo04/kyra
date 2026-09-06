@@ -136,6 +136,11 @@ def cmd_train(args):
     # lengths trainable at all without truncating the assistant turn being learned.
     if args.grad_checkpoint:
         cmd.append("--grad-checkpoint")
+    # Batch 1 is forced by memory (above), which makes every gradient a single-example
+    # estimate. Accumulation gives an effective batch without the memory: run 1 trained
+    # at effective batch 1 for 0.45 of an epoch and produced a model that over-called.
+    if args.grad_accumulation_steps > 1:
+        cmd += ["--grad-accumulation-steps", str(args.grad_accumulation_steps)]
     print(" ".join(cmd))
     subprocess.run(cmd, check=True, cwd=PROJECT_ROOT)
     print(f"adapter -> {adapter}")
@@ -193,6 +198,7 @@ def main():
     tr.add_argument("--model", required=True)
     tr.add_argument("--data", default="full")
     tr.add_argument("--iters", type=int, default=400)
+    tr.add_argument("--grad-accumulation-steps", type=int, default=4)
     tr.add_argument("--batch-size", type=int, default=1)
     tr.add_argument("--num-layers", type=int, default=8)
     tr.add_argument("--lr", type=float, default=1e-4)

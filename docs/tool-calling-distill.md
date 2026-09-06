@@ -47,6 +47,7 @@ call anything on keyword bait - at $0/turn?
 | teacher: Sonnet 5, production tool loop | 92.9% | 92.9% | 5.0% | 6.0% | 3.38s | 5.54s |
 | zero-shot Qwen2.5-7B-Instruct-4bit | 78.6% | 84.3% | 5.0% | 8.0% | 2.21s | 3.03s |
 | zero-shot Qwen2.5-7B, **production prompt** | 77.1% | 82.9% | 5.0% | 12.0% | 2.64s | 3.03s |
+| LoRA run 1 (qwen7b-tools, 800 steps @ batch 1) | 70.0% | 74.3% | **20.0%** | 4.0% | 2.96s | 4.51s |
 
 **Teacher, the 5 misses** - kept as scored, not re-labelled to fit: two are the draft cases, where it asked for a
 background instead of calling `draft_application_material` with none saved (the harness has no profile; declining
@@ -90,3 +91,39 @@ posting, and a two-tool message whose role was genuinely missing.
 
 This is the part worth keeping from the whole exercise: **the pilot's job was to catch the harness, not the
 model.** Training on the first pilot's data would have produced a student that lists and then apologizes.
+
+## Run 1: the adapter got worse, and the data says why
+
+**70.0%, below the 78.6% zero-shot baseline.** Recorded rather than quietly retried, because the shape of the
+regression is the finding:
+
+| | zero-shot | LoRA run 1 |
+|---|---|---|
+| over-trigger (called a tool when it must not) | 5% | **20%** |
+| under-trigger | 8% | 4% |
+| multi-call cases missed | 10 | **7** |
+
+The training *did* teach the target behaviour - multi-step find-then-act improved, and under-triggering halved.
+It also taught the model to reach for a tool far too readily, and to keep calling: `list_job_applications` twice
+in a row, `mark_learning_reviewed` three times, and a five-call loop on "anything I still have to do today?". It
+also learned to list before acting even when the user *gave* the id ("snooze reminder 5" → list, then snooze).
+
+Counting what each training row actually teaches at its decision point explains the first half exactly:
+
+| Decision point | Rows | Says "call a tool" |
+|---|---|---|
+| after the user's message | 903 | **80%** |
+| after a tool result | 874 | 17% |
+
+Expanding a trace into one row per assistant turn (needed so `--mask-prompt` trains every turn) also multiplies
+tool traces by their call count, while a no-tool trace stays one row. The result was a training set whose first
+decision says "call something" four times out of five, against a suite where 20 of 70 cases must call nothing.
+The model learned the prior, not the judgement.
+
+The repetition has a second, separate cause: 800 steps at batch size 1 is **0.45 of an epoch**, each gradient
+estimated from a single example. Memory forced batch 1 (rows reach 3.6k tokens), so run 2 uses gradient
+accumulation for an effective batch of 4 without the memory cost.
+
+**Run 2 changes exactly two things** so the comparison stays readable: ~490 more no-tool traces to bring the
+first decision near 50/50, and a real training schedule (effective batch 4, about two epochs). Nothing about the
+suite, the scoring, or the model changes.
