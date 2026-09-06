@@ -9,8 +9,8 @@ next round (recorded in `needs-your-input.md` #10). Assumptions I'm making, stat
 - Student: `mlx-community/Qwen2.5-7B-Instruct-4bit` (already cached; flawless on the old 11-case suite), with
   1.5B/3B as latency ablations if the 7B clears the bar.
 - Teacher: production Sonnet 5 through the *real* `respond_with_tools` loop against a scripted registry, so the
-  traces are exactly what ships. Tool schemas get `cache_control` so the 7K-token schema block is cached - a
-  production saving too, not just a data-gen one.
+  traces are exactly what ships. Tool schemas get `cache_control` so the schema block (measured: 2,020 tokens) is cached -
+  a production saving too, not just a data-gen one.
 - Bar to activate: ≥ 95% of the teacher's suite accuracy, and 0 over-triggers on the no-tool cases. Below that
   it stays a documented option, like the 2026-09-02 benchmark verdict.
 - Spend: ~500 teacher traces ≈ $3-5 with caching. Pilot 40 first, check quality, then the full run.

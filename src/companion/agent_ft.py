@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 
 FT_DIR = DATA_DIR / "tool_ft"
 TESTSET_PATH = PROJECT_ROOT / "tests" / "data" / "tool_testset.jsonl"
+STUDENT_REPO = "mlx-community/Qwen2.5-7B-Instruct-4bit"
 FIXED_TODAY = "2026-09-06T10:00:00-07:00"  # a Sunday; every dated expectation in the suite is relative to this
 
 SPECIALIST_SYSTEM = (
@@ -95,7 +96,7 @@ def default_listings(today: str) -> dict[str, dict]:
     return {
         "list_reminders": {"reminders": [
             {"id": 2, "text": "pay electricity bill", "due_at": d(2), "created_at": d(-5), "done": False},
-            {"id": 3, "text": "book dentist appointment", "due_at": None, "created_at": d(-4), "done": False},
+            {"id": 3, "text": "book dentist appointment", "due_at": d(4), "created_at": d(-4), "done": False},
             {"id": 5, "text": "submit taxes", "due_at": d(6), "created_at": d(-3), "done": False},
             {"id": 6, "text": "call mom", "due_at": d(1, 18), "created_at": d(-2), "done": False},
             {"id": 8, "text": "renew passport photo", "due_at": d(9), "created_at": d(-2), "done": False},
@@ -156,6 +157,9 @@ class FakeRegistry:
         self._results = {k: (list(v) if isinstance(v, list) else v) for k, v in (results or {}).items()}
         self._today = today
         self.calls: list[ToolCall] = []
+        # what each call actually returned, or the error it raised - so a recorded
+        # trace can never claim a call succeeded when the registry rejected it.
+        self.results: list[dict] = []
 
     def schemas(self) -> list[dict]:
         return self._schemas
@@ -171,13 +175,18 @@ class FakeRegistry:
         unknown = [k for k in kwargs if k not in schema.get("properties", {})]
         self.calls.append(ToolCall(name, dict(kwargs)))
         if missing or unknown:
-            raise TypeError(f"{name}() missing required {missing} / unexpected {unknown}")
+            err = TypeError(f"{name}() missing required {missing} / unexpected {unknown}")
+            self.results.append({"error": str(err)})
+            raise err
         scripted = self._results.get(name)
         if isinstance(scripted, list):
-            return scripted.pop(0) if scripted else _default_result(name, kwargs, self._today)
-        if scripted is not None:
-            return scripted
-        return _default_result(name, kwargs, self._today)
+            result = scripted.pop(0) if scripted else _default_result(name, kwargs, self._today)
+        elif scripted is not None:
+            result = scripted
+        else:
+            result = _default_result(name, kwargs, self._today)
+        self.results.append(result)
+        return result
 
 
 # ----------------------------------------------------------------------------- scoring
@@ -385,19 +394,19 @@ def generate_messages(
     return out
 
 
-SEED_EXPLANATIONS = [
-    ("the CAP theorem", "CAP says a distributed store can guarantee only two of consistency, availability, and partition tolerance; since partitions happen, the real choice is C vs A during one."),
-    ("how Raft elects a leader", "Followers wait a randomized timeout, become candidates, and ask for votes; a majority makes a leader, and randomized timeouts keep two candidates from splitting the vote forever."),
-    ("SQL joins", "An inner join keeps only matching rows, a left join keeps every left row and fills nulls, a full outer join keeps both sides. Think of the Venn diagram."),
-    ("how vaccines work", "A vaccine shows the immune system a harmless piece of a pathogen so it builds memory cells; a later real infection is recognized and cleared fast."),
-    ("recursion", "A function that calls itself on a smaller input, with a base case that stops it; every recursion is a loop plus a stack."),
-    ("Bayes theorem", "Posterior is proportional to likelihood times prior: start from what you believed, weight it by how well each hypothesis explains the evidence."),
-    ("TCP congestion control", "Slow start doubles the window each round trip, congestion avoidance grows it linearly, a loss halves it: AIMD keeps competing flows fair."),
-    ("Dockerfile layer caching", "Each instruction is a cached layer keyed on its inputs; put things that change rarely first so a code change doesn't rebuild the dependency install."),
-    ("vector clocks", "Every node keeps a counter per node; senders attach their vector, receivers take the element-wise max and bump their own, so you can tell ordered from concurrent events."),
-    ("the bias-variance tradeoff", "Simple models underfit (high bias), flexible ones overfit (high variance); the sweet spot minimizes the sum, which is what regularization tunes."),
-    ("how LoRA fine-tuning works", "Freeze the base weights and train two small low-rank matrices whose product is added to a layer's weight; a few million trainable parameters instead of billions."),
-    ("what a B-tree is", "A balanced tree with wide nodes sized to a disk page, so lookups touch only a handful of pages; that's why databases index with it."),
+SEED_EXPLANATIONS: list[tuple[str, list[str], str]] = [
+    ("the CAP theorem", ["cap theorem", "cap"], "CAP says a distributed store can guarantee only two of consistency, availability, and partition tolerance; since partitions happen, the real choice is C vs A during one."),
+    ("how Raft elects a leader", ["raft"], "Followers wait a randomized timeout, become candidates, and ask for votes; a majority makes a leader, and randomized timeouts keep two candidates from splitting the vote forever."),
+    ("SQL joins", ["sql join", "join"], "An inner join keeps only matching rows, a left join keeps every left row and fills nulls, a full outer join keeps both sides. Think of the Venn diagram."),
+    ("how vaccines work", ["vaccine"], "A vaccine shows the immune system a harmless piece of a pathogen so it builds memory cells; a later real infection is recognized and cleared fast."),
+    ("recursion", ["recursion", "recursive"], "A function that calls itself on a smaller input, with a base case that stops it; every recursion is a loop plus a stack."),
+    ("Bayes theorem", ["bayes"], "Posterior is proportional to likelihood times prior: start from what you believed, weight it by how well each hypothesis explains the evidence."),
+    ("TCP congestion control", ["tcp", "congestion"], "Slow start doubles the window each round trip, congestion avoidance grows it linearly, a loss halves it: AIMD keeps competing flows fair."),
+    ("Dockerfile layer caching", ["docker"], "Each instruction is a cached layer keyed on its inputs; put things that change rarely first so a code change doesn't rebuild the dependency install."),
+    ("vector clocks", ["vector clock"], "Every node keeps a counter per node; senders attach their vector, receivers take the element-wise max and bump their own, so you can tell ordered from concurrent events."),
+    ("the bias-variance tradeoff", ["bias", "variance"], "Simple models underfit (high bias), flexible ones overfit (high variance); the sweet spot minimizes the sum, which is what regularization tunes."),
+    ("how LoRA fine-tuning works", ["lora", "fine-tun"], "Freeze the base weights and train two small low-rank matrices whose product is added to a layer's weight; a few million trainable parameters instead of billions."),
+    ("what a B-tree is", ["b-tree", "btree"], "A balanced tree with wide nodes sized to a disk page, so lookups touch only a handful of pages; that's why databases index with it."),
 ]
 
 SEED_BACKGROUNDS = [
@@ -407,12 +416,20 @@ SEED_BACKGROUNDS = [
 ]
 
 
-def history_for(category: str, rng: random.Random) -> list[dict]:
+def history_for(category: str, rng: random.Random, message: str = "") -> list[dict]:
     """Prior turns a teacher trace needs to be answerable. A save-this
     message is only a tool call if something was just explained; a draft
-    request is only a call if a background exists. Other categories get no history."""
+    request is only a call if a background exists. Other categories get no history.
+
+    The seeded explanation must be about what the message names: the pilot
+    generated "save the one about SQL joins" against a random history about
+    the CAP theorem, and the teacher correctly refused ("that's not what we
+    discussed") - a refusal that would have trained the student to refuse.
+    """
     if category == "save_learning_item":
-        topic, text = rng.choice(SEED_EXPLANATIONS)
+        low = message.lower()
+        matches = [e for e in SEED_EXPLANATIONS if any(k in low for k in e[1])]
+        topic, _keys, text = rng.choice(matches) if matches else rng.choice(SEED_EXPLANATIONS)
         return [{"role": "user", "content": f"can you explain {topic}?"}, {"role": "assistant", "content": text}]
     if category == "draft_application_material":
         return [{"role": "user", "content": rng.choice(SEED_BACKGROUNDS)}, {"role": "assistant", "content": "Got it, I'll use that as your background for drafts."}]
@@ -447,20 +464,21 @@ def record_trace(
     history = history or []
     prior = [Message(role=h["role"], content=h["content"]) for h in history]
     reply = backend.respond_with_tools(specialist_system(today), prior, message, registry)
-    calls = []
-    for c in registry.calls:
-        try:
-            result = _default_result(c.name, c.args, today)
-        except Exception:  # noqa: BLE001
-            result = {"ok": True}
-        calls.append({"name": c.name, "args": c.args, "result": result})
+    calls = [{"name": c.name, "args": c.args, "result": r} for c, r in zip(registry.calls, registry.results, strict=True)]
     return Trace(message=message, category=category, expect=expect, today=today, calls=calls, reply=reply, history=history)
+
+
+MULTI_STEP_CATEGORIES = {"find_then_act", "two_tools"}
 
 
 def trace_is_clean(trace: Trace, schemas: list[dict], max_calls: int = 4) -> tuple[bool, str]:
     """A trace is training-worthy only if it agrees with its category: a
     tool category must call something and every call must be a real tool
-    with its required arguments; a no-tool category must call nothing."""
+    with its required arguments; a no-tool category must call nothing; a
+    multi-step category must take more than one step (the pilot kept a
+    find-then-act trace that listed and then asked a question - a perfectly
+    good answer, but it teaches list-then-stop, which is the exact failure
+    the zero-shot student already has)."""
     by_name = {s["name"]: s for s in schemas}
     if trace.expect == "none" and trace.calls:
         return False, "called a tool in a no-tool category"
@@ -468,6 +486,10 @@ def trace_is_clean(trace: Trace, schemas: list[dict], max_calls: int = 4) -> tup
         return False, "no call in a tool category"
     if len(trace.calls) > max_calls:
         return False, f"more than {max_calls} calls"
+    if trace.category in MULTI_STEP_CATEGORIES and len(trace.calls) < 2:
+        return False, f"{trace.category} needs more than one call"
+    if any("error" in c["result"] for c in trace.calls if isinstance(c["result"], dict)):
+        return False, "a call was rejected by the registry"
     for c in trace.calls:
         schema = by_name.get(c["name"])
         if schema is None:
@@ -495,6 +517,29 @@ def trace_to_rows(trace: Trace, tools: list[dict]) -> list[dict]:
     messages.append({"role": "assistant", "content": trace.reply})
     rows.append({"messages": list(messages), "tools": tools})
     return rows
+
+
+def row_token_lengths(rows: list[dict], repo: str = STUDENT_REPO) -> list[int]:
+    """Token length of each training row under the student's own chat
+    template. Loads the tokenizer only (no weights), so it is cheap enough
+    to run at build time.
+
+    This exists because a row longer than `--max-seq-length` is silently
+    truncated by mlx-lm, and truncation lands on the *end* of the row -
+    which with --mask-prompt is exactly the assistant turn being trained.
+    A measured maximum turns that into a build-time warning instead of a
+    training run that quietly learned from cut-off targets.
+    """
+    from transformers import AutoTokenizer
+
+    tok = AutoTokenizer.from_pretrained(repo)
+    lengths = []
+    for row in rows:
+        out = tok.apply_chat_template(row["messages"], tools=row.get("tools"), add_generation_prompt=False)
+        # transformers 5.x returns a BatchEncoding (dict); 4.x returned a list of ids.
+        ids = out["input_ids"] if hasattr(out, "keys") else out
+        lengths.append(len(ids))
+    return lengths
 
 
 def split_traces(traces: list[Trace], valid_frac: float = 0.1, seed: int = 7) -> tuple[list[Trace], list[Trace]]:

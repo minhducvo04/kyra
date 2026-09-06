@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from companion.agent_ft import (
     FT_DIR,
+    STUDENT_REPO,
     Trace,
     evaluate,
     generate_messages,
@@ -25,6 +26,7 @@ from companion.agent_ft import (
     random_today,
     record_trace,
     render_report,
+    row_token_lengths,
     split_traces,
     trace_is_clean,
     write_mlx_dataset,
@@ -84,7 +86,7 @@ def cmd_trace(args):
     with TRACES.open("a", encoding="utf-8") as out, REJECTED.open("a", encoding="utf-8") as rej:
         for i, r in enumerate(rows, 1):
             trace = record_trace(teacher, schemas, r["message"], r["category"], r["expect"], random_today(rng),
-                                 history=history_for(r["category"], rng))
+                                 history=history_for(r["category"], rng, r["message"]))
             ok, why = trace_is_clean(trace, schemas)
             target = out if ok else rej
             payload = trace.__dict__ | ({} if ok else {"rejected": why})
@@ -103,6 +105,15 @@ def cmd_build(args):
     out = FT_DIR / f"data-{args.name}"
     counts = write_mlx_dataset(out, train, valid, _schemas())
     print(f"{out}: traces train={len(train)} valid={len(valid)} -> rows {counts}")
+    rows = [json.loads(line) for line in (out / "train.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+    lengths = sorted(row_token_lengths(rows, args.tokenizer))
+    longest = lengths[-1] if lengths else 0
+    p95 = lengths[int(0.95 * (len(lengths) - 1))] if lengths else 0
+    print(f"row tokens: max={longest} p95={p95} median={lengths[len(lengths)//2] if lengths else 0}")
+    if longest >= args.max_seq_length:
+        print(f"WARNING: {sum(x >= args.max_seq_length for x in lengths)} row(s) reach --max-seq-length "
+              f"{args.max_seq_length}; mlx-lm truncates the END of a row, which is the assistant turn being "
+              f"trained. Train with --max-seq-length {((longest // 512) + 1) * 512} or higher.")
 
 
 def cmd_train(args):
@@ -159,6 +170,8 @@ def main():
     b = sub.add_parser("build")
     b.add_argument("--name", default="full")
     b.add_argument("--seed", type=int, default=7)
+    b.add_argument("--tokenizer", default=STUDENT_REPO, help="tokenizer used to measure row lengths")
+    b.add_argument("--max-seq-length", type=int, default=4096, help="the value you intend to train with")
     b.set_defaults(fn=cmd_build)
     tr = sub.add_parser("train")
     tr.add_argument("--name", required=True)
@@ -168,7 +181,7 @@ def main():
     tr.add_argument("--batch-size", type=int, default=2)
     tr.add_argument("--num-layers", type=int, default=8)
     tr.add_argument("--lr", type=float, default=1e-4)
-    tr.add_argument("--max-seq-length", type=int, default=3072)
+    tr.add_argument("--max-seq-length", type=int, default=4096)
     tr.set_defaults(fn=cmd_train)
     e = sub.add_parser("eval")
     e.add_argument("--teacher", action="store_true")
