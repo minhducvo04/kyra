@@ -127,8 +127,9 @@ def cmd_train(args):
     cmd = [sys.executable, "-m", "mlx_lm.lora", "--model", args.model, "--train", "--fine-tune-type", "lora",
            "--data", str(FT_DIR / f"data-{args.data}"), "--adapter-path", str(adapter), "--iters", str(args.iters),
            "--batch-size", str(args.batch_size), "--num-layers", str(args.num_layers), "--learning-rate", str(args.lr),
-           "--max-seq-length", str(args.max_seq_length), "--mask-prompt", "--steps-per-eval", "50",
-           "--steps-per-report", "20", "--save-every", "100", "--seed", "7"]
+           "--max-seq-length", str(args.max_seq_length), "--mask-prompt", "--steps-per-eval", str(args.steps_per_eval),
+           "--steps-per-report", "20", "--save-every", str(args.save_every), "--seed", "7",
+           "--val-batches", str(args.val_batches)]
     # Tool-calling rows are long (a two-call trace with a listing result is ~3.6k tokens
     # against the router fine-tune's ~100), so a 7B at batch 2 ran the GPU out of memory
     # on the first step. Gradient checkpointing recomputes activations in the backward
@@ -139,6 +140,10 @@ def cmd_train(args):
     # Batch 1 is forced by memory (above), which makes every gradient a single-example
     # estimate. Accumulation gives an effective batch without the memory: run 1 trained
     # at effective batch 1 for 0.45 of an epoch and produced a model that over-called.
+    #
+    # Sizing note, learned the hard way: in mlx-lm one --iters step consumes ONE batch of
+    # --batch-size rows; --grad-accumulation-steps only delays the optimizer update. So
+    # iters == rows at batch 1, and an epoch of this dataset is ~2,350 iters, not ~590.
     if args.grad_accumulation_steps > 1:
         cmd += ["--grad-accumulation-steps", str(args.grad_accumulation_steps)]
     print(" ".join(cmd))
@@ -199,6 +204,9 @@ def main():
     tr.add_argument("--data", default="full")
     tr.add_argument("--iters", type=int, default=400)
     tr.add_argument("--grad-accumulation-steps", type=int, default=4)
+    tr.add_argument("--steps-per-eval", type=int, default=200, help="validation is ~50s a time; keep it rare on long runs")
+    tr.add_argument("--save-every", type=int, default=200, help="checkpoint interval in iters")
+    tr.add_argument("--val-batches", type=int, default=50, help="more batches = less noisy val loss for checkpoint choice")
     tr.add_argument("--batch-size", type=int, default=1)
     tr.add_argument("--num-layers", type=int, default=8)
     tr.add_argument("--lr", type=float, default=1e-4)
