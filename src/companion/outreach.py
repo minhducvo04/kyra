@@ -169,6 +169,7 @@ OUTREACH_PROMPT = """Write two things for Duc to send to {first_name} ({name}) a
 About {first_name} - the RECIPIENT. These are their facts, never Duc's; do not attribute any of this to Duc:
 - role: {role}
 - shared ground / relation to Duc: {relation}{mutuals_part}
+- personal angle for the ask (true, from their profile; build the "would love ..." part around it): {angle}
 
 About Duc - the SENDER. Only what is stated here and in the notes below is true of Duc:
 - applying to: {job_context}
@@ -179,7 +180,8 @@ How Duc writes, plus what Kyra knows about him (his own rules and facts, follow 
 
 1. CONNECTION NOTE - the note on a LinkedIn connection request. Hard limit {limit} characters, aim under {target}.
    Plain first-person sentences, the shape "Hi {first_name}, I'm a fellow <shared ground>. I'm about to apply for
-   <role> and would love <a short chat about their team>." No telegram style ("alum here"), no parenthetical
+   <role> and would love <something specific to them - their path, their team's work - that only they can
+   answer>." If a personal angle is given, the ask is about that, not a generic chat. No telegram style ("alum here"), no parenthetical
    asides, no fragments. Respect the application status above - never say he applied if he has not. Mutual
    connections are people you both know, not an introduction; leave them out unless there is a real reason.
    No referral ask.
@@ -217,7 +219,7 @@ def _parse(text: str) -> OutreachDraft:
 
 def draft_outreach_note(
     llm: LLMBackend, *, name: str, company: str, role: str | None = None, relation: str | None = None,
-    job_context: str = "", voice_notes: str = "", mutuals: str = "", applied: bool | None = None,
+    job_context: str = "", voice_notes: str = "", mutuals: str = "", applied: bool | None = None, angle: str = "",
 ) -> OutreachDraft:
     """Draft, then the same humanizer critique pass the cover letters get,
     then enforce the length: one shorten call if needed, then raise.
@@ -227,6 +229,7 @@ def draft_outreach_note(
         first_name=fn, name=name, role=role or "(not given)", company=company,
         job_context=job_context.strip() or f"a role at {company}",
         relation=relation or "same school", mutuals_part=f"; mutual connections: {mutuals}" if mutuals else "",
+        angle=angle.strip() or "(none given - ask about their team's work)",
         applied_line=(
             "not applied yet - he is reaching out first" if applied is False
             else "already applied" if applied else "unknown - do not claim he applied"
@@ -343,6 +346,10 @@ class DraftOutreachNoteTool(Tool):
             "id": {"type": "integer", "description": "contact id from add_outreach_contact / list_outreach"},
             "job_context": {"type": "string", "description": "The role Duc is applying to, a line or two"},
             "mutual_connections": {"type": "string", "description": "Names of mutual connections, if any"},
+            "personal_angle": {
+                "type": "string",
+                "description": "One true, specific thing about this person (their path, their team's work) to build the ask around",
+            },
         },
         "required": ["id"],
     }
@@ -360,7 +367,7 @@ class DraftOutreachNoteTool(Tool):
         app = next((a for a in self._apps.list() if a.id == c.application_id), None)
         return None if app is None else app.status != "targeting"
 
-    def run(self, id: int, job_context: str = "", mutual_connections: str = "") -> dict:
+    def run(self, id: int, job_context: str = "", mutual_connections: str = "", personal_angle: str = "") -> dict:
         c = self._store.get(id)
         if c is None:
             return {"error": f"no outreach contact with id {id}"}
@@ -371,6 +378,7 @@ class DraftOutreachNoteTool(Tool):
             d = draft_outreach_note(
                 self._llm, name=c.name, company=c.company, role=c.role, relation=c.relation,
                 job_context=job_context, voice_notes=voice, mutuals=mutual_connections, applied=self._applied(c),
+                angle=personal_angle,
             )
         except (OutreachNoteTooLong, ValueError) as e:
             return {"error": str(e)}

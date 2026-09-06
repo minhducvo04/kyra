@@ -63,6 +63,7 @@ def test_draft_runs_critique_pass_and_enforces_length():
     d = draft_outreach_note(
         llm, name="Alex Rivera", company="Northwind", role="Software Engineer", relation="Berkeley EECS",
         job_context="Software Engineer - University Graduate", voice_notes="be playful", mutuals="Sam, Jordan P.",
+        angle="moved from a data platform company to Northwind in 2025",
     )
     assert d.note == note and d.follow_up == "follow up final"
     assert len(llm.calls) == 2
@@ -70,6 +71,7 @@ def test_draft_runs_critique_pass_and_enforces_length():
     assert "Alex" in prompt and "Sam" in prompt
     # recipient facts are labelled as the recipient's - the first real run attributed Alex's degrees to Duc
     assert "RECIPIENT" in prompt and "never Duc's" in prompt and "- role: Software Engineer" in prompt
+    assert "moved from a data platform company to Northwind in 2025" in prompt
     assert "AI-writing patterns" in llm.calls[1]["user_input"]  # the humanizer pass really ran
 
 
