@@ -49,7 +49,6 @@ from companion.profile import load_profile, save_profile
 from companion.reminders import RemindersStore
 from companion.router import TurnRouter, route_and_answer_verbose
 from companion.science import ScienceFactsTool
-from companion.voice import FasterWhisperSTT, KokoroTTS, decode_uploaded_audio, encode_wav_bytes
 
 app = FastAPI(title="Kyra")
 
@@ -85,12 +84,20 @@ class _Runtime:
     def conversation(self) -> ConversationManager:
         return ConversationManager(persona=KYRA, memory=self.memory, llm=_claude)
 
+    # companion.voice is imported here, not at module top: it pulls in numpy
+    # and the audio stack, and the HTTP layer must import (and be testable)
+    # without them - the first real CI run failed at collection on exactly
+    # this (ModuleNotFoundError: numpy) with the slim install list.
     @cached_property
-    def stt(self) -> FasterWhisperSTT:
+    def stt(self):
+        from companion.voice import FasterWhisperSTT
+
         return FasterWhisperSTT()
 
     @cached_property
-    def tts(self) -> KokoroTTS:
+    def tts(self):
+        from companion.voice import KokoroTTS
+
         return KokoroTTS()
 
 
@@ -221,6 +228,8 @@ def voice(audio: UploadFile) -> VoiceOut:
     hands-free in the web UI both hit this same endpoint per utterance;
     the difference is only how the browser decides when to call it.
     """
+    from companion.voice import decode_uploaded_audio, encode_wav_bytes
+
     pcm = decode_uploaded_audio(audio.file)
     transcript = _rt.stt.transcribe(pcm).strip()
     if not transcript:
