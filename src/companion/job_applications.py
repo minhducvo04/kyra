@@ -36,7 +36,8 @@ DB_PATH = DATA_DIR / "job_applications.db"
 
 logger = logging.getLogger(__name__)
 
-VALID_STATUSES = {"applied", "interviewing", "offer", "rejected", "withdrawn"}
+# targeting: found the role, doing outreach, not applied yet. referral_pending: applied, a referral is in flight.
+VALID_STATUSES = {"targeting", "applied", "referral_pending", "interviewing", "offer", "rejected", "withdrawn"}
 
 NO_SPECIFIC_JOB = (
     "(No specific posting given - draft general-purpose material aimed at Duc's ideal target role, "
@@ -115,14 +116,18 @@ class JobApplicationStore:
     def __init__(self, path: Path | str | None = None, *, engine: Engine | None = None):
         self._engine = engine or engine_for_store(DB_PATH, path)
 
-    def add(self, company: str, role: str, link: str | None = None, notes: str | None = None) -> JobApplication:
+    def add(
+        self, company: str, role: str, link: str | None = None, notes: str | None = None, status: str = "applied",
+    ) -> JobApplication:
+        if status not in VALID_STATUSES:
+            raise ValueError(f"status must be one of {sorted(VALID_STATUSES)}, got {status!r}")
         now = datetime.now(UTC).isoformat()
         with self._engine.begin() as conn:
             res = conn.execute(insert(JA).values(
-                company=company, role=role, link=link, status="applied", notes=notes, created_at=now, updated_at=now,
+                company=company, role=role, link=link, status=status, notes=notes, created_at=now, updated_at=now,
             ))
         return JobApplication(
-            id=res.inserted_primary_key[0], company=company, role=role, link=link, status="applied",
+            id=res.inserted_primary_key[0], company=company, role=role, link=link, status=status,
             notes=notes, created_at=now, updated_at=now,
         )
 
@@ -153,7 +158,7 @@ class JobApplicationStore:
 
 class AddJobApplicationTool(Tool):
     name = "add_job_application"
-    description = "Log a job application Duc has submitted or is tracking - company, role, and optionally a link/notes."
+    description = "Log a job application Duc has submitted or is tracking (status targeting if not applied yet) - company, role, and optionally a link/notes."
     input_schema = {
         "type": "object",
         "properties": {
@@ -161,6 +166,10 @@ class AddJobApplicationTool(Tool):
             "role": {"type": "string"},
             "link": {"type": "string", "description": "Job posting URL, if given"},
             "notes": {"type": "string"},
+            "status": {
+                "type": "string", "enum": sorted(VALID_STATUSES),
+                "description": "default applied; use targeting for a role Duc is reaching out about but has not applied to yet",
+            },
         },
         "required": ["company", "role"],
     }
@@ -168,13 +177,17 @@ class AddJobApplicationTool(Tool):
     def __init__(self, store: JobApplicationStore):
         self._store = store
 
-    def run(self, company: str, role: str, link: str | None = None, notes: str | None = None) -> dict:
-        return asdict(self._store.add(company, role, link, notes))
+    def run(self, company: str, role: str, link: str | None = None, notes: str | None = None,
+            status: str = "applied") -> dict:
+        try:
+            return asdict(self._store.add(company, role, link, notes, status=status))
+        except ValueError as e:
+            return {"error": str(e)}
 
 
 class ListJobApplicationsTool(Tool):
     name = "list_job_applications"
-    description = "List Duc's tracked job applications, optionally filtered by status (applied/interviewing/offer/rejected/withdrawn)."
+    description = "List Duc's tracked job applications, optionally filtered by status (targeting/applied/referral_pending/interviewing/offer/rejected/withdrawn)."
     input_schema = {
         "type": "object",
         "properties": {"status": {"type": "string", "enum": sorted(VALID_STATUSES)}},
@@ -191,7 +204,7 @@ class ListJobApplicationsTool(Tool):
 class UpdateJobApplicationStatusTool(Tool):
     name = "update_job_application_status"
     description = (
-        "Update a tracked job application's status (applied/interviewing/offer/rejected/withdrawn), "
+        "Update a tracked job application's status (targeting/applied/referral_pending/interviewing/offer/rejected/withdrawn), "
         "by its id from list_job_applications."
     )
     input_schema = {

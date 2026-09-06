@@ -67,3 +67,22 @@ jobs = Table(
     Column("started_at", String(64)),
     Column("finished_at", String(64)),
 )
+
+outreach_contacts = Table(
+    "outreach_contacts",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("name", Text, nullable=False),
+    Column("company", Text, nullable=False),
+    Column("role", Text),
+    Column("profile_url", Text),
+    Column("relation", Text),
+    Column("application_id", Integer),  # job_applications.id, no FK: stores may live in separate SQLite files
+    Column("note", Text),
+    Column("follow_up", Text),
+    Column("status", String(32), nullable=False, server_default="drafted"),
+    Column("sent_at", String(64)),
+    Column("follow_up_at", String(64)),
+    Column("created_at", String(64), nullable=False),
+    Column("updated_at", String(64), nullable=False),
+)
