@@ -13,7 +13,7 @@ from a ~60-token prompt (`router_ft.COMPACT_SYSTEM`), faster, and at least as ac
 ## Method
 
 - **Held-out test set, handwritten:** `tests/data/router_testset.jsonl` — 61 cases (33 tool, 13 text/claude,
-  15 text/local) written by hand before any data was generated. It deliberately includes keyword-bait negatives
+  15 text/local) in rounds 1-2, 72 from round 3 (see below) written by hand before any data was generated. It deliberately includes keyword-bait negatives
   ("remind me how quicksort works" is an explanation, not a reminder; "can you snooze for a second" is chat) and
   indirect tool phrasings ("the dentist one is done, tick it off"). It is never trained on, never used to pick a
   checkpoint, and the generator drops any synthetic message that normalizes to a test message.
@@ -96,3 +96,48 @@ Set `KYRA_CLASSIFIER_ADAPTER="<repo>:<adapter dir>"` and `TurnRouter` loads that
 uses `COMPACT_SYSTEM`; unset, it runs the few-shot path. Same `RoutingDecision`, same log fields, same
 `route_and_answer()` — the classifier is a config value behind the existing interface, which is the point of
 having the interface.
+
+## Round 3 (2026-09-07): seven new tools, same adapter recipe
+
+Between round 2 and this run, seven tools landed in `default_tools.py` (outreach assist: `add_outreach_contact`,
+`draft_outreach_note`, `copy_outreach_note`, `update_outreach_status`, `list_outreach`; posting signals:
+`analyze_job_posting`, `target_job_posting`). The production adapter had never seen them. Observed in real use:
+"what's a good salary range for a new grad SWE in NYC?" went to the tool path.
+
+- **Data:** 7 new tool categories plus 2 bait buckets (`text_hard_negative_outreach` for salary/LinkedIn/repost
+  *advice* questions, `text_hard_negative_outreach_local` for casual mentions of recruiters/referrals/targets),
+  45 each -> 408 new synthetic examples (`data/router_ft/new_tools.jsonl`). Combined with the round 1-2 data:
+  1,403 train / 155 valid. `COMPACT_SYSTEM` gained one clause naming posting signals and outreach (122 -> 145
+  prompt tokens).
+- **Test set:** 11 handwritten cases appended (7 tool, one per new tool; 3 text/claude bait incl. the salary
+  question; 1 text/local bait) -> 72 cases. Written before the data was generated, never trained on.
+- **Training:** `qwen1.5b-v3`, same recipe (Qwen2.5-1.5B-4bit, 8 layers, batch 4, lr 1e-4), 950 iters ≈ 2.7 epochs.
+
+| System | Prompt | Accuracy (72) | Path-only | Old 61 subset | New 11 subset | Prompt tokens |
+|---|---|---|---|---|---|---|
+| LoRA qwen1.5b-hn (production before) | round-2 prompt | 87.5% | 91.7% | 88.5% | 81.8% | 123 |
+| LoRA qwen1.5b-hn | round-3 prompt | 91.7% | 93.1% | 91.8% | 90.9% | 145 |
+| **LoRA qwen1.5b-v3** | round-3 prompt | **93.1%** | **93.1%** | 91.8% | **100%** | 145 |
+
+Reading it:
+
+- The 88.5% from round 2 reproduces exactly under its own prompt, so the harness is deterministic and the rows
+  are comparable.
+- The old adapter already generalized to most new-tool phrasings (it learned "job-search request -> tool"), but
+  it missed `analyze_job_posting` and took the salary question as a tool call. v3 gets all 11 new cases and sends
+  the salary question to text.
+- **On the old 61, v3 and hn tie at 91.8% but not on the same cases.** v3 fixed two ("save what you just explained
+  about Raft..." -> tool, "can you snooze for a second" -> local) and regressed two: "note for later: I hate early
+  morning meetings" -> text (a real `save_memory_note` miss) and "what does a good STAR answer for Ownership look
+  like" -> tool (job-search-adjacent advice over-triggering, the same failure class as the salary question). The
+  three persistent misses ("cover letter about octopuses", "applied a patch", "add a note to the design doc") are
+  unchanged since round 2.
+- Through the real `TurnRouter` (env-driven, no harness): salary question -> text, "target this posting <url>" ->
+  tool, "read the warning signs..." -> tool, "draft a connection note for Alex" -> tool, "how do I write a good
+  LinkedIn note in general" -> text. Still wrong: "what does a reposted job mean" -> tool (the held-out phrasing
+  "what does a reposted job **usually** mean" is right), so the repost-bait boundary is thin.
+- One case is 1.4 points on 72, so 93.1 vs 91.7 is within noise; the decision rests on the new-tool coverage
+  (11/11 vs 10/11) and the fixed over-trigger, not the headline.
+- **Decision:** `qwen1.5b-v3` activated via `KYRA_CLASSIFIER_ADAPTER`. `qwen1.5b-hn` stays on disk as the
+  rollback. Next: a second seed, and a bait bucket for job-search *advice* questions in general (STAR answers,
+  interview prep, salary) since that class now shows up on both sides of the test set.

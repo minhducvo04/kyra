@@ -59,3 +59,14 @@
 {"message": "add a note to the design doc that we chose SQLite", "path": "text", "backend": "claude", "note": "hard: 'note' but not a memory note about Duc"}
 {"message": "my sister Linh is visiting next week, remember that", "path": "tool", "backend": "claude", "note": "save_memory_note - person fact"}
 {"message": "set something so I don't miss the 3pm standup", "path": "tool", "backend": "claude", "note": "add_reminder - no keyword 'remind'"}
+{"message": "add Priya Shah at Stripe to my outreach list, she's a Cal alum on the payments team", "path": "tool", "backend": "claude", "note": "add_outreach_contact"}
+{"message": "draft the LinkedIn note for my Northwind contact", "path": "tool", "backend": "claude", "note": "draft_outreach_note"}
+{"message": "copy the follow-up for Priya so I can paste it", "path": "tool", "backend": "claude", "note": "copy_outreach_note"}
+{"message": "Alex accepted my connection request, log that", "path": "tool", "backend": "claude", "note": "update_outreach_status"}
+{"message": "which of my outreach follow-ups are overdue", "path": "tool", "backend": "claude", "note": "list_outreach"}
+{"message": "read the warning signs in this posting: Senior-ish Junior Engineer, 5+ years, $60k-$180k, fast-paced...", "path": "tool", "backend": "claude", "note": "analyze_job_posting"}
+{"message": "target this one: jobs.ashbyhq.com/netic/8f2a1c", "path": "tool", "backend": "claude", "note": "target_job_posting - no keyword beyond 'target' + URL"}
+{"message": "what's a good salary range for a new grad SWE in NYC?", "path": "text", "backend": "claude", "note": "hard: salary/job talk but advice, not a posting to analyze"}
+{"message": "how do I write a good LinkedIn note in general", "path": "text", "backend": "claude", "note": "hard: 'LinkedIn note' but general advice, no contact"}
+{"message": "what does a reposted job usually mean", "path": "text", "backend": "claude", "note": "hard: 'reposted job' but an explanation, no posting given"}
+{"message": "my cousin's recruiter friend ghosted her, brutal", "path": "text", "backend": "local", "note": "hard: 'recruiter' but casual"}
