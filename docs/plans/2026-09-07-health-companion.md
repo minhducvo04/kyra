@@ -36,17 +36,100 @@ and ideally screenless so it reads as a plain band rather than a second watch. I
 that is the whole architecture below - and it should carry as much data as possible, from a company that is
 serious about it, at a sane price.
 
-### Bands (what he asked for)
+### Bands - the detailed comparison
 
-| Band | Look & weight | Writes to Apple Health | Privacy | Price |
+Decided 2026-09-07: **no smartwatch**; the traditional watch stays and this goes on the other wrist. Duc is also
+willing to pay a subscription, so WHOOP is back in the running and every recurring cost is priced below.
+
+**1. On the wrist**
+
+| Band | Screen | Weight | Battery | Feel |
 |---|---|---|---|---|
-| **Garmin vívosmart 5** | slim band, small OLED screen, **24.5 g** | sleep stages, HR 24/7, HRV, **SpO₂**, respiration, stress, Body Battery, steps | US company; the 2020 WastedLocker ransomware took services down but Garmin found no evidence data was accessed or stolen; Health API is company-only, no personal access | **$150, no subscription** |
-| **Polar Loop** | **screenless**, plain band, **29 g** | sleep stages, HR 24/7, HRV, activity, recovery. No SpO₂, no skin temperature | **the cleanest**: Finnish, GDPR, states nothing is shared with providers without permission; AccessLink API open to individuals | **$200, no subscription** |
-| Amazfit Helio Strap | screenless, **20 g** - the lightest | the broadest list: sleep, HRV, HR, resting HR, VO₂max, SpO₂, respiration, steps | weakest: Zepp Health (China), policy allows storage "anywhere in the world", says it does not sell data | $99, no subscription |
-| Fitbit Charge 6 | band with a screen, **30 g** | steps, sleep, workouts - and only since Google Health 5.05 (Aug 2026); before that it needed a third-party bridge | Google account now mandatory (Fitbit accounts ended May 2026); Google commits not to use the data for Ads | $130 |
-| WHOOP 5.0 / MG | thicker strap, 26.5 / 27.3 g | **sleep only as asleep/awake - no stages** | an active class action alleges sharing health data with a third-party tracker without consent | subscription only, $199-359/yr |
-| Xiaomi Smart Band 10 | band with a screen | syncs activity, sleep, HR via Mi Fitness | Chinese vendor, same class of concern as Amazfit | ~$50 |
-| Samsung Galaxy Fit 3 | — | **nothing: it does not work with an iPhone at all** | — | — |
+| Amazfit Helio Strap | none | **20 g** | **10 d** (25 d saver) | lightest here; plain strap |
+| Garmin vívosmart 5 | small OLED, 0.41 × 0.73 in | 24.5 g (S/M) | 7 d | rounded band shaped for the wrist, interchangeable straps, comfortable for sleep |
+| WHOOP 5.0 / MG | none | 26.5 / 27.3 g | ~14 d | knit strap, thickest of the group |
+| Polar Loop | **none** | 29 g | **8 d** | screenless by design - reads as a plain bracelet, not a gadget |
+| Fitbit Charge 6 | colour touchscreen | 30 g | 7 d | most watch-like of the bands |
+| Xiaomi Smart Band 10 | AMOLED | ~16 g | up to 21 d | cheapest; clearly a gadget |
+
+**2. What the hardware senses**
+
+| Band | HR 24/7 | HRV | Sleep stages | SpO₂ | Skin temp | ECG | Extras |
+|---|---|---|---|---|---|---|---|
+| Garmin vívosmart 5 | yes | yes | yes | **yes** | no | no | stress, respiration, Body Battery, hydration log |
+| Polar Loop | yes | yes | yes | no | sensor present but **not exposed in the app** | no | recovery, activity, sleep score |
+| Amazfit Helio Strap | yes | yes | yes | **yes** | no | no | VO₂max, respiration, readiness, 27 sport modes |
+| WHOOP 5.0 | yes | yes | yes | yes | yes | no | strain, recovery, sleep coach |
+| WHOOP MG | yes | yes | yes | yes | yes | **yes** | + AFib detection, blood-pressure insights |
+| Fitbit Charge 6 | yes | yes | yes | yes | yes | yes | EDA stress, built-in GPS |
+
+**3. What actually reaches Apple Health - the line that matters most here**
+
+Everything Kyra reads comes through HealthKit, so a sensor whose data stops at the vendor's app is worth nothing
+to this project.
+
+| Band | Reaches Apple Health | Catch |
+|---|---|---|
+| Garmin vívosmart 5 | sleep stages, HR, HRV, SpO₂, respiration, steps, activity | via Garmin Connect; toggled per data type |
+| Polar Loop | sleep stages, HR, HRV, activity | only through Polar Flow; the band talks to nothing else directly |
+| Amazfit Helio Strap | sleep, HRV, HR, resting HR, VO₂max, SpO₂, respiration, steps | via Zepp app |
+| WHOOP 5.0 / MG | **sleep as asleep/awake only - no stages**; recovery and strain | its own reason: WHOOP measures HRV as rMSSD, Apple stores SDNN, so **HRV does not transfer either** |
+| Fitbit Charge 6 | steps, sleep, workouts | native only since Google Health 5.05 (Aug 2026); needed a third-party bridge before that |
+
+**4. Developer API - the second path, if we ever want the Mac to fetch data itself**
+
+| Band | Personal API access |
+|---|---|
+| **Polar** | **yes** - AccessLink, an individual can register and pull their own data |
+| **WHOOP** | **yes** - API v2, OAuth 2.0, full sleep stages, HRV, recovery, webhooks |
+| Ultrahuman / Oura (rings) | yes, by application |
+| **Garmin** | **no** - the Health API requires a company, university or hospital; personal applications are rejected |
+| Fitbit / Google | account-bound, Google terms |
+
+**5. Cost over three years, subscriptions included**
+
+| Band | Hardware | Subscription | 3-year total |
+|---|---|---|---|
+| Xiaomi Smart Band 10 | ~$50 | none | **~$50** |
+| Amazfit Helio Strap | $99 | optional Zepp Aura $69/yr, Zepp Fitness $29/yr | **$99** (or up to $393 with both) |
+| Garmin vívosmart 5 | $150 | none | **$150** |
+| Polar Loop | $200 | none | **$200** |
+| Fitbit Charge 6 | $130 | Premium $99.99/yr (now Google Health Premium) | $130, or **$430** with Premium |
+| WHOOP One | included | $199/yr | **$597** |
+| WHOOP Peak | included | $239/yr | $717 |
+| WHOOP Life (MG hardware, ECG) | included | $359/yr | $1,077 |
+
+**6. Privacy, on Duc's "not breached or taken away" criterion**
+
+| Band | Assessment |
+|---|---|
+| **Polar** | strongest: Finnish, GDPR, states nothing goes to service providers without permission; no known incident |
+| Garmin | US company; the 2020 WastedLocker ransomware took services down, but it encrypts rather than exfiltrates and Garmin found no evidence data was accessed or stolen; sells hardware, not data |
+| Fitbit | a **Google account is compulsory** since Fitbit accounts ended May 2026; Google commits not to use the health data for Ads |
+| WHOOP | **an active class action** alleges it shared heart rate, sleep and stress data with a third-party tracker without consent |
+| Amazfit / Xiaomi | Chinese vendors; policies permit storage "anywhere in the world"; Amazfit states it does not sell data |
+
+### The verdict, now that a subscription is acceptable
+
+**WHOOP still loses, and not on price.** Its Apple Health export carries neither sleep stages nor HRV, which are
+the two things this plan reads most. The workaround exists - poll the WHOOP API from the Mac - but that routes
+Duc's biometrics through WHOOP's cloud *and* our server, which is the opposite of the architecture chosen here,
+and it does it while a class action over data sharing is live. $597 over three years to make the privacy story
+worse is not a trade worth making.
+
+**Recommendation: Garmin vívosmart 5 ($150).** Most sensors reaching Apple Health of anything in the table -
+including SpO₂, respiration and stress that Polar's band does not expose - lightest of the credible options at
+24.5 g, a week of battery, and no subscription ever. Its one real limitation is that Garmin's Health API is closed
+to individuals, so everything must arrive through Apple Health. In this architecture that costs nothing, because
+Apple Health is the hub by design.
+
+**Close second: Polar Loop ($200)**, and the better choice on two grounds Duc may weigh higher - it is
+**screenless**, so beside a real watch it reads as a bracelet rather than a second display, and it is the only
+band here with both the cleanest privacy record and an API an individual can actually get, which matters if we
+ever want the Mac to fetch data without the phone. The cost is no SpO₂ and no exposed temperature.
+
+**Amazfit Helio Strap ($99)** is the value pick and the lightest at 20 g with 10-day battery - genuinely good
+hardware for the money. It fails only Duc's privacy criterion, which he raised himself.
 
 ### The Apple Watch, which should not have been dropped
 
