@@ -9,6 +9,7 @@ from companion.job_autofill import (
     FillReport,
     GreenhouseAutofillEngine,
     LabeledFormEngine,
+    LeverAutofillEngine,
     default_engines,
 )
 from companion.profile import ApplicantProfile
@@ -17,14 +18,17 @@ from companion.profile import ApplicantProfile
 class FakeLocator:
     """Enough of a Playwright locator for the label walk and the fills."""
 
-    def __init__(self, tag="input", input_type="text", label="", value_sink=None, present=True):
+    def __init__(self, tag="input", input_type="text", label="", value_sink=None, present=True, count_override=None):
         self.tag, self.input_type, self.label = tag, input_type, label
         self.filled = None
         self.files = None
         self._present = present
         self._sink = value_sink
+        self._count_override = count_override
 
     def count(self):
+        if self._count_override is not None:
+            return self._count_override
         return 1 if self._present else 0
 
     def inner_text(self):
@@ -39,7 +43,7 @@ class FakeLocator:
     def fill(self, value):
         self.filled = value
         if self._sink is not None:
-            self._sink.append((self.label, value))
+            self._sink[self.label] = value
 
     def set_input_files(self, path):
         self.files = path
@@ -121,7 +125,7 @@ def test_number_and_url_inputs_are_walked_so_they_reach_the_report():
         ("Additional Information", "textarea", "textarea"),
         ("Consent", "input", "checkbox"),
     ])
-    walked = [label for _loc, label in AshbyAutofillEngine()._labeled_text_inputs(page)]
+    walked = [label for _loc, label in AshbyAutofillEngine()._form_fields(page)]
     assert walked == ["Name", "Years of experience", "Portfolio", "Additional Information"]
     assert "Consent" not in walked  # a checkbox is Duc's to answer, never auto-ticked
 
@@ -134,8 +138,11 @@ def test_engines_are_keyed_the_way_posting_urls_parse():
     ):
         engine, ats = engine_for_url(url, engines)
         assert isinstance(engine, expected), (url, ats)
-    # an ATS with no engine yet must resolve to None, not blow up
-    assert engine_for_url("https://jobs.lever.co/acme/d9bcb6a2-0e54-4cb3-baec-43f2d74db18f", engines)[0] is None
+    assert isinstance(engine_for_url("https://jobs.lever.co/acme/d9bcb6a2-0e54-4cb3-baec-43f2d74db18f", engines)[0],
+                      LeverAutofillEngine)
+    # an ATS with no engine yet (Workday, iCIMS) must resolve to None, not blow up
+    engine, ats = engine_for_url("https://acme.wd1.myworkdayjobs.com/careers/job/123", engines)
+    assert engine is None and ats == "unknown"
 
 
 def test_greenhouse_behaviour_is_unchanged_by_the_shared_base():
@@ -156,3 +163,58 @@ def test_an_empty_profile_field_says_so_rather_than_filling_blank(engine):
     report = FillReport(url="u")
     engine._fill_one(FakeLocator(label="LinkedIn"), "LinkedIn", _profile(linkedin_url=""), report)
     assert not report.filled and "linkedin_url is empty" in report.skipped[0].reason
+
+
+class FakeLeverPage:
+    """Lever identifies core fields by `name`, so the fake is selector-keyed."""
+
+    def __init__(self, present, cards=0, location=True):
+        self._present = set(present)
+        self._cards, self._location = cards, location
+        self.filled = {}
+
+    def locator(self, selector):
+        if selector.startswith('[name^="cards['):
+            return FakeLocator(present=self._cards > 0, label="cards", count_override=self._cards)
+        if 'name="location"' in selector:
+            return FakeLocator(present=self._location, label="location")
+        # names contain brackets ("urls[LinkedIn]"), so cut at the closing quote
+        name = selector.split('name="')[1].split('"')[0] if 'name="' in selector else selector
+        return FakeLocator(present=name in self._present, label=name, value_sink=self.filled)
+
+
+def test_lever_application_url():
+    u = LeverAutofillEngine.application_url
+    assert u("https://jobs.lever.co/palantir/abc") == "https://jobs.lever.co/palantir/abc/apply"
+    assert u("https://jobs.lever.co/palantir/abc/apply") == "https://jobs.lever.co/palantir/abc/apply"
+    assert u("https://jobs.lever.co/palantir/abc?src=x") == "https://jobs.lever.co/palantir/abc/apply"
+
+
+def test_lever_walks_named_fields_and_labels_them_like_the_other_boards():
+    page = FakeLeverPage({"name", "email", "phone", "org", "urls[LinkedIn]", "urls[GitHub]", "urls[Portfolio]"})
+    got = [label for _loc, label in LeverAutofillEngine()._form_fields(page)]
+    assert got == ["Name", "Email", "Phone", "Current company", "LinkedIn", "GitHub", "Portfolio"]
+    # a form without the optional link fields yields only what is there
+    thin = FakeLeverPage({"name", "email"})
+    assert [lab for _l, lab in LeverAutofillEngine()._form_fields(thin)] == ["Name", "Email"]
+
+
+def test_lever_labels_map_onto_the_shared_profile_maps():
+    engine, report = LeverAutofillEngine(), FillReport(url="u")
+    p = _profile(current_company="Escaype", linkedin_url="https://li/x", portfolio_url="https://site/x")
+    for label in ("Name", "Current company", "LinkedIn", "Portfolio"):
+        engine._fill_one(FakeLocator(label=label), label, p, report)
+    assert [f.value for f in report.filled] == ["Duc Vo", "Escaype", "https://li/x", "https://site/x"]
+
+
+def test_lever_reports_what_it_cannot_answer():
+    engine, report = LeverAutofillEngine(), FillReport(url="u")
+    page = FakeLeverPage({"name"}, cards=60, location=True)
+    engine._attach_resume(page, _profile(), report)
+    reasons = {s.label: s.reason for s in report.skipped}
+    assert any("city" in r for r in reasons.values())
+    assert "60 custom question field(s)" in reasons
+    # a form with no cards and no location box says nothing extra
+    quiet = FillReport(url="u")
+    engine._attach_resume(FakeLeverPage({"name"}, cards=0, location=False), _profile(), quiet)
+    assert [s.label for s in quiet.skipped] == ["Resume"]  # the fake has no file input

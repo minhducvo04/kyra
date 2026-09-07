@@ -141,6 +141,8 @@ class LabeledFormEngine(AutofillEngine):
     # and reports every field missing (caught on a real Netic form, 2026-09-07).
     ready_selector: str | None = None
     ready_timeout_ms = 15000
+    # ATSs that use ONE name field instead of first/last (Ashby, Lever).
+    single_name_labels: frozenset[str] = frozenset()
 
     def __init__(self, headless: bool = False, log_dir: Path | str = LOG_DIR):
         # headless=False by default - Duc should see the browser fill
@@ -176,7 +178,7 @@ class LabeledFormEngine(AutofillEngine):
         # <label for="..."> markup for both core and custom fields, so
         # one matching pass handles both; we just only *act* on labels
         # we recognize.
-        for locator, label_text in self._labeled_text_inputs(page):
+        for locator, label_text in self._form_fields(page):
             self._fill_one(locator, label_text, profile, report)
 
         self._attach_resume(page, profile, report)
@@ -187,10 +189,11 @@ class LabeledFormEngine(AutofillEngine):
         # submit. The process holding it open is the caller's script.
         return report
 
-    def _labeled_text_inputs(self, page):
-        """Yield (locator, label_text) for every text-like input that has
-        an associated label - the general shape Greenhouse uses for
-        every field, standard or custom.
+    def _form_fields(self, page):
+        """Yield (locator, label) for every field worth acting on. The default
+        walks `<label for=...>` markup, which is how Greenhouse and Ashby both
+        render every field, standard or custom. Lever identifies its fields by
+        `name` attribute instead and overrides this.
         """
         labels = page.locator("label").all()
         for label in labels:
@@ -217,6 +220,13 @@ class LabeledFormEngine(AutofillEngine):
 
     def _fill_one(self, locator, label_text, profile: ApplicantProfile, report: FillReport) -> None:
         key = label_text.lower()
+        if key.strip() in self.single_name_labels:
+            full = f"{profile.first_name} {profile.last_name}".strip()
+            if not full:
+                report.skipped.append(SkippedField(label=label_text, reason="profile has no name"))
+                return
+            self._set(locator, label_text, full, report)
+            return
         attr = next((a for m in self.field_maps if (a := self._match(key, m))), None)
         if attr is None:
             report.skipped.append(SkippedField(label=label_text, reason="no matching profile field - custom question"))
@@ -225,10 +235,14 @@ class LabeledFormEngine(AutofillEngine):
         if not value:
             report.skipped.append(SkippedField(label=label_text, reason=f"profile.{attr} is empty"))
             return
+        self._set(locator, label_text, value, report)
+
+    @staticmethod
+    def _set(locator, label_text: str, value: str, report: FillReport) -> None:
         try:
             locator.fill(value)
             report.filled.append(FilledField(label=label_text, value=value))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - one field failing must not stop the rest
             report.skipped.append(SkippedField(label=label_text, reason=f"couldn't fill: {e}"))
 
     @staticmethod
@@ -335,6 +349,7 @@ class AshbyAutofillEngine(LabeledFormEngine):
     field_maps = (ASHBY_FIELD_MAP, CORE_FIELD_MAP, EEO_FIELD_MAP)
     resume_selector = 'input[type=file][id="_systemfield_resume"]'
     ready_selector = 'input[id="_systemfield_email"]'
+    single_name_labels = frozenset({"name", "full name"})
 
     @staticmethod
     def application_url(url: str) -> str:
@@ -346,25 +361,70 @@ class AshbyAutofillEngine(LabeledFormEngine):
     def fill(self, url: str, profile: ApplicantProfile) -> FillReport:
         return super().fill(self.application_url(url), profile)
 
-    def _fill_one(self, locator, label_text, profile: ApplicantProfile, report: FillReport) -> None:
-        # The single "Name" field: first + last, and only when both exist.
-        if label_text.strip().lower() in ("name", "full name"):
-            full = f"{profile.first_name} {profile.last_name}".strip()
-            if not full:
-                report.skipped.append(SkippedField(label=label_text, reason="profile has no name"))
-                return
-            try:
-                locator.fill(full)
-                report.filled.append(FilledField(label=label_text, value=full))
-            except Exception as e:  # noqa: BLE001 - one field failing must not stop the rest
-                report.skipped.append(SkippedField(label=label_text, reason=f"couldn't fill: {e}"))
-            return
-        super()._fill_one(locator, label_text, profile, report)
+
+class LeverAutofillEngine(LabeledFormEngine):
+    """Lever (jobs.lever.co). Built by reading a real live Palantir form
+    (2026-09-07).
+
+    Lever is the reason `_form_fields` is a hook rather than a fixed label
+    walk: its core fields carry no `<label for>` at all, they are identified
+    by `name` attributes - `name`, `email`, `phone`, `org`, and the bracketed
+    `urls[LinkedIn]` / `urls[GitHub]` / `urls[Portfolio]`. Everything else on
+    the page is a `cards[<uuid>][fieldN]` custom question, very often a
+    checkbox group (the Palantir form has one listing every language), which
+    this must never tick.
+    """
+
+    field_maps = (CORE_FIELD_MAP, EEO_FIELD_MAP)
+    resume_selector = 'input[type=file][name="resume"]'
+    ready_selector = 'input[name="email"]'
+    single_name_labels = frozenset({"name"})
+
+    # (CSS selector, the label reported in the summary). The label is also what
+    # _fill_one matches against the profile maps, so it must read like the
+    # equivalent Greenhouse label ("LinkedIn", "Phone") rather than the raw name.
+    NAMED_FIELDS = (
+        ('input[name="name"]', "Name"),
+        ('input[name="email"]', "Email"),
+        ('input[name="phone"]', "Phone"),
+        ('input[name="org"]', "Current company"),
+        ('input[name="urls[LinkedIn]"]', "LinkedIn"),
+        ('input[name="urls[GitHub]"]', "GitHub"),
+        ('input[name="urls[Portfolio]"]', "Portfolio"),
+    )
+
+    @staticmethod
+    def application_url(url: str) -> str:
+        """Lever serves the form at <posting>/apply."""
+        trimmed = url.split("?")[0].rstrip("/")
+        return trimmed if trimmed.endswith("/apply") else f"{trimmed}/apply"
+
+    def fill(self, url: str, profile: ApplicantProfile) -> FillReport:
+        return super().fill(self.application_url(url), profile)
+
+    def _form_fields(self, page):
+        for selector, label in self.NAMED_FIELDS:
+            locator = page.locator(selector).first
+            if locator.count():
+                yield locator, label
+
+    def _attach_resume(self, page, profile: ApplicantProfile, report: FillReport) -> None:
+        super()._attach_resume(page, profile, report)
+        # Lever's core set has no city field and its custom questions are cards[...]
+        # groups; say so rather than leaving Duc to notice an empty required box.
+        if page.locator('input[name="location"]').count():
+            report.skipped.append(SkippedField(
+                label="Location", reason="Lever wants a city here and the profile has only a country"))
+        cards = page.locator('[name^="cards["]').count()
+        if cards:
+            report.skipped.append(SkippedField(
+                label=f"{cards} custom question field(s)", reason="Lever custom questions - answer these yourself"))
 
 
 ENGINES_BY_SOURCE: dict[str, type[LabeledFormEngine]] = {
     "greenhouse": GreenhouseAutofillEngine,
     "ashby": AshbyAutofillEngine,
+    "lever": LeverAutofillEngine,
 }
 
 
