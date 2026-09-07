@@ -228,5 +228,13 @@ Deviations from the design above, and why:
   question is "what does Kyra hold that search cannot see". It currently, correctly, reports
   18 compiled `.pdf` whose `.tex` sources are indexed.
 
+- **Auto-refresh on a stale index was NOT built**, though the Freshness section above promises
+  it. Indexing is incremental by content hash, but it only runs when `--reindex` is passed, so
+  a search after an edit answers from the previous index without saying so. Deliberate for now
+  - a stat sweep plus possible re-embedding inside every query makes search latency
+  unpredictable - but the honest fix is either a staleness *warning* on search, or wiring
+  `--reindex` into the 05:00 digest run. Not done either way, so treat the index as stale until
+  reindexed.
+
 Still open, unchanged: slice 3 (web SEARCH panel) and slice 4 (`search_kyra_data` chat tool +
 router round 5, and routing the drafting paths through `search(include_sensitive=False)`).
