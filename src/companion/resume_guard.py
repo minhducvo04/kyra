@@ -86,9 +86,21 @@ _HEADING_RE = re.compile(r"\\resume(?:Sub|Project)[Hh]eading\s*\{(?:\\textbf\{)?
 _TERM_RE = re.compile(r"\b(?:[A-Z][A-Za-z0-9+#-]*)(?:[ \t]+(?:[A-Z][A-Za-z0-9+#-]*)){0,3}\b")
 _LATEX_CMD_RE = re.compile(r"\\[A-Za-z]+\*?")
 # Words that start sentences/bullets and would otherwise look like terms.
+# NOTE on what is deliberately absent: "Applied". It is a resume verb, but it is also
+# the first word of "Applied Intuition", a company Duc is actually applying to - listing
+# it here would hide a fabricated employer. A blanket "any -ed word is a verb" rule has
+# the same flaw, which is why this stays an explicit list.
 _COMMON_STARTERS = {
     "Built", "Designed", "Raised", "Benchmarked", "Closed", "Implemented", "Developed", "Reduced", "Improved",
     "Optimized", "Replaced", "Architected", "Kept", "Persisted", "Cut", "Trained", "Led", "Owned", "Shipped",
+    # Added 2026-09-07 after a tailored resume flagged "Shortened" as an unsourced proper
+    # noun. One false positive per four resumes is enough to teach ignoring the warning,
+    # which is the failure mode that matters for a warn-only check.
+    "Shortened", "Scaled", "Automated", "Migrated", "Refactored", "Streamlined", "Consolidated", "Deployed",
+    "Integrated", "Prototyped", "Engineered", "Delivered", "Drove", "Wrote", "Created", "Added", "Removed",
+    "Tuned", "Profiled", "Measured", "Validated", "Debugged", "Documented", "Maintained", "Extended", "Ported",
+    "Packaged", "Orchestrated", "Parallelized", "Cached", "Indexed", "Modeled", "Evaluated", "Instrumented",
+    "Wired", "Wrapped", "Ran", "Set", "Made", "Took", "Grew", "Halved", "Doubled", "Eliminated", "Resolved",
     "The", "A", "An", "And", "Every", "Each", "This", "That", "For", "With", "In", "On", "At", "To", "Of",
     "Coursework", "Languages", "Skills", "Education", "Experience", "Projects", "Technical",
 }

@@ -100,3 +100,20 @@ def test_qualifier_in_a_commented_source_line_counts_as_evidence():
     # but a qualifier that only appears inside an OUTPUT comment is invisible and not flagged either
     out2 = ORIGINAL_TEX + "% \\resumeItem{a mission-critical service}\n"
     assert unsupported_qualifiers(out2, [ORIGINAL_TEX]) == []
+
+
+def test_sentence_starting_verbs_do_not_read_as_invented_proper_nouns():
+    """A warn-only check people learn to ignore is worse than no check: a tailored
+    resume flagged "Shortened" as an unsourced name (2026-09-07)."""
+    source = r"\resumeItem{Cut review time on the pipeline.}"
+    for verb in ("Shortened", "Automated", "Refactored", "Streamlined", "Halved"):
+        out = rf"\resumeItem{{{verb} review time on the pipeline.}}"
+        assert check_resume_output(out, [source]) == [], verb
+
+
+def test_a_company_whose_name_is_also_a_verb_is_still_checked():
+    """"Applied" starts "Applied Intuition"; treating it as a verb would hide a
+    fabricated employer, so it is deliberately not in the starter list."""
+    warnings = check_resume_output(
+        r"\resumeSubheading{Applied Intuition}{2026}{Engineer}{Now}", [r"\resumeSubheading{Escaype}{2025}{Intern}{Now}"])
+    assert any("Applied Intuition" in w for w in warnings)
