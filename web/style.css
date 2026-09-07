@@ -1069,3 +1069,25 @@ body {
 .apply-who { font-weight: 600; }
 .apply-attention-head { margin-top: 0.4rem; color: var(--danger); font-weight: 600; }
 .apply-result ul { margin: 0.2rem 0 0 1rem; padding: 0; }
+
+/* ---- Presence: <body data-presence> is the single source of truth for what Kyra is
+   doing (set by setPresence() in app.js). The rings are her face; each state changes
+   only their colour and tempo, so the cue is legible from across the room without
+   reading the label. ---- */
+body[data-presence="listening"] .core-wrap { --inner-speed: 12s; }
+body[data-presence="listening"] .ring-core { stroke: var(--accent); opacity: 0.9; animation: pulse-ring 1.4s ease-in-out infinite; }
+body[data-presence="listening"] .core-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
+body[data-presence="listening"] .core-label { color: var(--accent); }
+
+body[data-presence="speaking"] .core-wrap { --mid-speed: 14s; --inner-speed: 8s; }
+body[data-presence="speaking"] .ring-mid { stroke: var(--accent); opacity: 0.85; animation: pulse-ring 0.9s ease-in-out infinite; }
+body[data-presence="speaking"] .core-label { color: var(--text); text-shadow: 0 0 12px var(--accent-glow); }
+
+body[data-presence="interrupted"] .ring-core,
+body[data-presence="interrupted"] .ring-mid { animation: none; opacity: 0.25; }
+body[data-presence="interrupted"] .core-label { color: var(--text-dim); }
+
+body[data-presence="failed"] .ring-core { stroke: var(--danger); opacity: 0.9; animation: blink 0.9s steps(2, jump-none) infinite; }
+body[data-presence="failed"] .core-dot { fill: var(--danger); animation: none; }
+body[data-presence="failed"] .core-label { color: var(--danger); }
+body[data-presence="failed"] .core-sub { color: var(--danger); }

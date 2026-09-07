@@ -16,6 +16,61 @@ const replyAudio = document.getElementById("reply-audio");
 
 const backendBtns = { auto: btnAuto, claude: btnClaude, local: btnLocal };
 
+// --- Presence: one state for the whole interface -------------------------------
+// A companion's first job is to show what it is doing (idle / listening / thinking /
+// speaking / interrupted / failed - docs/plans/2026-09-07-human-interface.md, point 1).
+// Before this, the core ring knew two states and the mic button five, set from a
+// dozen scattered assignments. Everything now goes through setPresence(): it stamps
+// <body data-presence>, so CSS owns the look, and plays a short earcon on the
+// transitions a voice user cannot see (listen-start, reply-start, failure).
+const PRESENCE_LABELS = {
+  idle: ["STANDBY", "awaiting input"],
+  listening: ["LISTENING", "go ahead"],
+  thinking: ["PROCESSING", "querying model…"],
+  speaking: ["SPEAKING", "click mic to interrupt"],
+  interrupted: ["INTERRUPTED", "listening again"],
+  failed: ["FAULT", "check the connection"],
+};
+let presence = "idle";
+let audioCtx = null;
+
+function earcon(kind) {
+  // Synthesised, not a file: nothing to load, and quiet enough to be a cue rather than a noise.
+  // Skipped entirely when the user asked the OS for less motion - that preference is the
+  // closest thing the browser has to "keep the interface calm".
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const notes = { listening: [[660, 0], [880, 0.09]], speaking: [[523, 0]], failed: [[220, 0], [180, 0.12]] }[kind];
+    if (!notes) return;
+    for (const [freq, at] of notes) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, audioCtx.currentTime + at);
+      gain.gain.exponentialRampToValueAtTime(0.06, audioCtx.currentTime + at + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + at + 0.11);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(audioCtx.currentTime + at);
+      osc.stop(audioCtx.currentTime + at + 0.12);
+    }
+  } catch (_) {
+    // no audio context (autoplay policy, headless) - the visual state is enough
+  }
+}
+
+function setPresence(state, sub) {
+  const changed = state !== presence;
+  presence = state;
+  document.body.dataset.presence = state;
+  const [label, defaultSub] = PRESENCE_LABELS[state] || PRESENCE_LABELS.idle;
+  coreLabel.textContent = label;
+  coreSub.textContent = sub || defaultSub;
+  coreWrap.classList.toggle("is-thinking", state === "thinking");
+  if (changed && (state === "listening" || state === "speaking" || state === "failed")) earcon(state);
+}
+
 function addLine(who, text, meta) {
   const line = document.createElement("div");
   line.className = `line line-${who}`;
@@ -38,9 +93,7 @@ function addLine(who, text, meta) {
 }
 
 function setThinking(on) {
-  coreWrap.classList.toggle("is-thinking", on);
-  coreLabel.textContent = on ? "PROCESSING" : "STANDBY";
-  coreSub.textContent = on ? "querying model…" : "awaiting input";
+  setPresence(on ? "thinking" : "idle", on ? undefined : handsFreeActive ? "hands-free — just start talking" : undefined);
   sendBtn.disabled = on;
   input.disabled = on;
   micBtn.disabled = on;
@@ -72,7 +125,7 @@ async function streamTurn(text) {
       if (!line) {
         line = addLine("kyra", "");
         textNode = line.querySelector(".line-text").lastChild;
-        coreSub.textContent = "responding…";
+        setPresence("thinking", "responding…");
       }
       textNode.textContent += payload;
       transcript.scrollTop = transcript.scrollHeight;
@@ -141,10 +194,15 @@ async function send() {
   } catch (err) {
     addLine("error", `connection lost — ${err.message}`);
     statusText.textContent = "OFFLINE";
-  } finally {
-    setThinking(false);
+    setPresence("failed");
+    sendBtn.disabled = false;
+    input.disabled = false;
+    micBtn.disabled = false;
     input.focus();
+    return;
   }
+  setThinking(false);
+  input.focus();
 }
 
 sendBtn.addEventListener("click", send);
@@ -236,9 +294,14 @@ const MIC_STATE_LABELS = {
 };
 
 function setMicState(state) {
-  micBtn.dataset.state = state; // idle | recording | listening | processing
+  micBtn.dataset.state = state; // idle | recording | listening | processing | speaking
   micBtn.setAttribute("aria-pressed", state === "recording" || state === "listening" ? "true" : "false");
   micLabel.textContent = MIC_STATE_LABELS[state] || state;
+  if (state === "recording") setPresence("listening", "recording — click mic to stop");
+  else if (state === "listening") setPresence("listening", "hands-free — just start talking");
+  else if (state === "processing") setPresence("thinking", "transcribing…");
+  else if (state === "speaking") setPresence("speaking");
+  else if (presence !== "failed") setPresence("idle");
 }
 
 function startOneRecording() {
@@ -266,8 +329,6 @@ function stopOneRecording() {
 function playReply(base64) {
   return new Promise((resolve) => {
     replyAudio.src = `data:audio/wav;base64,${base64}`;
-    coreLabel.textContent = "SPEAKING";
-    coreSub.textContent = "click mic to interrupt";
     setMicState("speaking");
     const done = () => {
       replyAudio.removeEventListener("ended", done);
@@ -283,6 +344,7 @@ function interruptPlayback() {
     replyAudio.pause();
     replyAudio.currentTime = 0;
     addLine("system", "interrupted");
+    setPresence("interrupted");
   }
 }
 
@@ -292,9 +354,6 @@ async function sendVoiceBlob(blob) {
     return;
   }
   setMicState("processing");
-  coreWrap.classList.add("is-thinking");
-  coreLabel.textContent = "PROCESSING";
-  coreSub.textContent = "transcribing…";
   input.disabled = true;
   sendBtn.disabled = true;
   try {
@@ -313,10 +372,8 @@ async function sendVoiceBlob(blob) {
     if (data.reply_audio_b64) await playReply(data.reply_audio_b64);
   } catch (err) {
     addLine("error", `voice turn failed — ${err.message}`);
+    setPresence("failed");
   } finally {
-    coreWrap.classList.remove("is-thinking");
-    coreLabel.textContent = "STANDBY";
-    coreSub.textContent = handsFreeActive ? "hands-free — just start talking" : "awaiting input";
     input.disabled = false;
     sendBtn.disabled = false;
     setMicState(handsFreeActive ? "listening" : "idle");
@@ -337,7 +394,9 @@ async function handlePttClick() {
     });
   } catch (err) {
     addLine("error", `microphone error — ${err.message}`);
-    setMicState("idle");
+    setPresence("failed", "microphone unavailable");
+    micBtn.dataset.state = "idle";
+    micLabel.textContent = MIC_STATE_LABELS.idle;
   }
 }
 

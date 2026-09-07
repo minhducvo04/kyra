@@ -49,10 +49,13 @@ JS/CSS is small (1.5k lines) and every slice below is additive.
 
 ## Slices (each one evening, each verified in a real browser)
 
-1. **Presence states** - one state machine in `app.js` (`idle | listening | thinking | speaking | interrupted |
+1. **Presence states** - DONE 2026-09-07. One state machine in `app.js` (`idle | listening | thinking | speaking | interrupted |
    failed`) driving the core ring, its label, and the mic button together, plus three earcons synthesised with the
    Web Audio API (no asset files): listen-start, reply-start, error. `data-state` on `<body>` so CSS owns the look.
-   -> verify: click through PTT and hands-free in the browser; every transition has a visible and audible cue.
+   -> verified in the running page: all six states stamp `<body data-presence>` and relabel the core; `failed`
+   turns the ring red; a real text turn goes thinking → idle. Earcons are Web Audio sines and are skipped under
+   `prefers-reduced-motion`. The mic-permission block in the automated browser means PTT itself is still a
+   real-Chrome check, as before.
 2. **Streaming chat** - DONE 2026-09-07 (`92a7957`). `POST /api/chat/stream` as SSE (the jobs endpoints already use SSE and `app.js`
    already has the EventSource pattern), fed by an `on_token` callback threaded through `AnthropicLLM.respond()`,
    which already iterates the stream. Tool turns and local turns fall back to one `done` event, so nothing breaks.
