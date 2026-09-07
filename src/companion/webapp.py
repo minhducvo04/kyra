@@ -142,7 +142,10 @@ _draft_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=2500)
 # ~4.5k tokens, and 16000 started failing on it with the truncation marker (2026-09-07,
 # tailoring for Composio) - the same way 6000 failed once the resume passed ~4k. This is
 # a ceiling, not a reservation: raising it costs nothing unless it is used.
-_resume_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=32000)
+# 40000 (2026-09-07): 32000 was already past the SDK's non-streaming limit (~21k tokens), so
+# respond() streams now and the ceiling is free to sit well above any observed output (the
+# largest real fit-loop reply so far was ~13.8k output tokens on ~10k of input).
+_resume_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=40000)
 _autofill_engine = GreenhouseAutofillEngine()
 # apply_pipeline routes by the posting URL's ATS; add a Lever/Ashby engine here when one exists.
 _autofill_engines = {"greenhouse": _autofill_engine}
