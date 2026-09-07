@@ -141,3 +141,76 @@ Reading it:
 - **Decision:** `qwen1.5b-v3` activated via `KYRA_CLASSIFIER_ADAPTER`. `qwen1.5b-hn` stays on disk as the
   rollback. Next: a second seed, and a bait bucket for job-search *advice* questions in general (STAR answers,
   interview prep, salary) since that class now shows up on both sides of the test set.
+
+## Round 4 (2026-09-07): a bucket for career advice, and what a second seed says about round 3
+
+Round 3 shipped on a 1.4-point margin. Two things were owed: a bait bucket for job-search *advice* (round 3
+fixed the salary question but still sent "what does a good STAR answer for Ownership look like" and "what does a
+reposted job mean" to the tool path), and a second training seed to say whether any of these margins are real.
+
+**Method changes, all in code:**
+
+- `tests/data/router_testset_holdout2.jsonl` — a **second held-out set, 17 cases**, written and committed
+  *before* any round-4 data was generated: 8 advice bait (interview detail, negotiating, resume length, cover
+  letters, follow-up etiquette, reposts, when to network, equity), 2 casual bait, and 7 real tool requests in the
+  same domain so an over-corrected model cannot score well by never calling a tool. The generator now blocks both
+  sets; a test asserts the two sets share no message.
+- One new category, `text_hard_negative_jobsearch_advice` (45 examples), and wider `save_memory_note` seeds to
+  cover the bare-imperative shape ("note for later: ...", "jot this down: ...") that v3 was missing.
+- `--seed` on `train`, `--testset`/`--out` on `eval`, and cross-file dedupe in `_load_synth` (each `gen` run only
+  deduped within itself). 1,483 train / 164 valid.
+
+### Two seeds of each dataset, both held-out sets
+
+| Adapter | Data | Seed | Main 72 | Path-only | Holdout2 (17) |
+|---|---|---|---|---|---|
+| qwen1.5b-v3 | round 3 | 7 | 93.1% | 93.1% | 100% |
+| qwen1.5b-v3-s13 | round 3 | 13 | 88.9% | 93.1% | 82.4% |
+| qwen1.5b-v4 | round 4 | 7 | 91.7% | 91.7% | 100% |
+| **qwen1.5b-v4-s13** | round 4 | 13 | **91.7%** | **95.8%** | **100%** |
+| qwen1.5b-hn (round 2) | round 2 | 7 | 87.5%* | 91.7%* | 88.2% |
+
+\* under the round-3 prompt, from the table above.
+
+### What the seed says about round 3 — a correction
+
+**Changing only the training seed moved the same dataset by 4.2 points on the main set and 17.6 points on
+holdout2.** Round 3's headline (v3 93.1% vs the old adapter's 91.7% under the same prompt) is therefore noise:
+its second seed scores 88.9%, below the adapter it replaced. Round 3's own caveat said one case is 1.4 points and
+differences under ~3 points are not meaningful; the seed study says the real noise floor on this setup is larger
+than that, roughly ±4 points on 72 cases. Nothing about round 3's *tool coverage* changes — 11/11 new-tool cases
+is a capability the old adapter did not have, and that was the actual reason to ship it. The accuracy margin was
+not.
+
+### What round 4 actually bought: stability, not points
+
+- **v4 scores identically at both seeds** (91.7 / 91.7 main, 100 / 100 holdout2) where v3 swings. On the mean of
+  two seeds v4 is 91.7 vs v3's 91.0 on the main set and 100 vs 91.2 on holdout2. The gain is that the answer
+  stops depending on the seed.
+- **Both target cases are fixed at both seeds:** the STAR question routes to text, and "note for later: I hate
+  early morning meetings" routes to the memory-note tool (v3 missed it at both seeds — the widened seeds, not the
+  new bucket, fixed that one).
+- **The repost case is still not solved.** "what does a reposted job usually mean" is wrong on v4 seed 7 and
+  right on seed 13; it was right on v3 seed 7 and wrong on v3 seed 13. Four runs, two each way: this case is a
+  coin flip, not a fixed failure. It happens to be right in the shipped adapter.
+- **Holdout2 says the bucket generalizes**, on cases that never informed the data: 17/17 at both v4 seeds,
+  including all 7 real tool requests, so the advice bucket did not teach it to under-call tools.
+
+### Decision, and the part that inflates the number
+
+Shipped **`qwen1.5b-v4-s13`** via `KYRA_CLASSIFIER_ADAPTER`. The tie-break was stated before looking at the
+misses: the two v4 seeds have identical accuracy and identical holdout2, so take the higher **path-only** score,
+since a wrong path calls or skips a tool loop while a wrong backend still answers. Said plainly: **choosing
+between two seeds by their held-out score is checkpoint selection, and the 95.8% path-only it produces is
+optimistic** — the honest summary of round 4 is "91.7% ±0 across seeds, 100% on the second held-out set."
+`qwen1.5b-v3` and `qwen1.5b-hn` stay on disk as rollbacks.
+
+Remaining misses on the shipped adapter, all long-standing: three path errors ("what's the news with my sister
+lately", "I applied a patch to the router yesterday", "add a note to the design doc that we chose SQLite" — the
+last two unfixed since round 2) and three backend-only calls on casual bait that a second labeler could score
+either way. Verified through the real `TurnRouter`: 13/13 paths correct, including every case that was wrong in
+production before this round.
+
+Next, in order: a third seed would tighten the error bars further, but the cheaper win is that the main set is
+now the *only* thing every round is tuned against — the honest move for round 5 is another independent set, or
+folding real `router.log` turns in once enough have accumulated.

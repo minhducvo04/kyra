@@ -2,6 +2,7 @@ import json
 
 from companion.router_ft import (
     CATEGORIES,
+    TESTSET2_PATH,
     Example,
     Prediction,
     generate_synthetic,
@@ -21,6 +22,17 @@ def test_testset_is_well_formed_and_balanced_enough():
     assert len(rows) >= 50
     assert {r.path for r in rows} == {"tool", "text"} and {r.backend for r in rows} == {"claude", "local"}
     assert all(r.backend == "claude" for r in rows if r.path == "tool")
+
+
+def test_second_holdout_set_is_well_formed_and_disjoint():
+    """The round-4 advice/outreach set: same shape as the main one, and no
+    message shared with it - two overlapping 'held-out' sets would double-count
+    whatever they share."""
+    rows = load_testset(TESTSET2_PATH)
+    assert len(rows) >= 15
+    assert {r.path for r in rows} == {"tool", "text"} and {r.backend for r in rows} == {"claude", "local"}
+    assert all(r.backend == "claude" for r in rows if r.path == "tool")
+    assert not {r.message for r in rows} & {r.message for r in load_testset()}
 
 
 def test_parse_json_array_tolerates_fences_and_prose():
