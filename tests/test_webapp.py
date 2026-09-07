@@ -244,7 +244,9 @@ def test_apply_jobs_queue_one_per_url_and_run(client, monkeypatch):
     assert second["status"] == "done" and second["result"]["status"] == "needs_attention"
     assert any("no autofill engine for ashby" in a for a in second["result"]["attention"])
     statuses = {a["company"]: a["status"] for a in client.get("/api/job/applications").json()["applications"]}
-    assert statuses["Meridian"] == "ready_to_submit" and statuses["netic"] == "needs_attention"
+    # "Netic", not the "netic" board slug: Ashby returns only the slug and it would
+    # otherwise reach an employer in the tailored resume's filename.
+    assert statuses["Meridian"] == "ready_to_submit" and statuses["Netic"] == "needs_attention"
 
 
 def test_apply_jobs_validation(client, monkeypatch):

@@ -32,6 +32,15 @@ class FetchedPosting:
     location: str
 
 
+def _company_name(source: str, token: str) -> str:
+    """Ashby and Lever hand back only the board slug, and that slug becomes the
+    tracker's company and the tailored resume's filename. Prefer the name Duc gave
+    the board in his watchlist, else a title-cased slug - never a raw "retell-ai"."""
+    from companion.job_boards import company_for_token, titleize_token
+
+    return company_for_token(source, token) or titleize_token(token)
+
+
 def parse_posting_url(url: str) -> tuple[str, str, str] | None:
     """(source, board token, job id) for the three boards; None otherwise."""
     m = re.search(r"(?:boards|job-boards)\.greenhouse\.io/([A-Za-z0-9_-]+)/jobs/(\d+)", url)
@@ -76,7 +85,7 @@ def fetch_posting(url: str, fetch_json=_get_json) -> FetchedPosting:
         parts.append(j.get("additionalPlain") or "")
         ts = j.get("createdAt")
         return FetchedPosting(
-            source=source, company=token, title=(j.get("text") or "").strip(), text="\n\n".join(p for p in parts if p),
+            source=source, company=_company_name(source, token), title=(j.get("text") or "").strip(), text="\n\n".join(p for p in parts if p),
             url=j.get("hostedUrl") or url,
             posted_at=datetime.fromtimestamp(ts / 1000).astimezone().isoformat() if ts else "",
             location=(j.get("categories") or {}).get("location", ""),
@@ -85,7 +94,7 @@ def fetch_posting(url: str, fetch_json=_get_json) -> FetchedPosting:
     for j in data.get("jobs", []):
         if str(j.get("id")) == job_id:
             return FetchedPosting(
-                source=source, company=token, title=(j.get("title") or "").strip(),
+                source=source, company=_company_name(source, token), title=(j.get("title") or "").strip(),
                 text=j.get("descriptionPlain") or _html_to_text(j.get("descriptionHtml", "")),
                 url=j.get("jobUrl") or url, posted_at=j.get("publishedAt") or "", location=j.get("location") or "",
             )

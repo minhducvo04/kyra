@@ -150,6 +150,35 @@ class WatchEntry:
     title_keywords: list[str]  # case-insensitive; a posting matches if ANY keyword is in the title ([] = all)
 
 
+# Small words that should not be title-cased into "Ai" / "Hq" when a board slug is
+# all we have to go on.
+_UPPER_WORDS = {"ai", "ml", "hq", "io", "ux", "ui", "api", "xr", "vr"}
+
+
+def titleize_token(token: str) -> str:
+    """A board slug rendered as a company name: "retell-ai" -> "Retell AI"."""
+    words = [w for w in re.split(r"[-_]+", token) if w]
+    return " ".join(w.upper() if w.lower() in _UPPER_WORDS else w.capitalize() for w in words)
+
+
+def company_for_token(source: str, token: str, path: Path = WATCHLIST_PATH) -> str | None:
+    """The display name Duc gave this board in the watchlist, if he watches it.
+
+    Boards differ: Greenhouse returns a real `company_name`, while Ashby and Lever
+    return nothing but the slug, so a posting fetched from them was tracked as
+    "composio" or "retell-ai" - and that string ends up in the resume FILENAME an
+    employer receives. The watchlist is a curated local mapping already, so it is
+    the right source; titleize_token() is the fallback for a board he does not watch.
+    """
+    try:
+        for entry in load_watchlist(path):
+            if entry.source == source and entry.token.lower() == token.lower():
+                return entry.company
+    except Exception:  # noqa: BLE001 - a missing or malformed watchlist must not break a fetch
+        return None
+    return None
+
+
 def load_watchlist(path: Path = WATCHLIST_PATH) -> list[WatchEntry]:
     if not path.exists():
         return []

@@ -28,7 +28,9 @@ def test_parse_and_fetch_three_boards():
     lv = fetch_posting("https://jobs.lever.co/palantir/94984771-0704-446c-88c6-91ce748f6d92", _fake)
     assert lv.title.startswith("Software Engineer") and "Ownership" in lv.text and "authorized" in lv.text and lv.posted_at
     ab = fetch_posting("https://jobs.ashbyhq.com/netic/d9bcb6a2-0e54-4cb3-baec-43f2d74db18f", _fake)
-    assert ab.company == "netic" and ab.text.startswith("Join the Agent Platform team")
+    # Ashby returns only the board slug; the fetcher titles it (or takes the watchlist
+    # name) because this string becomes the tailored resume's filename.
+    assert ab.company == "Netic" and ab.text.startswith("Join the Agent Platform team")
 
 
 def test_target_tool_logs_targeting_entry_with_signals_and_dedups(tmp_path):
@@ -50,3 +52,26 @@ def test_target_tool_needs_text_for_unknown_sites(tmp_path):
                    company="Netic", role="Software Engineer (Agent Platform) - New Grad")
     assert out["created"] and out["application"]["link"].endswith("/4438446984/")
     assert "error" in tool.run(url="https://example.com/job", posting_text="text but no company")
+
+
+def test_company_name_comes_from_the_watchlist_not_the_board_slug(tmp_path):
+    """Ashby and Lever return only the slug, and that string becomes the tracker's
+    company and the tailored resume's FILENAME - "retell-ai" would reach an employer."""
+    import json
+
+    from companion.job_boards import company_for_token, titleize_token
+
+    wl = tmp_path / "watchlist.json"
+    wl.write_text(json.dumps([
+        {"company": "Retell", "source": "ashby", "token": "retell-ai", "title_keywords": []},
+        {"company": "Applied Intuition", "source": "ashby", "token": "applied", "title_keywords": []},
+    ]))
+    assert company_for_token("ashby", "retell-ai", wl) == "Retell"
+    assert company_for_token("ashby", "APPLIED", wl) == "Applied Intuition"  # slug case is ignored
+    assert company_for_token("lever", "retell-ai", wl) is None  # right slug, wrong board
+    assert company_for_token("ashby", "unwatched", wl) is None
+    assert company_for_token("ashby", "retell-ai", tmp_path / "missing.json") is None  # never raises
+
+    assert titleize_token("retell-ai") == "Retell AI"
+    assert titleize_token("composio") == "Composio"
+    assert titleize_token("some_new_co") == "Some New Co"
