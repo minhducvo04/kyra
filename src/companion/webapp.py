@@ -14,6 +14,7 @@ import logging
 import time
 from dataclasses import asdict
 from functools import cached_property
+from pathlib import Path
 
 from anthropic import Anthropic
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -21,6 +22,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from companion.apply_pipeline import ApplyError, run_apply_pipeline
 from companion.config import require_api_key
 from companion.conversation import ConversationManager
 from companion.db import engine_for_store
@@ -41,6 +43,7 @@ from companion.job_applications import (
 )
 from companion.job_autofill import GreenhouseAutofillEngine
 from companion.job_documents import JobDocumentStore
+from companion.job_posting_fetch import fetch_posting as _fetch_posting
 from companion.jobs import DbJobQueue, Handler, start_inline_worker
 from companion.learning import LearningStore
 from companion.llm import AnthropicLLM, LazyBackends, build_llm
@@ -134,8 +137,15 @@ _draft_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=2500)
 # real resume's output size. Separate instance/budget from _draft_llm,
 # which stays sized for cover letters/bullets (already verified clean
 # at 2500 - much shorter output, doesn't need this).
-_resume_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=16000)
+# Every fit-loop iteration must return a COMPLETE document, not a diff, and Sonnet's
+# adaptive thinking is charged against the same ceiling. The base resume has grown to
+# ~4.5k tokens, and 16000 started failing on it with the truncation marker (2026-09-07,
+# tailoring for Composio) - the same way 6000 failed once the resume passed ~4k. This is
+# a ceiling, not a reservation: raising it costs nothing unless it is used.
+_resume_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=32000)
 _autofill_engine = GreenhouseAutofillEngine()
+# apply_pipeline routes by the posting URL's ATS; add a Lever/Ashby engine here when one exists.
+_autofill_engines = {"greenhouse": _autofill_engine}
 _job_documents = JobDocumentStore()
 _memory_notes = MarkdownMemoryNotesStore()
 
@@ -583,7 +593,35 @@ def _run_latex_resume_job(payload: dict, on_progress) -> dict:
     ).model_dump()
 
 
-HANDLERS: dict[str, Handler] = {"latex_resume": _run_latex_resume_job}
+def _apply_base_latex() -> str:
+    """The .tex every mass-apply resume is tailored from (Settings.resume_base_tex). A missing file is a
+    configuration error worth a clear message, not a silent fallback to something else."""
+    path = Path(get_settings().resume_base_tex)
+    if not path.is_absolute():
+        path = DATA_DIR / path
+    if not path.is_file():
+        raise ApiError(409, "no_base_resume", f"base resume LaTeX not found: {path} - set KYRA_RESUME_BASE_TEX")
+    return path.read_text(encoding="utf-8")
+
+
+def _run_apply_job(payload: dict, on_progress) -> dict:
+    """Job handler: one posting URL through apply_pipeline.run_apply_pipeline. Extra facts are the
+    same Memory Notes block every resume path already reads (via _pick_resume_source with no
+    resume of its own)."""
+    _, extra_facts, _ = _pick_resume_source("", "", None)
+    try:
+        result = run_apply_pipeline(
+            payload["url"], store=_job_store, resume_llm=_resume_llm, draft_llm=_draft_llm,
+            base_latex=_apply_base_latex(), profile=load_profile(), engines=_autofill_engines, extra_facts=extra_facts,
+            posting_text=payload.get("posting_text", ""), company=payload.get("company", ""), role=payload.get("role", ""),
+            cover_letter=payload.get("cover_letter", "auto"), fetch=_fetch_posting, on_progress=on_progress,
+        )
+    except ApplyError as e:
+        raise ApiError(400, "apply_failed", str(e)) from e
+    return asdict(result)
+
+
+HANDLERS: dict[str, Handler] = {"latex_resume": _run_latex_resume_job, "apply": _run_apply_job}
 
 
 @app.on_event("startup")
@@ -620,6 +658,36 @@ def enqueue_draft_job(
         "background_document_ids": ",".join(doc_ids), "include_github": include_github,
     })
     return {"id": job_id, "kind": "latex_resume", "status": "queued"}
+
+
+class ApplyIn(BaseModel):
+    urls: list[str]
+    cover_letter: str = "auto"  # auto (only when the posting mentions one) | always | never
+    posting_text: str = ""  # for a single non-board URL (LinkedIn, a company site) - pasted text
+    company: str = ""
+    role: str = ""
+
+
+@app.post("/api/jobs/apply")
+def enqueue_apply_jobs(body: ApplyIn) -> dict:
+    """Mass apply: one queued job per posting URL. The worker runs them in order, each one
+    opening its own filled browser window; nothing is submitted (apply_pipeline.py)."""
+    urls = [u.strip() for u in body.urls if u.strip()]
+    if not urls:
+        raise ApiError(400, "no_urls", "paste at least one posting URL")
+    if body.cover_letter not in ("auto", "always", "never"):
+        raise ApiError(400, "bad_cover_letter", "cover_letter must be auto, always or never")
+    if body.posting_text and len(urls) > 1:
+        raise ApiError(400, "text_needs_one_url", "pasted posting text applies to exactly one URL")
+    _apply_base_latex()  # fail now, not inside every queued job
+    ids = [
+        _queue.enqueue("apply", {
+            "url": u, "cover_letter": body.cover_letter, "posting_text": body.posting_text,
+            "company": body.company, "role": body.role,
+        })
+        for u in urls
+    ]
+    return {"jobs": [{"id": i, "url": u, "kind": "apply", "status": "queued"} for i, u in zip(ids, urls, strict=True)]}
 
 
 @app.get("/api/jobs/{job_id}")

@@ -35,9 +35,10 @@ not an afterthought.
 """
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 from companion.paths import DATA_DIR
 from companion.profile import ApplicantProfile, load_profile
@@ -216,6 +217,58 @@ class GreenhouseAutofillEngine(AutofillEngine):
         return str(path)
 
 
+_MIN_COMPANY_SLUG = 4
+
+
+def _normalize_url(url: str) -> str:
+    """Host + path, lowercased, no scheme/query/fragment/trailing slash - so a
+    tracked link and the URL Duc pastes match even when one carries a
+    `?gh_src=` tracking parameter."""
+    u = urlparse(url.strip())
+    host = (u.netloc or "").lower().removeprefix("www.")
+    return f"{host}{(u.path or '').rstrip('/').lower()}"
+
+
+def resume_for_url(url: str, applications: list) -> tuple[str | None, str]:
+    """The company-tailored resume to attach for this posting, and why.
+
+    Duc's rule (2026-09-07): one resume per company, tailored to that
+    company's environment and specialisation. So the resume travels with the
+    tracked application, and the profile default is only the fallback.
+
+    Matching, most certain first: the same posting URL, then exactly one
+    tracked company whose name appears in the URL (Greenhouse and Ashby both
+    put the company slug in the path). An ambiguous match attaches nothing
+    and says so - sending the wrong company's resume is worse than sending
+    the general one.
+    """
+    target = _normalize_url(url)
+    by_url = [a for a in applications if a.link and _normalize_url(a.link) == target]
+    if len(by_url) == 1:
+        app = by_url[0]
+        if app.resume_path:
+            return app.resume_path, f"tracked application #{app.id} ({app.company}) matched this URL"
+        return None, f"tracked application #{app.id} ({app.company}) has no resume set - using the profile default"
+
+    slug = re.sub(r"[^a-z0-9]+", "", target)
+    by_company = []
+    for a in applications:
+        if not (a.resume_path and a.company):
+            continue
+        name = re.sub(r"[^a-z0-9]+", "", a.company.lower())
+        # A very short name is a substring of half the internet ("AI" is inside
+        # "openai"), so names under four characters must match by URL instead.
+        if len(name) >= _MIN_COMPANY_SLUG and name in slug:
+            by_company.append(a)
+    if len(by_company) == 1:
+        app = by_company[0]
+        return app.resume_path, f"company {app.company!r} matched the URL (application #{app.id})"
+    if len(by_company) > 1:
+        names = ", ".join(a.company for a in by_company)
+        return None, f"several tracked companies match this URL ({names}) - using the profile default"
+    return None, "no tracked application matched this URL - using the profile default"
+
+
 class AutofillJobApplicationTool(Tool):
     name = "autofill_job_application"
     description = (
@@ -234,9 +287,19 @@ class AutofillJobApplicationTool(Tool):
         "required": ["url"],
     }
 
-    def __init__(self, engine: AutofillEngine | None = None, profile: ApplicantProfile | None = None):
+    def __init__(
+        self, engine: AutofillEngine | None = None, profile: ApplicantProfile | None = None, applications=None,
+    ):
         self._engine = engine or GreenhouseAutofillEngine()
         self._profile = profile
+        self._applications = applications
+
+    def _applications_list(self) -> list:
+        if self._applications is not None:
+            return self._applications.list()
+        from companion.job_applications import JobApplicationStore
+
+        return JobApplicationStore().list()
 
     def run(self, url: str) -> dict:
         profile = self._profile or load_profile()
@@ -247,16 +310,30 @@ class AutofillJobApplicationTool(Tool):
                 "missing_fields": missing,
                 "fix": "edit data/applicant_profile.json (or ask Duc to fill it in) before trying again",
             }
+
+        # One resume per company: prefer the tracked application's own file.
+        try:
+            tailored, why = resume_for_url(url, self._applications_list())
+        except Exception as e:  # noqa: BLE001 - a tracker read must never block an application
+            tailored, why = None, f"couldn't read the tracker ({type(e).__name__}) - using the profile default"
+        if tailored and not Path(tailored).is_file():
+            why = f"{why}, but that file is missing ({tailored}) - using the profile default"
+            tailored = None
+        if tailored:
+            profile = replace(profile, resume_path=tailored)
+
         report = self._engine.fill(url, profile)
         return {
             "url": url,
             "filled_count": len(report.filled),
             "skipped_count": len(report.skipped),
             "skipped_labels": [s.label for s in report.skipped],
+            "resume_attached": Path(profile.resume_path).name,
+            "resume_choice": why,
             "summary_path": report.summary_path,
             "note": "browser window left open for review - nothing was submitted",
         }
 
 
-def job_autofill_tools(engine: AutofillEngine | None = None) -> list[Tool]:
-    return [AutofillJobApplicationTool(engine=engine)]
+def job_autofill_tools(engine: AutofillEngine | None = None, applications=None) -> list[Tool]:
+    return [AutofillJobApplicationTool(engine=engine, applications=applications)]

@@ -37,7 +37,12 @@ DB_PATH = DATA_DIR / "job_applications.db"
 logger = logging.getLogger(__name__)
 
 # targeting: found the role, doing outreach, not applied yet. referral_pending: applied, a referral is in flight.
-VALID_STATUSES = {"targeting", "applied", "referral_pending", "interviewing", "offer", "rejected", "withdrawn"}
+# ready_to_submit / needs_attention: set by apply_pipeline.py - the form is filled and waiting for Duc's click, or
+# something needs him first. Only Duc moves an application to applied.
+VALID_STATUSES = {
+    "targeting", "ready_to_submit", "needs_attention", "applied", "referral_pending", "interviewing", "offer", "rejected",
+    "withdrawn",
+}
 
 NO_SPECIFIC_JOB = (
     "(No specific posting given - draft general-purpose material aimed at Duc's ideal target role, "
@@ -110,6 +115,7 @@ class JobApplication:
     notes: str | None
     created_at: str
     updated_at: str
+    resume_path: str | None = None
 
 
 class JobApplicationStore:
@@ -118,17 +124,35 @@ class JobApplicationStore:
 
     def add(
         self, company: str, role: str, link: str | None = None, notes: str | None = None, status: str = "applied",
+        resume_path: str | None = None,
     ) -> JobApplication:
         if status not in VALID_STATUSES:
             raise ValueError(f"status must be one of {sorted(VALID_STATUSES)}, got {status!r}")
         now = datetime.now(UTC).isoformat()
         with self._engine.begin() as conn:
             res = conn.execute(insert(JA).values(
-                company=company, role=role, link=link, status=status, notes=notes, created_at=now, updated_at=now,
+                company=company, role=role, link=link, status=status, notes=notes,
+                resume_path=resume_path, created_at=now, updated_at=now,
             ))
         return JobApplication(
             id=res.inserted_primary_key[0], company=company, role=role, link=link, status=status,
-            notes=notes, created_at=now, updated_at=now,
+            notes=notes, created_at=now, updated_at=now, resume_path=resume_path,
+        )
+
+    def set_resume(self, app_id: int, resume_path: str | None) -> JobApplication | None:
+        """Point one application at the resume autofill should attach for it.
+        The file is not required to exist yet (Duc may tailor it later); the
+        autofill path checks and falls back to the profile default with a
+        warning rather than attaching nothing."""
+        with self._engine.begin() as conn:
+            row = conn.execute(select(JA).where(JA.c.id == app_id)).first()
+            if row is None:
+                return None
+            now = datetime.now(UTC).isoformat()
+            conn.execute(update(JA).where(JA.c.id == app_id).values(resume_path=resume_path, updated_at=now))
+        return JobApplication(
+            id=app_id, company=row.company, role=row.role, link=row.link, status=row.status,
+            notes=row.notes, created_at=row.created_at, updated_at=now, resume_path=resume_path,
         )
 
     def list(self, status: str | None = None) -> list[JobApplication]:
@@ -152,7 +176,7 @@ class JobApplicationStore:
             conn.execute(update(JA).where(JA.c.id == app_id).values(status=status, notes=new_notes, updated_at=now))
         return JobApplication(
             id=app_id, company=row.company, role=row.role, link=row.link, status=status,
-            notes=new_notes, created_at=row.created_at, updated_at=now,
+            notes=new_notes, created_at=row.created_at, updated_at=now, resume_path=row.resume_path,
         )
 
 
@@ -187,7 +211,7 @@ class AddJobApplicationTool(Tool):
 
 class ListJobApplicationsTool(Tool):
     name = "list_job_applications"
-    description = "List Duc's tracked job applications, optionally filtered by status (targeting/applied/referral_pending/interviewing/offer/rejected/withdrawn)."
+    description = "List Duc's tracked job applications, optionally filtered by status (targeting/ready_to_submit/needs_attention/applied/referral_pending/interviewing/offer/rejected/withdrawn)."
     input_schema = {
         "type": "object",
         "properties": {"status": {"type": "string", "enum": sorted(VALID_STATUSES)}},
@@ -204,7 +228,7 @@ class ListJobApplicationsTool(Tool):
 class UpdateJobApplicationStatusTool(Tool):
     name = "update_job_application_status"
     description = (
-        "Update a tracked job application's status (targeting/applied/referral_pending/interviewing/offer/rejected/withdrawn), "
+        "Update a tracked job application's status (targeting/ready_to_submit/needs_attention/applied/referral_pending/interviewing/offer/rejected/withdrawn), "
         "by its id from list_job_applications."
     )
     input_schema = {
@@ -1016,9 +1040,36 @@ class DraftApplicationMaterialTool(Tool):
         return {"material_type": material_type, "draft": final}
 
 
+class SetApplicationResumeTool(Tool):
+    name = "set_application_resume"
+    description = "Point one tracked job application at the company-tailored resume PDF autofill should attach for it."
+    input_schema = {
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+            "resume_path": {"type": "string", "description": "Path to the tailored PDF, or empty to clear it"},
+        },
+        "required": ["id", "resume_path"],
+    }
+
+    def __init__(self, store: JobApplicationStore):
+        self._store = store
+
+    def run(self, id: int, resume_path: str) -> dict:
+        path = resume_path.strip() or None
+        app = self._store.set_resume(id, path)
+        if app is None:
+            return {"error": f"no application with id {id}"}
+        result = {"id": app.id, "company": app.company, "resume_path": app.resume_path}
+        if path and not Path(path).is_file():
+            result["warning"] = f"saved, but no file at {path} yet - autofill will fall back to the profile default"
+        return result
+
+
 def job_application_tools(store: JobApplicationStore | None = None, llm: AnthropicLLM | None = None) -> list[Tool]:
     store = store or JobApplicationStore()
-    tools = [AddJobApplicationTool(store), ListJobApplicationsTool(store), UpdateJobApplicationStatusTool(store)]
+    tools = [AddJobApplicationTool(store), ListJobApplicationsTool(store), UpdateJobApplicationStatusTool(store),
+             SetApplicationResumeTool(store)]
     if llm is not None:
         tools.append(DraftApplicationMaterialTool(llm))
     return tools

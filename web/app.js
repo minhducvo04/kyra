@@ -796,6 +796,110 @@ fitCopy.addEventListener("click", async () => {
   }
 });
 
+/* -- apply (mass apply) -- */
+
+const applyUrls = document.getElementById("apply-urls");
+const applyCoverLetter = document.getElementById("apply-cover-letter");
+const applyRunBtn = document.getElementById("apply-run");
+const applyJobs = document.getElementById("apply-jobs");
+
+/* One card per queued job: live progress lines, then the verdict. The worker runs the
+   jobs one at a time, so cards fill in from the top. */
+function applyCard(job) {
+  const card = document.createElement("div");
+  card.className = "apply-card";
+  const head = document.createElement("div");
+  head.className = "apply-card-head";
+  const url = document.createElement("a");
+  url.href = job.url; url.target = "_blank"; url.rel = "noopener"; url.textContent = job.url;
+  const status = document.createElement("span");
+  status.className = "apply-status"; status.textContent = "queued";
+  head.appendChild(url); head.appendChild(status);
+  const live = document.createElement("ul");
+  live.className = "draft-live";
+  const result = document.createElement("div");
+  result.className = "apply-result"; result.hidden = true;
+  card.appendChild(head); card.appendChild(live); card.appendChild(result);
+  applyJobs.appendChild(card);
+
+  const es = new EventSource(`/api/jobs/${job.id}/events`);
+  // The server's terminal `event: error` shares its name with EventSource's own connection error,
+  // so the native handler must not overwrite a verdict that already landed.
+  let finished = false;
+  es.addEventListener("progress", (e) => {
+    status.textContent = "running";
+    const li = document.createElement("li"); li.textContent = e.data; live.appendChild(li);
+  });
+  es.addEventListener("done", (e) => {
+    finished = true; es.close();
+    const r = JSON.parse(e.data);
+    status.textContent = r.status.replace("_", " ");
+    status.classList.add(r.status === "ready_to_submit" ? "is-ok" : "is-bad");
+    result.innerHTML = "";
+    const who = document.createElement("div");
+    who.className = "apply-who";
+    who.textContent = `${r.company} — ${r.role} (tracker #${r.application_id})`;
+    result.appendChild(who);
+    if (r.resume_pdf_path) {
+      const p = document.createElement("div");
+      p.textContent = `resume: ${r.resume_pdf_path.split("/").pop()} — ${r.resume_fit ? "one page" : `${r.page_count} pages`}${r.change_summary ? `; ${r.change_summary}` : ""}`;
+      result.appendChild(p);
+    }
+    if (r.cover_letter_path) {
+      const p = document.createElement("div");
+      p.textContent = `cover letter: ${r.cover_letter_path.split("/").pop()} (paste it in yourself)`;
+      result.appendChild(p);
+    }
+    if (r.autofill_summary_path) {
+      const p = document.createElement("div");
+      p.textContent = `form: ${r.autofill_filled} field(s) filled, ${r.autofill_skipped.length} left for you${r.autofill_skipped.length ? `: ${r.autofill_skipped.join(", ")}` : ""}`;
+      result.appendChild(p);
+    }
+    if (r.attention.length) {
+      const h = document.createElement("div"); h.className = "apply-attention-head"; h.textContent = "Needs you:";
+      const ul = document.createElement("ul");
+      r.attention.forEach((a) => { const li = document.createElement("li"); li.textContent = a; ul.appendChild(li); });
+      result.appendChild(h); result.appendChild(ul);
+    }
+    if (r.questions && r.questions.length) {
+      const h = document.createElement("div"); h.className = "apply-attention-head"; h.textContent = "Bullets that would be stronger with a real number:";
+      const ul = document.createElement("ul");
+      r.questions.forEach((q) => { const li = document.createElement("li"); li.textContent = q; ul.appendChild(li); });
+      result.appendChild(h); result.appendChild(ul);
+    }
+    result.hidden = false;
+    loadTrackerList();
+  });
+  es.addEventListener("error", (e) => {
+    if (finished || !e.data) return;
+    finished = true; es.close();
+    status.textContent = "failed"; status.classList.add("is-bad");
+    result.textContent = e.data; result.hidden = false;
+  });
+  es.onerror = () => { if (finished) return; es.close(); status.textContent = "lost stream"; status.classList.add("is-bad"); };
+}
+
+applyRunBtn.addEventListener("click", async () => {
+  const urls = applyUrls.value.split("\n").map((u) => u.trim()).filter(Boolean);
+  if (!urls.length) return;
+  applyRunBtn.disabled = true;
+  applyRunBtn.textContent = "Queueing…";
+  try {
+    const data = await readJson(await fetch("/api/jobs/apply", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls, cover_letter: applyCoverLetter.value }),
+    }));
+    data.jobs.forEach(applyCard);
+    applyUrls.value = "";
+  } catch (err) {
+    const p = document.createElement("p"); p.className = "jobs-warnings"; p.textContent = `couldn't queue — ${err.message}`;
+    applyJobs.prepend(p);
+  } finally {
+    applyRunBtn.disabled = false;
+    applyRunBtn.textContent = "Apply to all";
+  }
+});
+
 /* -- tracker -- */
 
 const trackerCompany = document.getElementById("tracker-company");
@@ -804,7 +908,7 @@ const trackerLink = document.getElementById("tracker-link");
 const trackerAddBtn = document.getElementById("tracker-add");
 const trackerList = document.getElementById("tracker-list");
 
-const STATUSES = ["targeting", "applied", "referral_pending", "interviewing", "offer", "rejected", "withdrawn"];
+const STATUSES = ["targeting", "ready_to_submit", "needs_attention", "applied", "referral_pending", "interviewing", "offer", "rejected", "withdrawn"];
 
 async function loadTrackerList() {
   trackerList.textContent = "loading…";
