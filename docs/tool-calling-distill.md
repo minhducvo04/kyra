@@ -5,8 +5,9 @@ _Run 2026-09-06 on an Apple M5 Max (36 GB), MLX 0.32 / mlx-lm 0.31.3. Code: `src
 
 ## The question
 
-Every `tool` turn today goes to Claude through the real Anthropic tool-use loop, carrying ~2,020 tokens of tool
-schemas (measured with the student's own tokenizer: 158-token prompt without them, 2,178 with). `docs/router-model-benchmark.md` (2026-09-02) found Qwen2.5-7B flawless on an 11-case tool suite and
+Every `tool` turn today goes to Claude through the real Anthropic tool-use loop, carrying a few thousand tokens of tool
+schemas (measured with the student's own tokenizer: 2,020 tokens for the 15 tools this experiment ran on, 3,234
+for the 23 registered after the outreach and posting-signals work - the block grows with the registry). `docs/router-model-benchmark.md` (2026-09-02) found Qwen2.5-7B flawless on an 11-case tool suite and
 called that too small and too clean to act on. This is the harder suite, the distillation, and the measurement:
 can a local model, LoRA-tuned on Claude's own traces, make the same calls with the same arguments - and refuse to
 call anything on keyword bait - at $0/turn?

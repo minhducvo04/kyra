@@ -196,7 +196,7 @@ def main():
     b.add_argument("--name", default="full")
     b.add_argument("--seed", type=int, default=7)
     b.add_argument("--tokenizer", default=STUDENT_REPO, help="tokenizer used to measure row lengths")
-    b.add_argument("--max-seq-length", type=int, default=4096, help="the value you intend to train with")
+    b.add_argument("--max-seq-length", type=int, default=6144, help="the value you intend to train with")
     b.set_defaults(fn=cmd_build)
     tr = sub.add_parser("train")
     tr.add_argument("--name", required=True)
@@ -210,7 +210,10 @@ def main():
     tr.add_argument("--batch-size", type=int, default=1)
     tr.add_argument("--num-layers", type=int, default=8)
     tr.add_argument("--lr", type=float, default=1e-4)
-    tr.add_argument("--max-seq-length", type=int, default=4096)
+    # Rows grow with the tool registry: 15 tools put the schema block at ~2.0k tokens, 23 put it at
+    # ~3.2k, and a two-call trace with a listing result sits ~900 tokens above that. Adding a tool
+    # therefore lengthens every training row - keep this above what `build` reports.
+    tr.add_argument("--max-seq-length", type=int, default=6144)
     tr.add_argument("--no-grad-checkpoint", dest="grad_checkpoint", action="store_false",
                     help="store activations instead of recomputing them (faster, much more memory)")
     tr.set_defaults(fn=cmd_train)

@@ -276,7 +276,10 @@ def test_row_token_lengths_measures_real_rows(schemas):
     assert len(lengths) == 4
     assert all(n > 1500 for n in lengths)  # the tool schemas alone are ~2k tokens
     assert lengths[-1] > lengths[0]  # a two-call trace's final row is the longest
-    assert max(lengths) < 4096  # the training --max-seq-length default
+    # Rows grow with the tool registry (15 tools ~2.0k schema tokens, 23 ~3.2k), so this
+    # tracks the --max-seq-length default rather than a fixed number; when it fails, raise
+    # the default rather than truncating the assistant turn being trained.
+    assert max(lengths) < 6144
 
 
 def test_registry_results_are_recorded_including_errors(schemas):
