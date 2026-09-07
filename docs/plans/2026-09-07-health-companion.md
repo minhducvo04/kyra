@@ -48,6 +48,43 @@ serious about it, at a sane price.
 | Xiaomi Smart Band 10 | band with a screen | syncs activity, sleep, HR via Mi Fitness | Chinese vendor, same class of concern as Amazfit | ~$50 |
 | Samsung Galaxy Fit 3 | — | **nothing: it does not work with an iPhone at all** | — | — |
 
+### The Apple Watch, which should not have been dropped
+
+Duc wears a traditional watch he loves, and the first revision of this plan treated that as a reason to remove the
+Apple Watch from the table. That was wrong: it is a *form-factor* preference to weigh, not a veto, and on the two
+criteria he stressed most for the project - "a lot to work with" and "I don't want my data breached or taken away" -
+the Apple Watch is the strongest option here.
+
+| | Apple Watch SE 3 | Apple Watch Series 11 |
+|---|---|---|
+| Price | **$239** (40 mm) / $269 (44 mm) | $399 (42 mm) / $429 (46 mm) |
+| Weight | 33 g (44 mm) | **29.7 g (42 mm)** - the same as the Polar Loop |
+| Health data | sleep stages + Sleep Score, HR, HRV, activity, respiratory rate | all of that plus **ECG, blood oxygen, wrist temperature, hypertension notifications** |
+| Battery | 18 h (32 h low power), 0-80% in ~45 min | 24 h (38 h low power) |
+
+What no band or ring can match:
+- **It writes to HealthKit natively.** Every other option goes device → vendor app → vendor cloud → Apple Health.
+  The watch is already inside the store this whole architecture reads from - no third-party account, no sync lag.
+- **Privacy is its strongest axis, and the earlier table gave it no credit while ruling others out on exactly
+  that.** No outside company holds the data at all.
+- **It is a programmable platform, not just a sensor.** A watchOS app can start a workout session to sample heart
+  rate at high rate for custom HRV work, put Kyra on a complication, and deliver haptics. For "I plan to keep
+  building this", that is a different category from a band that only posts a daily summary.
+- **A silent haptic wake-up**, which the sleep routine wants and which nothing else on this page offers.
+
+The real costs, which are not small:
+- **It is a watch.** Worn opposite a traditional watch it is the most visible option here. (A pattern worth
+  considering: traditional watch by day when out, Apple Watch at the Mac and overnight - the phone still counts
+  steps.)
+- **Charging.** 18-24 hours means a daily top-up, and sleep tracking needs it charged at bedtime. The bands run
+  7-8 days. This is the one genuine day-to-day friction.
+- **Price**: $239 against $150-200.
+
+**Honest ranking for this project.** If wearing a smartwatch opposite the traditional watch is acceptable, the
+**Apple Watch SE 3 ($239)** is the best starting point - most data, best privacy, and the only option Kyra can run
+code on, for $39 more than the Polar Loop. If it is not acceptable, the **Garmin vívosmart 5 ($150)** is the pick,
+with the **Polar Loop ($200)** if screenless matters more than SpO₂. That is Duc's call, not a technical one.
+
 ### Rings, since he said he is open to suggestions
 
 | Ring | Weight | Writes to Apple Health | Privacy | Price |
