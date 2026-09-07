@@ -1,0 +1,26 @@
+{"query": "why did we choose BGE for embeddings instead of the default", "expect_any": ["CLAUDE.md"], "class": "semantic", "sensitive": false}
+{"query": "why is the voice stack local instead of a cloud API", "expect_any": ["docs/design.md", "CLAUDE.md"], "class": "semantic", "sensitive": false}
+{"query": "can a local model take over tool calling from Claude", "expect_any": ["docs/tool-calling-distill.md"], "class": "semantic", "sensitive": false}
+{"query": "how accurate is the fine-tuned router adapter", "expect_any": ["docs/router-finetune.md"], "class": "semantic", "sensitive": false}
+{"query": "which small model was picked to classify each turn and why", "expect_any": ["docs/router-model-benchmark.md"], "class": "semantic", "sensitive": false}
+{"query": "which local chat model won the benchmark", "expect_any": ["docs/model-benchmark.md"], "class": "semantic", "sensitive": false}
+{"query": "what happens when mass apply finishes a posting", "expect_any": ["docs/plans/2026-09-07-mass-apply.md", "CLAUDE.md"], "class": "semantic", "sensitive": false}
+{"query": "plans for tracking hydration and sleep", "expect_any": ["docs/plans/2026-09-07-health-companion.md"], "class": "semantic", "sensitive": false}
+{"query": "what are we building for the headset", "expect_any": ["docs/plans/2026-09-07-visionos.md"], "class": "semantic", "sensitive": false}
+{"query": "why won't Kyra connect with people on LinkedIn automatically", "expect_any": ["docs/plans/2026-09-06-outreach-assist.md", "CLAUDE.md"], "class": "semantic", "sensitive": false}
+{"query": "how should a networking email to a founder sound", "expect_any": ["data/memory_notes/writing-voice.md"], "class": "semantic", "sensitive": false}
+{"query": "what degree do I have and what was my GPA", "expect_any": ["data/memory_notes/background.md"], "class": "semantic", "sensitive": false}
+{"query": "who did I meet over table tennis", "expect_any": ["data/memory_notes/career.md"], "class": "semantic", "sensitive": false}
+{"query": "the resume I tailored for the hedge fund new grad role", "expect_any": ["data/resumes/Duc_Vo_Resume_Northwind_SWE_University_Graduate.tex"], "class": "semantic", "sensitive": false}
+{"query": "resume for the Orion early career role", "expect_any": ["data/resumes/Duc_Vo_Resume_Orion_SWE_Research.tex"], "class": "semantic", "sensitive": false}
+{"query": "cover letter for the reinforcement learning research role", "expect_any": ["data/cover_letters/Duc_Vo_Cover_Letter_Anthropic_RL.tex"], "class": "semantic", "sensitive": false}
+{"query": "what does the roadmap say about decomposing complex turns into subtasks", "expect_any": ["docs/agentic-roadmap.md"], "class": "semantic", "sensitive": false}
+{"query": "what changed after the industry standards audit", "expect_any": ["docs/industry-standards.md"], "class": "semantic", "sensitive": false}
+{"query": "what is the v2 architecture outline", "expect_any": ["docs/v2-outline.md", "docs/plans/2026-09-06-v2-phase1.md"], "class": "semantic", "sensitive": false}
+{"query": "RECENCY_WEIGHT", "expect_any": ["CLAUDE.md"], "class": "lexical", "sensitive": false}
+{"query": "write18 shell escape", "expect_any": ["docs/industry-standards.md", "CLAUDE.md"], "class": "lexical", "sensitive": false}
+{"query": "ICPC", "expect_any": ["data/resumes/Duc_Vo_Resume_Northwind_SWE_University_Graduate.tex", "data/resumes/Minh_Duc_Vo_Resume_Netic_Software_Engineer_Agent_Platform_New_Grad_2026_2027.tex", "data/resumes/Minh_Duc_Vo_Resume_Retell_Forward_Deployed_Engineer_New_Grad.tex", "CLAUDE.md"], "class": "lexical", "sensitive": false}
+{"query": "Kokoro", "expect_any": ["docs/design.md", "CLAUDE.md", "docs/v2-outline.md", "docs/industry-standards.md"], "class": "lexical", "sensitive": false}
+{"query": "which decisions are still waiting on me", "expect_any": ["data/private_docs/needs-your-input.md"], "class": "semantic", "sensitive": true}
+{"query": "my two week plan before the interview", "expect_any": ["data/private_docs/interview-prep-next-steps.md"], "class": "semantic", "sensitive": true}
+{"query": "the loop from job posting to referral", "expect_any": ["data/private_docs/outreach-playbook.md"], "class": "semantic", "sensitive": true}
