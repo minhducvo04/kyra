@@ -8,7 +8,6 @@ guarantee.
 """
 import hashlib
 
-import numpy as np
 import pytest
 from chromadb.api.types import EmbeddingFunction
 
@@ -34,15 +33,19 @@ class HashingEmbedding(EmbeddingFunction):
     exercise the vector half's plumbing deterministically.
     """
 
+    def __init__(self) -> None:
+        pass  # Chroma deprecates embedding functions without one
+
     def __call__(self, input):  # noqa: A002 - Chroma's parameter name
+        # Plain lists, not numpy arrays: Chroma accepts them, and a test
+        # double should not drag a dependency the module itself never uses.
         out = []
         for text in input:
-            vec = np.zeros(DIM, dtype=np.float32)
+            vec = [0.0] * DIM
             for word in text.lower().split():
-                idx = int(hashlib.md5(word.encode()).hexdigest(), 16) % DIM
-                vec[idx] += 1.0
-            norm = np.linalg.norm(vec)
-            out.append(vec / norm if norm else vec)
+                vec[int(hashlib.md5(word.encode()).hexdigest(), 16) % DIM] += 1.0
+            norm = sum(v * v for v in vec) ** 0.5
+            out.append([v / norm for v in vec] if norm else vec)
         return out
 
     @staticmethod
