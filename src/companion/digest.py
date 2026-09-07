@@ -13,13 +13,14 @@ scripts/daily_digest.py is the CLI over this module, the same way
 scripts/watch_boards.py is the CLI over job_boards.py.
 """
 import html
+import json
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from companion.job_boards import WatchReport, check_boards, load_watchlist, render_report
+from companion.job_boards import Posting, WatchReport, check_boards, load_watchlist, render_report
 from companion.learning import LearningItem, LearningStore
 from companion.news import TechNewsTool
 from companion.outreach import OutreachContact, OutreachStore
@@ -238,6 +239,24 @@ nav a:hover { color:var(--accent); border-color:var(--accent); }
 nav a b { color:var(--text); font-weight:600; }
 nav a.hot { border-color:var(--danger); } nav a.hot b { color:var(--danger); }
 
+.days { display:flex; gap:16px; align-items:baseline; margin-top:11px;
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; }
+.days a { color:var(--dim); text-decoration:none; }
+.days a:hover { color:var(--accent); text-decoration:underline; text-underline-offset:3px; }
+.days .off { color:#2c4453; }
+
+/* index */
+.day { display:flex; gap:14px; align-items:baseline; padding:11px 14px; margin-bottom:7px;
+  border:1px solid var(--grid); border-left:2px solid var(--grid); border-radius:3px;
+  background:var(--panel); text-decoration:none; transition:.15s; }
+.day:hover { border-color:#1d3346; border-left-color:var(--accent); background:var(--panel-2); }
+.day .d { font-family:var(--mono); font-size:13px; color:var(--text); min-width:118px; }
+.day .c { font-family:var(--mono); font-size:10.5px; letter-spacing:.07em;
+  text-transform:uppercase; color:var(--faint); }
+.day .c b { color:var(--dim); font-weight:500; }
+.day .c .hot { color:var(--danger); }
+.day.legacy .d, .day.legacy .c { color:var(--faint); }
+
 h2 {
   font-family:var(--mono); font-size:12px; font-weight:500; letter-spacing:.2em;
   text-transform:uppercase; color:var(--faint); margin:44px 0 16px;
@@ -315,9 +334,29 @@ def _news_card(h: NewsItem) -> str:
     return "".join(parts)
 
 
-def render_html(data: DigestData) -> str:
-    """A self-contained page - no server, no network, no JS. Opening the
-    file works whether or not the web UI happens to be running."""
+def _day_label(stem: str) -> str:
+    """'2026-09-06' -> 'Sep 6'. Falls back to the raw stem if it isn't a date."""
+    try:
+        return datetime.strptime(stem, "%Y-%m-%d").strftime("%b %-d")
+    except ValueError:
+        return stem
+
+
+def render_html(data: DigestData, *, prev_day: str | None = None, next_day: str | None = None) -> str:
+    """One day's page. No server, no network, no JS - opening the file
+    works whether or not the web UI happens to be running.
+
+    The CSS is inlined rather than shared from a sibling digest.css. That
+    was tried and reverted: it saved ~5KB a day (~1.8MB a year - nothing)
+    and cost self-containment, so the page rendered unstyled anywhere the
+    sibling file wasn't reachable. The real storage answer is that the
+    HTML is disposable - delete every page and `--rebuild` restores it
+    from the JSON, which is a quarter of the size.
+
+    prev_day/next_day are archive stems ("2026-09-06") for the older and
+    newer neighbouring days, so the archive is walkable without going
+    back to the index every time.
+    """
     d = data
     date_long = d.generated_at.strftime("%A, %B %-d, %Y")
 
@@ -331,12 +370,21 @@ def render_html(data: DigestData) -> str:
         for href, label, n, hot in nav
     )
 
+    days = [
+        f'<a href="{_e(prev_day)}.html">← {_e(_day_label(prev_day))}</a>' if prev_day
+        else '<span class="off">← earlier</span>',
+        '<a href="index.html">All days</a>',
+        f'<a href="{_e(next_day)}.html">{_e(_day_label(next_day))} →</a>' if next_day
+        else '<span class="off">later →</span>',
+    ]
+
     parts = [
         "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">",
         '<meta name="viewport" content="width=device-width,initial-scale=1">',
         f"<title>Kyra digest — {_e(date_long)}</title><style>{_CSS}</style></head><body>",
         '<div class="wrap"><header class="top"><div class="brand">Kyra · morning digest</div>',
-        f"<h1>{_e(date_long)}</h1><nav>{nav_html}</nav></header>",
+        f"<h1>{_e(date_long)}</h1><nav>{nav_html}</nav>",
+        f'<div class="days">{"".join(days)}</div></header>',
     ]
 
     # ---- Action items: everything that wants a decision today.
@@ -418,3 +466,176 @@ def render_html(data: DigestData) -> str:
     )
     parts.append("</div></body></html>")
     return "\n".join(parts)
+
+
+# ------------------------------------------------------- archive (JSON)
+#
+# JSON is the canonical record, not the Markdown and not the HTML. The
+# Markdown was the original output but it is *lossy* - it keeps a
+# headline and a link and drops the summary, which is the whole "is this
+# worth my time" signal. The HTML is a rendering and can be regenerated
+# (--rebuild) whenever the template improves. So: one small JSON file per
+# day is the thing that must never be thrown away.
+
+
+def to_json(data: DigestData) -> dict:
+    report = None
+    if data.report:
+        report = {
+            "checked_at": data.report.checked_at,
+            "new": [asdict(p) for p in data.report.new],
+            "still_open": data.report.still_open,
+            "errors": list(data.report.errors),
+            "reposted": sorted(data.report.reposted),  # a set isn't JSON
+        }
+    return {
+        "generated_at": data.generated_at.isoformat(),
+        "due_reminders": [asdict(r) for r in data.due_reminders],
+        "open_reminders": [asdict(r) for r in data.open_reminders],
+        "due_follow_ups": [asdict(c) for c in data.due_follow_ups],
+        "awaiting_replies": data.awaiting_replies,
+        "reviews": [asdict(i) for i in data.reviews],
+        "news": [asdict(n) for n in data.news],
+        "report": report,
+        "warnings": list(data.warnings),
+    }
+
+
+def from_json(raw: dict) -> DigestData:
+    report = None
+    if raw.get("report"):
+        r = raw["report"]
+        report = WatchReport(
+            checked_at=r.get("checked_at", ""),
+            new=[Posting(**p) for p in r.get("new", [])],
+            still_open=r.get("still_open", 0),
+            errors=r.get("errors", []),
+            reposted=set(r.get("reposted", [])),
+        )
+    return DigestData(
+        generated_at=datetime.fromisoformat(raw["generated_at"]),
+        due_reminders=[Reminder(**r) for r in raw.get("due_reminders", [])],
+        open_reminders=[Reminder(**r) for r in raw.get("open_reminders", [])],
+        due_follow_ups=[OutreachContact(**c) for c in raw.get("due_follow_ups", [])],
+        awaiting_replies=raw.get("awaiting_replies", 0),
+        reviews=[LearningItem(**i) for i in raw.get("reviews", [])],
+        news=[NewsItem(**n) for n in raw.get("news", [])],
+        report=report,
+        warnings=raw.get("warnings", []),
+    )
+
+
+def search_archive(digest_dir: Path, term: str) -> list[tuple[str, str, str, str]]:
+    """Find a headline you remember reading but didn't save. Returns
+    (date, source, title, link), newest day first. Plain substring match
+    over the JSON archive - no index to keep in sync."""
+    needle = term.lower()
+    hits: list[tuple[str, str, str, str]] = []
+    for path in sorted(digest_dir.glob("*.json"), reverse=True):
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            logger.warning("skipping unreadable archive %s: %s", path.name, e)
+            continue
+        for n in raw.get("news", []):
+            if needle in n.get("title", "").lower() or needle in n.get("summary", "").lower():
+                hits.append((path.stem, n.get("source", ""), n.get("title", ""), n.get("link", "")))
+    return hits
+
+
+def render_index(entries: list[tuple[str, DigestData]], legacy: list[str] | None = None) -> str:
+    """The archive front page: every day we still have data for, newest
+    first. entries are (stem, data) already sorted newest-first.
+
+    legacy are stems that predate the JSON archive - days written when the
+    Markdown was the only output. They can't be rendered as pages (the
+    Markdown never kept the headline summaries), but they existed and the
+    index would be lying to omit them, so they get a row linking to the
+    .md file itself."""
+    rows = []
+    for stem, d in entries:
+        try:
+            long = datetime.strptime(stem, "%Y-%m-%d").strftime("%a, %b %-d %Y")
+        except ValueError:
+            long = stem
+        counts = [
+            f'<span class="{"hot" if d.action_count else ""}"><b>{d.action_count}</b> to do</span>',
+            f"<span><b>{d.new_postings}</b> postings</span>",
+            f"<span><b>{len(d.news)}</b> headlines</span>",
+        ]
+        rows.append(
+            f'<a class="day" href="{_e(stem)}.html"><span class="d">{_e(long)}</span>'
+            f'<span class="c">{" · ".join(counts)}</span></a>'
+        )
+    for stem in legacy or []:
+        try:
+            long = datetime.strptime(stem, "%Y-%m-%d").strftime("%a, %b %-d %Y")
+        except ValueError:
+            long = stem
+        rows.append(
+            f'<a class="day legacy" href="{_e(stem)}.md"><span class="d">{_e(long)}</span>'
+            f'<span class="c">markdown only · predates the archive</span></a>'
+        )
+    body = "".join(rows) or '<p class="empty">No archived digests yet.</p>'
+    return "\n".join([
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">',
+        '<meta name="viewport" content="width=device-width,initial-scale=1">',
+        f"<title>Kyra digest — archive</title><style>{_CSS}</style></head><body>",
+        '<div class="wrap"><header class="top"><div class="brand">Kyra · morning digest</div>',
+        f"<h1>Archive · {(n := len(entries) + len(legacy or []))} day{'' if n == 1 else 's'}</h1></header>",
+        body,
+        '<footer>Every day Kyra has kept structured data for. The JSON beside each page is '
+        'the canonical record; the pages are regenerated from it with '
+        '<code>python3 scripts/daily_digest.py --rebuild</code>.</footer>',
+        "</div></body></html>",
+    ])
+
+
+def load_archive(digest_dir: Path) -> list[tuple[str, DigestData]]:
+    """Every archived day, newest first. A file that won't parse is
+    skipped with a warning rather than taking the whole archive down."""
+    out: list[tuple[str, DigestData]] = []
+    for path in sorted(digest_dir.glob("*.json"), reverse=True):
+        try:
+            out.append((path.stem, from_json(json.loads(path.read_text(encoding="utf-8")))))
+        except (OSError, ValueError, TypeError, KeyError) as e:
+            logger.warning("skipping unreadable archive %s: %s", path.name, e)
+    return out
+
+
+def write_archive(digest_dir: Path, *, rebuild: bool = False) -> list[str]:
+    """Regenerate the index and the day pages from the JSON archive.
+    Returns the stems written.
+
+    Normally only the two newest days need rewriting - a new day changes
+    its own page and gives the previous day a "later →" link it didn't
+    have. rebuild=True redoes every page, which is what makes JSON the
+    canonical format: change the template, rebuild, and the whole archive
+    follows.
+    """
+    digest_dir.mkdir(parents=True, exist_ok=True)
+    archive = load_archive(digest_dir)
+    stems = [s for s, _ in archive]
+    # Newest two, plus any day whose page is missing - so the archive
+    # self-heals and --date always has something to open.
+    targets = stems if rebuild else [
+        s for s in stems if s in stems[:2] or not (digest_dir / f"{s}.html").exists()
+    ]
+
+    for stem, data in archive:
+        if stem not in targets:
+            continue
+        i = stems.index(stem)
+        # stems are newest-first, so the *older* neighbour is the next index.
+        prev_day = stems[i + 1] if i + 1 < len(stems) else None
+        next_day = stems[i - 1] if i > 0 else None
+        (digest_dir / f"{stem}.html").write_text(
+            render_html(data, prev_day=prev_day, next_day=next_day), encoding="utf-8"
+        )
+
+    # Days that only ever got a Markdown file, before JSON existed.
+    legacy = sorted(
+        {p.stem for p in digest_dir.glob("*.md")} - set(stems), reverse=True
+    )
+    (digest_dir / "index.html").write_text(render_index(archive, legacy), encoding="utf-8")
+    return targets

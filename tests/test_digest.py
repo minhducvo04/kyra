@@ -2,6 +2,7 @@
 feed text is never trusted into the HTML, and Hacker News' metadata
 "summary" is parsed into real fields rather than printed as prose.
 """
+import json
 from datetime import datetime
 
 from companion.digest import (
@@ -110,3 +111,116 @@ def test_build_digest_does_not_write_the_real_seen_file(tmp_path, monkeypatch):
     data = build_digest(seen_path=scratch)
     assert seen["path"] == scratch
     assert any("boards unreachable" in w for w in data.warnings)  # failure is a warning, not a crash
+
+
+# ------------------------------------------------- archive / navigation
+
+from companion.digest import (  # noqa: E402 - grouped with the archive tests
+    from_json,
+    load_archive,
+    render_index,
+    search_archive,
+    to_json,
+    write_archive,
+)
+from companion.job_boards import Posting, WatchReport  # noqa: E402
+
+
+def _rich() -> DigestData:
+    return DigestData(
+        generated_at=datetime(2026, 9, 6, 5, 0).astimezone(),
+        due_reminders=[Reminder(id=1, text="Call the bank", due_at="2026-09-06", created_at="x", done=False)],
+        news=[NewsItem(source="NYT", title="A headline", summary="The blurb that says what it is.",
+                       link="https://example.com/a")],
+        report=WatchReport(
+            checked_at="2026-09-06T05:00:00",
+            new=[Posting(source="greenhouse", company="Anthropic", id="1", title="SWE",
+                         location="SF", url="https://example.com/j", updated_at="2026-09-05T00:00:00")],
+            still_open=42, errors=[], reposted={"greenhouse:Anthropic:1"},
+        ),
+        warnings=["a feed died"],
+    )
+
+
+def test_json_round_trip_keeps_everything_the_markdown_drops():
+    """The .md archive keeps titles and links but throws the summary away.
+    JSON is canonical precisely so going back to an old day isn't lossy."""
+    original = _rich()
+    back = from_json(to_json(original))
+
+    assert back.news[0].summary == "The blurb that says what it is."
+    assert "The blurb that says what it is." not in render_markdown(original)  # the gap being closed
+
+    assert back.due_reminders[0].text == "Call the bank"
+    assert back.report.still_open == 42
+    assert back.report.reposted == {"greenhouse:Anthropic:1"}  # a set survives the list round-trip
+    assert back.report.new[0].company == "Anthropic"
+    assert back.warnings == ["a feed died"]
+    assert back.generated_at == original.generated_at
+
+
+def _seed(dir_, *stems):
+    for stem in stems:
+        d = _rich()
+        d.generated_at = datetime.fromisoformat(f"{stem}T05:00:00").astimezone()
+        (dir_ / f"{stem}.json").write_text(json.dumps(to_json(d)), encoding="utf-8")
+
+
+def test_day_pages_link_to_their_neighbours(tmp_path):
+    _seed(tmp_path, "2026-09-04", "2026-09-05", "2026-09-06")
+    write_archive(tmp_path, rebuild=True)
+
+    middle = (tmp_path / "2026-09-05.html").read_text()
+    assert 'href="2026-09-04.html"' in middle and 'href="2026-09-06.html"' in middle
+
+    oldest = (tmp_path / "2026-09-04.html").read_text()
+    assert 'href="2026-09-03.html"' not in oldest
+    assert "← earlier" in oldest  # dead-end is shown, not linked
+
+    newest = (tmp_path / "2026-09-06.html").read_text()
+    assert 'href="2026-09-07.html"' not in newest
+    assert "later →" in newest
+
+
+def test_pages_are_self_contained(tmp_path):
+    """Inlined CSS, not a sibling stylesheet - a page opened anywhere must
+    still be styled (an external digest.css was tried and reverted)."""
+    _seed(tmp_path, "2026-09-06")
+    write_archive(tmp_path, rebuild=True)
+    page = (tmp_path / "2026-09-06.html").read_text()
+    assert "<style>" in page and "stylesheet" not in page
+    assert not (tmp_path / "digest.css").exists()
+
+
+def test_archive_self_heals_missing_pages(tmp_path):
+    """--date on an old day must have something to open even though a
+    normal run only rewrites the newest two."""
+    _seed(tmp_path, "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04")
+    write_archive(tmp_path)  # not a rebuild
+    for stem in ("2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"):
+        assert (tmp_path / f"{stem}.html").exists(), stem
+
+
+def test_index_lists_every_day_newest_first(tmp_path):
+    _seed(tmp_path, "2026-09-04", "2026-09-06", "2026-09-05")
+    write_archive(tmp_path, rebuild=True)
+    index = (tmp_path / "index.html").read_text()
+    order = [index.index(f'href="2026-09-0{d}.html"') for d in (6, 5, 4)]
+    assert order == sorted(order), "newest day must come first"
+    assert "3 days" in index
+
+
+def test_search_finds_a_headline_by_title_or_summary(tmp_path):
+    _seed(tmp_path, "2026-09-05", "2026-09-06")
+    assert len(search_archive(tmp_path, "A headline")) == 2
+    assert search_archive(tmp_path, "blurb")[0][0] == "2026-09-06"  # newest first, matches summary
+    assert search_archive(tmp_path, "nothing here at all") == []
+
+
+def test_a_corrupt_archive_file_is_skipped_not_fatal(tmp_path):
+    """One bad file must not take the whole archive down."""
+    _seed(tmp_path, "2026-09-05")
+    (tmp_path / "2026-09-06.json").write_text("{not json", encoding="utf-8")
+    assert [s for s, _ in load_archive(tmp_path)] == ["2026-09-05"]
+    assert len(search_archive(tmp_path, "headline")) == 1
+    assert "2026-09-05" in render_index(load_archive(tmp_path))

@@ -9,6 +9,16 @@ Usage:
     python3 scripts/daily_digest.py --no-notify
     python3 scripts/daily_digest.py --dry-run  # print the markdown, write nothing
 
+Reading the archive (nothing is ever deleted):
+    python3 scripts/daily_digest.py --index               # every day, newest first
+    python3 scripts/daily_digest.py --date 2026-09-06     # open one past day
+    python3 scripts/daily_digest.py --search "gemini"     # find a headline you remember
+    python3 scripts/daily_digest.py --rebuild             # redo every page from the JSON
+
+Each day keeps three files: <date>.json is canonical (the Markdown drops
+each headline's summary, so it is not enough on its own), <date>.md is the
+grep-able record, <date>.html is a rendering that --rebuild can redo.
+
 Scheduled by launchd at 05:00 (see deploy/com.kyra.daily-digest.plist and
 docs: `launchctl load ~/Library/LaunchAgents/com.kyra.daily-digest.plist`).
 
@@ -21,6 +31,7 @@ it the notification still fires, it just isn't clickable.
 Install with: brew install terminal-notifier
 """
 import argparse
+import json
 import logging
 import shutil
 import subprocess
@@ -31,7 +42,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from companion.digest import build_digest, render_html, render_markdown, summary_line
+from companion.digest import (
+    build_digest,
+    render_markdown,
+    search_archive,
+    summary_line,
+    to_json,
+    write_archive,
+)
 from companion.job_boards import SEEN_PATH
 from companion.logging_setup import configure_logging
 from companion.paths import DATA_DIR
@@ -85,8 +103,31 @@ def main() -> None:
     parser.add_argument("--no-notify", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="print the digest, write nothing, notify nothing")
     parser.add_argument("--open", action="store_true", help="open the HTML page when it's written")
+    parser.add_argument("--date", metavar="YYYY-MM-DD", help="open an archived day instead of building today's")
+    parser.add_argument("--index", action="store_true", help="open the archive index (every day, newest first)")
+    parser.add_argument("--rebuild", action="store_true", help="regenerate every page from the JSON archive")
+    parser.add_argument("--search", metavar="TERM", help="find an archived headline by keyword")
     args = parser.parse_args()
     configure_logging()
+
+    if args.search:
+        hits = search_archive(DIGEST_DIR, args.search)
+        for date, source, title, link in hits:
+            print(f"{date}  {source}\n   {title}\n   {link}\n")
+        print(f"{len(hits)} match{'' if len(hits) == 1 else 'es'} for {args.search!r}")
+        return
+
+    if args.date or args.index or args.rebuild:
+        written = write_archive(DIGEST_DIR, rebuild=args.rebuild)
+        if args.rebuild:
+            logger.info("rebuilt %d page(s) from the JSON archive", len(written))
+        target = DIGEST_DIR / (f"{args.date}.html" if args.date else "index.html")
+        if not target.exists():
+            have = sorted(p.stem for p in DIGEST_DIR.glob("*.json"))
+            what = args.date or "the archive"
+            parser.error(f"no digest page for {what} - have: {', '.join(have) or 'none yet'}")
+        subprocess.run(["open", str(target)], check=False)
+        return
 
     if args.dry_run:
         # A preview must not consume tomorrow's new postings. check_boards
@@ -105,12 +146,18 @@ def main() -> None:
     stem = datetime.now().strftime("%Y-%m-%d")
     md_path = DIGEST_DIR / f"{stem}.md"
     html_path = DIGEST_DIR / f"{stem}.html"
-    page = render_html(data)
+    json_path = DIGEST_DIR / f"{stem}.json"
     md_path.write_text(render_markdown(data), encoding="utf-8")
-    html_path.write_text(page, encoding="utf-8")
+    # JSON is the canonical record: the Markdown drops each headline's
+    # summary, and the HTML is a rendering that --rebuild can redo.
+    json_path.write_text(json.dumps(to_json(data), indent=1), encoding="utf-8")
+    # Writes the shared CSS, today's page, the previous day's page (it has
+    # a "later ->" link now) and the index.
+    write_archive(DIGEST_DIR)
     # A stable path, so a bookmark or Dock alias always lands on today's.
+    # Same folder, so its relative CSS and day links keep working.
     latest = DIGEST_DIR / "latest.html"
-    latest.write_text(page, encoding="utf-8")
+    latest.write_text(html_path.read_text(encoding="utf-8"), encoding="utf-8")
 
     summary = summary_line(data)
     logger.info("digest written to %s (%s)", html_path, summary)
