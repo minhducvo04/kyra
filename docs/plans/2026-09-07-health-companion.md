@@ -31,20 +31,47 @@ about data, at a price that is not outrageous. The bottle is undecided.
 
 ## The bracelet, scored on Duc's four criteria
 
-| Band / ring | Looks & weight next to a watch | Data it writes to Apple Health | Privacy legitimacy | Price |
-|---|---|---|---|---|
-| **Polar Loop** (2025) | slim screenless band, **29 g**, understated | HR 24/7, HRV, sleep stages, activity, recovery; no SpO₂ or skin temperature | **strongest**: Finnish, GDPR, states no sharing with providers without permission; developer API (AccessLink) | **$200, no subscription** |
-| Amazfit Helio Strap | plain band, **20 g**, the lightest | the broadest list: sleep, HRV, HR, resting HR, VO₂max, SpO₂, respiratory rate, steps | weakest: Zepp Health (China), "stored anywhere in the world", AWS, GDPR-compliant, says it does not sell data | $99, no subscription |
-| Ultrahuman Ring AIR | a ring, **2.4 g** - nothing on the wrist at all | sleep stages, HRV, HR, temperature, SpO₂, activity | transparent (Mozilla: full marks, data exportable via API) but account required and many cloud subprocessors; India/US | $349, no subscription; API by application |
-| Oura Ring 4 | a ring, ~4-6 g | sleep stages, HR, steps, respiratory rate (not HRV) | strong: Finnish, GDPR; public API v2 | $349 + $5.99/mo |
-| WHOOP 5.0 | thicker band, needs its own strap | sleep only as asleep/awake in Apple Health (no stages) | **an active class action over sharing health data with a third-party tracker** | subscription only, $199-359/yr |
+He wears a traditional watch he loves, so this goes on the other wrist and must not compete with it: small, light,
+and ideally screenless so it reads as a plain band rather than a second watch. It must write to **Apple Health** -
+that is the whole architecture below - and it should carry as much data as possible, from a company that is
+serious about it, at a sane price.
 
-**Recommendation: the Polar Loop.** It is the only option that clears all four criteria at once - it looks like a
-plain band beside a watch, it is light, it writes the data Kyra needs (sleep stages, HRV, HR, activity), it comes
-from the company with the cleanest data story, and it costs $200 once. What it lacks is SpO₂ and skin
-temperature. If those matter more than "bracelet", the **Ultrahuman Ring AIR** is the alternative: more data, no
-subscription, nothing on the wrist, but a mandatory account and a longer list of cloud processors. WHOOP is out on
-privacy and price; the Helio Strap is out on privacy alone.
+### Bands (what he asked for)
+
+| Band | Look & weight | Writes to Apple Health | Privacy | Price |
+|---|---|---|---|---|
+| **Garmin vívosmart 5** | slim band, small OLED screen, **24.5 g** | sleep stages, HR 24/7, HRV, **SpO₂**, respiration, stress, Body Battery, steps | US company; the 2020 WastedLocker ransomware took services down but Garmin found no evidence data was accessed or stolen; Health API is company-only, no personal access | **$150, no subscription** |
+| **Polar Loop** | **screenless**, plain band, **29 g** | sleep stages, HR 24/7, HRV, activity, recovery. No SpO₂, no skin temperature | **the cleanest**: Finnish, GDPR, states nothing is shared with providers without permission; AccessLink API open to individuals | **$200, no subscription** |
+| Amazfit Helio Strap | screenless, **20 g** - the lightest | the broadest list: sleep, HRV, HR, resting HR, VO₂max, SpO₂, respiration, steps | weakest: Zepp Health (China), policy allows storage "anywhere in the world", says it does not sell data | $99, no subscription |
+| Fitbit Charge 6 | band with a screen, **30 g** | steps, sleep, workouts - and only since Google Health 5.05 (Aug 2026); before that it needed a third-party bridge | Google account now mandatory (Fitbit accounts ended May 2026); Google commits not to use the data for Ads | $130 |
+| WHOOP 5.0 / MG | thicker strap, 26.5 / 27.3 g | **sleep only as asleep/awake - no stages** | an active class action alleges sharing health data with a third-party tracker without consent | subscription only, $199-359/yr |
+| Xiaomi Smart Band 10 | band with a screen | syncs activity, sleep, HR via Mi Fitness | Chinese vendor, same class of concern as Amazfit | ~$50 |
+| Samsung Galaxy Fit 3 | — | **nothing: it does not work with an iPhone at all** | — | — |
+
+### Rings, since he said he is open to suggestions
+
+| Ring | Weight | Writes to Apple Health | Privacy | Price |
+|---|---|---|---|---|
+| Ultrahuman Ring AIR | **2.4 g** - nothing on either wrist | sleep stages, HRV, HR, temperature, SpO₂, activity | transparent (Mozilla gave full marks for data access) but an account is mandatory and there are many cloud subprocessors | $349, no subscription |
+| Oura Ring 4 | ~4-6 g | sleep stages, HR, steps, respiration (**not HRV**) | Finnish, GDPR; public API v2 | $349 + $5.99/mo |
+
+### The two that actually compete
+
+**Garmin vívosmart 5 ($150)** and **Polar Loop ($200)**. Garmin wins on data and price: it is lighter, cheaper, and
+adds SpO₂, respiration and stress that Polar's band leaves out - which matters for a project meant to have a lot to
+work with. Polar wins on the two soft criteria: it is **screenless**, so beside a real watch it reads as a bracelet
+rather than a second gadget, and its data story is the cleanest of anything here, with an API an individual can
+actually get.
+
+**Recommendation: the Garmin vívosmart 5**, unless the screen bothers him - then the Polar Loop. Garmin's 2020
+incident was a ransomware outage, not a proven data theft, and Garmin's business is hardware rather than data.
+The one real Garmin limitation is that its Health API is closed to individuals, so anything Kyra reads comes
+through Apple Health - which is exactly what this plan does anyway, so it costs nothing here.
+
+Ruled out on his own criteria: **WHOOP** (subscription-only, an active privacy class action, and no sleep stages
+in Apple Health - the single most useful thing the plan needs), **Amazfit** and **Xiaomi** (price is right, privacy
+is not), **Fitbit** (a Google account is now compulsory and Apple Health support arrived only weeks ago), and
+**Samsung Galaxy Fit 3** (does not work with an iPhone).
 
 **Bottle**: LARQ and HidrateSpark both write to Apple Health and neither has an API, so it is a comfort choice.
 Or none: "I drank a glass" by voice writes `dietaryWater` for free. Decide when the band arrives.
