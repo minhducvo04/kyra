@@ -1108,7 +1108,7 @@ async function loadDraftDocPickers() {
 /* -- profile -- */
 
 const PROFILE_FIELDS = [
-  "first_name", "last_name", "email", "phone", "country", "current_company",
+  "first_name", "last_name", "email", "phone", "location", "country", "current_company",
   "linkedin_url", "github_url", "portfolio_url", "twitter_url", "preferred_name", "pronouns", "resume_path",
   "eeo_gender_identity", "eeo_race_ethnicity", "eeo_hispanic_latino", "eeo_veteran_status", "eeo_disability_status",
 ];
