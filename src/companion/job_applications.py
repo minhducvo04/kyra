@@ -37,7 +37,12 @@ DB_PATH = DATA_DIR / "job_applications.db"
 logger = logging.getLogger(__name__)
 
 # targeting: found the role, doing outreach, not applied yet. referral_pending: applied, a referral is in flight.
-VALID_STATUSES = {"targeting", "applied", "referral_pending", "interviewing", "offer", "rejected", "withdrawn"}
+# ready_to_submit / needs_attention: set by apply_pipeline.py - the form is filled and waiting for Duc's click, or
+# something needs him first. Only Duc moves an application to applied.
+VALID_STATUSES = {
+    "targeting", "ready_to_submit", "needs_attention", "applied", "referral_pending", "interviewing", "offer", "rejected",
+    "withdrawn",
+}
 
 NO_SPECIFIC_JOB = (
     "(No specific posting given - draft general-purpose material aimed at Duc's ideal target role, "
@@ -206,7 +211,7 @@ class AddJobApplicationTool(Tool):
 
 class ListJobApplicationsTool(Tool):
     name = "list_job_applications"
-    description = "List Duc's tracked job applications, optionally filtered by status (targeting/applied/referral_pending/interviewing/offer/rejected/withdrawn)."
+    description = "List Duc's tracked job applications, optionally filtered by status (targeting/ready_to_submit/needs_attention/applied/referral_pending/interviewing/offer/rejected/withdrawn)."
     input_schema = {
         "type": "object",
         "properties": {"status": {"type": "string", "enum": sorted(VALID_STATUSES)}},
@@ -223,7 +228,7 @@ class ListJobApplicationsTool(Tool):
 class UpdateJobApplicationStatusTool(Tool):
     name = "update_job_application_status"
     description = (
-        "Update a tracked job application's status (targeting/applied/referral_pending/interviewing/offer/rejected/withdrawn), "
+        "Update a tracked job application's status (targeting/ready_to_submit/needs_attention/applied/referral_pending/interviewing/offer/rejected/withdrawn), "
         "by its id from list_job_applications."
     )
     input_schema = {

@@ -25,3 +25,6 @@ WEB_DIR = PROJECT_ROOT / "web"
 
 # Compiled one-page resume PDFs served by /api/job/resume-pdf/{filename}.
 GENERATED_RESUMES_DIR = DATA_DIR / "generated_resumes"
+
+# Duc's resumes: the hand-kept .tex/.pdf pairs and the ones apply_pipeline.py tailors per posting.
+RESUMES_DIR = DATA_DIR / "resumes"

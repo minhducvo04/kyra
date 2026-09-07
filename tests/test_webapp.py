@@ -215,3 +215,41 @@ def test_draft_job_rejects_synchronous_kinds_and_unknown_ids(client):
     assert res.status_code == 400 and res.json()["error"]["code"] == "not_a_job"
     assert client.get("/api/jobs/999999").status_code == 404
     assert client.get("/api/jobs/999999/events").status_code == 404
+
+
+@requires_latex
+def test_apply_jobs_queue_one_per_url_and_run(client, monkeypatch):
+    from companion.job_posting_fetch import fetch_posting
+    from companion.jobs import run_one
+    from companion.profile import ApplicantProfile
+    from tests.test_apply_pipeline import TAILORED, RecordingEngine
+    from tests.test_job_posting_fetch import _fake
+
+    # resumes land under the scratch KYRA_DATA_DIR/resumes (conftest), never in data/
+    monkeypatch.setattr(webapp, "_apply_base_latex", lambda: ONE_PAGE)
+    monkeypatch.setattr(webapp, "_resume_llm", ScriptedLLM([TAILORED, "BULLET: b | ASK: q", TAILORED, "BULLET: b | ASK: q"]))
+    engine = RecordingEngine()
+    monkeypatch.setattr(webapp, "_autofill_engines", {"greenhouse": engine})
+    monkeypatch.setattr(webapp, "_fetch_posting", lambda u: fetch_posting(u, _fake))
+    monkeypatch.setattr(webapp, "load_profile", lambda: ApplicantProfile(first_name="Duc", last_name="Vo", email="d@x.com", phone="1"))
+
+    res = client.post("/api/jobs/apply", json={"urls": [
+        "https://job-boards.greenhouse.io/janestreet/jobs/1", "", "https://jobs.ashbyhq.com/netic/d9bcb6a2-0e54-4cb3-baec-43f2d74db18f",
+    ]})
+    jobs = res.json()["jobs"]
+    assert res.status_code == 200 and [j["kind"] for j in jobs] == ["apply", "apply"]
+    assert run_one(webapp._queue, webapp.HANDLERS) and run_one(webapp._queue, webapp.HANDLERS)
+    first, second = (client.get(f"/api/jobs/{j['id']}").json() for j in jobs)
+    assert first["status"] == "done" and first["result"]["status"] == "ready_to_submit" and engine.calls
+    assert second["status"] == "done" and second["result"]["status"] == "needs_attention"
+    assert any("no autofill engine for ashby" in a for a in second["result"]["attention"])
+    statuses = {a["company"]: a["status"] for a in client.get("/api/job/applications").json()["applications"]}
+    assert statuses["Meridian"] == "ready_to_submit" and statuses["netic"] == "needs_attention"
+
+
+def test_apply_jobs_validation(client, monkeypatch):
+    assert client.post("/api/jobs/apply", json={"urls": ["", " "]}).json()["error"]["code"] == "no_urls"
+    assert client.post("/api/jobs/apply", json={"urls": ["https://x"], "cover_letter": "maybe"}).json()["error"]["code"] == "bad_cover_letter"
+    assert client.post("/api/jobs/apply", json={"urls": ["https://x", "https://y"], "posting_text": "t"}).json()["error"]["code"] == "text_needs_one_url"
+    monkeypatch.setattr(webapp.get_settings(), "resume_base_tex", "/nope/missing.tex")
+    assert client.post("/api/jobs/apply", json={"urls": ["https://x"]}).json()["error"]["code"] == "no_base_resume"

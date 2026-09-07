@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # v2 slice 3: run the job worker as a thread inside the web process (laptop
     # default). The container sets this False and runs scripts/worker.py.
     inline_worker: bool = Field(default=True, validation_alias="KYRA_INLINE_WORKER")
+    # Mass apply tailors every resume from this .tex (relative paths resolve under data_dir). The library copy of
+    # the LaTeX source went stale once, so the base is a file Duc edits directly, not a library document.
+    resume_base_tex: str = Field(default="resumes/Duc_Vo_Resume_General_AI_Engineer.tex", validation_alias="KYRA_RESUME_BASE_TEX")
     host: str = Field(default="127.0.0.1", validation_alias="KYRA_HOST")
     port: int = Field(default=8420, validation_alias="KYRA_PORT")
 

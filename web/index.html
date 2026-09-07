@@ -52,6 +52,7 @@
       <button class="jobs-tab" data-tab="profile" type="button">PROFILE</button>
       <button class="jobs-tab" data-tab="tracker" type="button">TRACKER</button>
       <button class="jobs-tab" data-tab="autofill" type="button">AUTOFILL</button>
+      <button class="jobs-tab" data-tab="apply" type="button">APPLY</button>
     </div>
 
     <section class="jobs-tab-panel is-active" data-tab-panel="draft">
@@ -223,6 +224,24 @@
         <div class="jobs-output-header"><span>RESULT</span></div>
         <div id="autofill-result"></div>
       </div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tab-panel="apply">
+      <label class="jobs-field">
+        <span>Posting URLs, one per line (Greenhouse / Lever / Ashby)</span>
+        <textarea id="apply-urls" rows="5" placeholder="https://job-boards.greenhouse.io/company/jobs/12345&#10;https://jobs.ashbyhq.com/company/..."></textarea>
+      </label>
+      <label class="jobs-field">
+        <span>Cover letter</span>
+        <select id="apply-cover-letter">
+          <option value="auto">Only when the posting mentions one</option>
+          <option value="always">Always draft one</option>
+          <option value="never">Never</option>
+        </select>
+      </label>
+      <button class="jobs-btn" id="apply-run" type="button">Apply to all</button>
+      <p class="jobs-hint">For each URL: tracker entry, resume tailored from your base .tex to one page and saved under data/resumes/, cover letter if asked, then the form filled in a browser window (Greenhouse only for now). Nothing gets submitted: ready_to_submit means review and click, needs_attention means read the list first.</p>
+      <div id="apply-jobs"></div>
     </section>
   </aside>
 

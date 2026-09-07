@@ -74,9 +74,14 @@ class AnthropicLLM(LLMBackend):
     def respond(self, system: str, history: list[Message], user_input: str) -> str:
         messages = [{"role": m.role, "content": m.content} for m in history]
         messages.append({"role": "user", "content": user_input})
-        response = self._client.messages.create(
+        # Streamed on purpose: the SDK refuses a non-streaming request whose max_tokens implies more than
+        # ten minutes of output (about 21k tokens), and the resume loop's 32000 budget crossed that line
+        # for real (2026-09-07: every resume job failed with "Streaming is required..."). The final
+        # message is the same object create() returns, so nothing downstream changes.
+        with self._client.messages.stream(
             model=self._model, max_tokens=self._max_tokens, system=system, messages=messages,
-        )
+        ) as stream:
+            response = stream.get_final_message()
         if response.stop_reason == "max_tokens":
             # Same bug class documented for respond_with_tools() above -
             # Sonnet 5's adaptive thinking can eat into max_tokens even on
