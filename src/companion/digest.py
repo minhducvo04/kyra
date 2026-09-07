@@ -12,12 +12,13 @@ hallucinate a reminder that doesn't exist.
 scripts/daily_digest.py is the CLI over this module, the same way
 scripts/watch_boards.py is the CLI over job_boards.py.
 """
+import calendar
 import html
 import json
 import logging
 import re
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from companion.job_boards import Posting, WatchReport, check_boards, load_watchlist, render_report
@@ -245,17 +246,37 @@ nav a.hot { border-color:var(--danger); } nav a.hot b { color:var(--danger); }
 .days a:hover { color:var(--accent); text-decoration:underline; text-underline-offset:3px; }
 .days .off { color:#2c4453; }
 
-/* index */
-.day { display:flex; gap:14px; align-items:baseline; padding:11px 14px; margin-bottom:7px;
-  border:1px solid var(--grid); border-left:2px solid var(--grid); border-radius:3px;
-  background:var(--panel); text-decoration:none; transition:.15s; }
-.day:hover { border-color:#1d3346; border-left-color:var(--accent); background:var(--panel-2); }
-.day .d { font-family:var(--mono); font-size:13px; color:var(--text); min-width:118px; }
-.day .c { font-family:var(--mono); font-size:10.5px; letter-spacing:.07em;
+/* index calendar */
+.legend { display:flex; flex-wrap:wrap; gap:15px; margin-top:11px;
+  font-family:var(--mono); font-size:10px; letter-spacing:.08em;
   text-transform:uppercase; color:var(--faint); }
-.day .c b { color:var(--dim); font-weight:500; }
-.day .c .hot { color:var(--danger); }
-.day.legacy .d, .day.legacy .c { color:var(--faint); }
+.key { display:flex; align-items:center; gap:6px; }
+.legacy-key { color:#2c4453; }
+
+.cal { margin-bottom:34px; }
+.cal h3 { font-family:var(--mono); font-size:12px; font-weight:500; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--faint); margin:0 0 13px;
+  padding-bottom:9px; border-bottom:1px solid var(--grid); }
+.grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+.dow { font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:#2c4453;
+  text-align:center; padding-bottom:3px; }
+
+.cell { min-height:46px; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:4px; border:1px solid var(--grid); border-radius:3px;
+  font-family:var(--mono); font-size:13px; }
+.cell.pad { border-color:transparent; }
+.cell.none { color:#2c4453; border-color:#0e1a24; }
+a.cell { background:var(--panel); color:var(--text); text-decoration:none; transition:.15s; }
+a.cell:hover { border-color:var(--accent); background:var(--panel-2); color:var(--accent); }
+a.cell.legacy { color:var(--faint); }
+.cell.today { border-color:var(--accent-dim); }
+.cell.today.none { color:var(--dim); }
+
+.dot { width:4px; height:4px; border-radius:50%; background:var(--accent); }
+.dot.hot { background:var(--danger); }
+a.cell.legacy .dot { background:#2c4453; }
+.key .dot { width:5px; height:5px; }
+@media (max-width:420px) { .grid { gap:4px; } .cell { min-height:38px; font-size:11px; } }
 
 h2 {
   font-family:var(--mono); font-size:12px; font-weight:500; letter-spacing:.2em;
@@ -543,49 +564,89 @@ def search_archive(digest_dir: Path, term: str) -> list[tuple[str, str, str, str
     return hits
 
 
+def _day_cells(days: dict[date, dict], year: int, month: int, today: date) -> str:
+    """One month's 7-column grid. Sunday-first (US convention, matching the
+    Mac's own calendar), leading/trailing cells blank rather than showing
+    the neighbouring month's numbers - this is a jump table, not a planner."""
+    cells = []
+    for week in calendar.Calendar(firstweekday=6).monthdatescalendar(year, month):
+        for d in week:
+            if d.month != month:
+                cells.append('<span class="cell pad"></span>')
+                continue
+            info = days.get(d)
+            cls = ["cell"]
+            if d == today:
+                cls.append("today")
+            if not info:
+                cls.append("none")
+                cells.append(f'<span class="{" ".join(cls)}">{d.day}</span>')
+                continue
+            if info["legacy"]:
+                cls.append("legacy")
+            tip = (
+                f"{d:%A, %B %-d} — markdown only, predates the archive"
+                if info["legacy"]
+                else f"{d:%A, %B %-d} — {info['todo']} to do · "
+                     f"{info['jobs']} postings · {info['news']} headlines"
+            )
+            dot = '<span class="dot hot"></span>' if info["todo"] else '<span class="dot"></span>'
+            cells.append(
+                f'<a class="{" ".join(cls)}" href="{_e(info["href"])}" title="{_e(tip)}">'
+                f"{d.day}{dot}</a>"
+            )
+    return "".join(cells)
+
+
 def render_index(entries: list[tuple[str, DigestData]], legacy: list[str] | None = None) -> str:
-    """The archive front page: every day we still have data for, newest
-    first. entries are (stem, data) already sorted newest-first.
+    """The archive front page: a calendar, newest month first, so finding
+    "the day I missed" is a glance and a click rather than a scan down a
+    list. A day with a digest is a link; a day without one is a dim number,
+    which is itself the answer to "did Kyra run that morning?".
 
     legacy are stems that predate the JSON archive - days written when the
     Markdown was the only output. They can't be rendered as pages (the
     Markdown never kept the headline summaries), but they existed and the
-    index would be lying to omit them, so they get a row linking to the
-    .md file itself."""
-    rows = []
+    index would be lying to omit them, so they link to the .md instead.
+    """
+    days: dict[date, dict] = {}
     for stem, d in entries:
         try:
-            long = datetime.strptime(stem, "%Y-%m-%d").strftime("%a, %b %-d %Y")
+            key = datetime.strptime(stem, "%Y-%m-%d").date()
         except ValueError:
-            long = stem
-        counts = [
-            f'<span class="{"hot" if d.action_count else ""}"><b>{d.action_count}</b> to do</span>',
-            f"<span><b>{d.new_postings}</b> postings</span>",
-            f"<span><b>{len(d.news)}</b> headlines</span>",
-        ]
-        rows.append(
-            f'<a class="day" href="{_e(stem)}.html"><span class="d">{_e(long)}</span>'
-            f'<span class="c">{" · ".join(counts)}</span></a>'
-        )
+            continue
+        days[key] = {"href": f"{stem}.html", "todo": d.action_count,
+                     "news": len(d.news), "jobs": d.new_postings, "legacy": False}
     for stem in legacy or []:
         try:
-            long = datetime.strptime(stem, "%Y-%m-%d").strftime("%a, %b %-d %Y")
+            key = datetime.strptime(stem, "%Y-%m-%d").date()
         except ValueError:
-            long = stem
-        rows.append(
-            f'<a class="day legacy" href="{_e(stem)}.md"><span class="d">{_e(long)}</span>'
-            f'<span class="c">markdown only · predates the archive</span></a>'
-        )
-    body = "".join(rows) or '<p class="empty">No archived digests yet.</p>'
+            continue
+        days.setdefault(key, {"href": f"{stem}.md", "todo": 0, "news": 0,
+                              "jobs": 0, "legacy": True})
+
+    today = datetime.now().astimezone().date()
+    months = sorted({(d.year, d.month) for d in days}, reverse=True)
+    dow = "".join(f'<span class="dow">{n}</span>' for n in ("S", "M", "T", "W", "T", "F", "S"))
+    blocks = [
+        f'<section class="cal"><h3>{calendar.month_name[m]} {y}</h3>'
+        f'<div class="grid">{dow}{_day_cells(days, y, m, today)}</div></section>'
+        for y, m in months
+    ]
+    body = "".join(blocks) or '<p class="empty">No archived digests yet.</p>'
+    n = len(days)
     return "\n".join([
         '<!doctype html><html lang="en"><head><meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width,initial-scale=1">',
         f"<title>Kyra digest — archive</title><style>{_CSS}</style></head><body>",
         '<div class="wrap"><header class="top"><div class="brand">Kyra · morning digest</div>',
-        f"<h1>Archive · {(n := len(entries) + len(legacy or []))} day{'' if n == 1 else 's'}</h1></header>",
+        f"<h1>Archive · {n} day{'' if n == 1 else 's'}</h1>",
+        '<div class="legend"><span class="key"><span class="dot"></span>digest</span>'
+        '<span class="key"><span class="dot hot"></span>had something to do</span>'
+        '<span class="key legacy-key">markdown only</span></div></header>',
         body,
-        '<footer>Every day Kyra has kept structured data for. The JSON beside each page is '
-        'the canonical record; the pages are regenerated from it with '
+        '<footer>Hover a day for its counts. The JSON beside each page is the canonical '
+        'record; the pages are regenerated from it with '
         '<code>python3 scripts/daily_digest.py --rebuild</code>.</footer>',
         "</div></body></html>",
     ])

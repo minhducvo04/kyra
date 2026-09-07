@@ -3,6 +3,7 @@ feed text is never trusted into the HTML, and Hacker News' metadata
 "summary" is parsed into real fields rather than printed as prose.
 """
 import json
+import re
 from datetime import datetime
 
 from companion.digest import (
@@ -201,13 +202,50 @@ def test_archive_self_heals_missing_pages(tmp_path):
         assert (tmp_path / f"{stem}.html").exists(), stem
 
 
-def test_index_lists_every_day_newest_first(tmp_path):
-    _seed(tmp_path, "2026-09-04", "2026-09-06", "2026-09-05")
+def test_index_calendar_orders_months_newest_first_days_naturally(tmp_path):
+    """The index is a calendar, so within a month days read 1..31 as any
+    calendar does; it is the *months* that run newest-first, so the current
+    month is what you land on."""
+    _seed(tmp_path, "2026-08-30", "2026-09-04", "2026-09-06")
     write_archive(tmp_path, rebuild=True)
     index = (tmp_path / "index.html").read_text()
-    order = [index.index(f'href="2026-09-0{d}.html"') for d in (6, 5, 4)]
-    assert order == sorted(order), "newest day must come first"
+
+    assert index.index("September 2026") < index.index("August 2026")
+    assert index.index('href="2026-09-04.html"') < index.index('href="2026-09-06.html"')
     assert "3 days" in index
+
+
+def test_calendar_aligns_days_to_real_weekdays(tmp_path):
+    """1 September 2026 is a Tuesday, and the grid is Sunday-first, so it
+    must sit behind exactly two blank cells. Off-by-one here would put
+    every day of the archive under the wrong weekday."""
+    _seed(tmp_path, "2026-09-01")
+    write_archive(tmp_path, rebuild=True)
+    index = (tmp_path / "index.html").read_text()
+    cells = re.findall(r'<(?:a|span) class="cell([^"]*)"', index)
+    assert cells[:3] == [" pad", " pad", ""]
+    assert datetime(2026, 9, 1).strftime("%A") == "Tuesday"  # the premise, pinned
+
+
+def test_a_day_without_a_digest_is_not_a_link(tmp_path):
+    """A dim, unclickable number is the honest answer to "did Kyra run
+    that morning?" - it must never look like a page that failed to open."""
+    _seed(tmp_path, "2026-09-04")
+    write_archive(tmp_path, rebuild=True)
+    index = (tmp_path / "index.html").read_text()
+    assert 'href="2026-09-05.html"' not in index
+    assert '<span class="cell none">5<' in index
+
+
+def test_calendar_marks_todos_and_legacy_days(tmp_path):
+    _seed(tmp_path, "2026-09-04")  # _rich() carries one due reminder
+    (tmp_path / "2026-09-02.md").write_text("# an older, markdown-only day", encoding="utf-8")
+    write_archive(tmp_path, rebuild=True)
+    index = (tmp_path / "index.html").read_text()
+
+    assert '<span class="dot hot">' in index  # 09-04 had something to do
+    assert 'class="cell legacy" href="2026-09-02.md"' in index
+    assert "2 days" in index  # the legacy day is counted, not quietly dropped
 
 
 def test_search_finds_a_headline_by_title_or_summary(tmp_path):
