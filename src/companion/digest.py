@@ -187,7 +187,14 @@ def render_markdown(data: DigestData) -> str:
     lines.append("")
     lines.append(f"## Tech news ({len(data.news)})")
     for h in data.news:
-        extra = f" ({h.points} pts, {h.n_comments} comments)" if h.points is not None else ""
+        # Both counts are optional and arrive separately; one guarding the
+        # other printed "None comments" on a front-page item without them.
+        meta = []
+        if h.points is not None:
+            meta.append(f"{h.points} pts")
+        if h.n_comments is not None:
+            meta.append(f"{h.n_comments} comments")
+        extra = f" ({', '.join(meta)})" if meta else ""
         lines.append(f"- {h.title} — {h.source}{extra}" + (f" <{h.link}>" if h.link else ""))
     if not data.news:
         lines.append("- (no news fetched)")

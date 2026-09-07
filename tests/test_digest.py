@@ -262,3 +262,13 @@ def test_a_corrupt_archive_file_is_skipped_not_fatal(tmp_path):
     assert [s for s, _ in load_archive(tmp_path)] == ["2026-09-05"]
     assert len(search_archive(tmp_path, "headline")) == 1
     assert "2026-09-05" in render_index(load_archive(tmp_path))
+
+
+def test_markdown_omits_a_missing_hn_comment_count():
+    """A front-page item with no comment count yet rendered "None comments"
+    into the archived .md - the count is optional, the points are not."""
+    md = render_markdown(_data(news=[NewsItem(
+        source="Hacker News (front page)", title="T", summary="", link="x", points=22,
+    )]))
+    assert "None" not in md
+    assert "(22 pts)" in md

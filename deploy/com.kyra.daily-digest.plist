@@ -5,14 +5,14 @@
     <key>Label</key><string>com.kyra.daily-digest</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/minhducvo/Downloads/Personal assistant/.venv/bin/python</string>
-        <string>/Users/minhducvo/Downloads/Personal assistant/scripts/daily_digest.py</string>
+        <string>/Users/minhducvo/Projects/kyra/.venv/bin/python</string>
+        <string>/Users/minhducvo/Projects/kyra/scripts/daily_digest.py</string>
     </array>
-    <key>WorkingDirectory</key><string>/Users/minhducvo/Downloads/Personal assistant</string>
+    <key>WorkingDirectory</key><string>/Users/minhducvo/Projects/kyra</string>
     <key>StartCalendarInterval</key>
     <dict><key>Hour</key><integer>5</integer><key>Minute</key><integer>0</integer></dict>
-    <key>StandardOutPath</key><string>/Users/minhducvo/Downloads/Personal assistant/data/digests/launchd.log</string>
-    <key>StandardErrorPath</key><string>/Users/minhducvo/Downloads/Personal assistant/data/digests/launchd.err</string>
+    <key>StandardOutPath</key><string>/Users/minhducvo/Projects/kyra/data/digests/launchd.log</string>
+    <key>StandardErrorPath</key><string>/Users/minhducvo/Projects/kyra/data/digests/launchd.err</string>
     <key>EnvironmentVariables</key>
     <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
 </dict>
