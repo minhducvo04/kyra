@@ -75,9 +75,10 @@ class AnthropicLLM(LLMBackend):
         messages = [{"role": m.role, "content": m.content} for m in history]
         messages.append({"role": "user", "content": user_input})
         # Streamed on purpose: the SDK refuses a non-streaming request whose max_tokens implies more than
-        # ten minutes of output (about 21k tokens), and the resume loop's 32000 budget crossed that line
-        # for real (2026-09-07: every resume job failed with "Streaming is required..."). The final
-        # message is the same object create() returns, so nothing downstream changes.
+        # ten minutes of output (about 21k tokens), and the resume loop's budget crossed that line for
+        # real (2026-09-07: every resume job failed with "Streaming is required..."). The final message
+        # is the same object create() returns, so nothing downstream changes. respond_with_tools()
+        # still uses create(): its 2000-token budget is nowhere near the cap.
         with self._client.messages.stream(
             model=self._model, max_tokens=self._max_tokens, system=system, messages=messages,
         ) as stream:
