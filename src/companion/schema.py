@@ -46,6 +46,10 @@ job_applications = Table(
     Column("link", Text),
     Column("status", String(32), nullable=False, server_default="applied"),
     Column("notes", Text),
+    # The company-tailored resume autofill should attach for this application.
+    # Duc wants one resume per company (its environment, product area, specialisation),
+    # so the file lives with the application, not only in the global profile.
+    Column("resume_path", Text),
     Column("created_at", String(64), nullable=False),
     Column("updated_at", String(64), nullable=False),
 )

@@ -41,7 +41,7 @@ def default_tool_registry(draft_backend: AnthropicLLM | None = None) -> ToolRegi
         reminder_tools(reminders)
         + learning_tools()
         + job_application_tools(applications, llm=draft_backend)
-        + job_autofill_tools()
+        + job_autofill_tools(applications=applications)
         + memory_note_tools()
         + outreach_tools(
             llm=draft_backend, reminders=reminders, memory_notes=MarkdownMemoryNotesStore(), applications=applications
