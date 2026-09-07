@@ -48,6 +48,8 @@ LOG_DIR = DATA_DIR / "job_autofill_logs"
 
 # label substring (case-insensitive) -> ApplicantProfile attribute
 CORE_FIELD_MAP = {
+    "location": "location",
+    "city": "location",
     "first name": "first_name",
     "last name": "last_name",
     "email": "email",
@@ -387,6 +389,7 @@ class LeverAutofillEngine(LabeledFormEngine):
         ('input[name="name"]', "Name"),
         ('input[name="email"]', "Email"),
         ('input[name="phone"]', "Phone"),
+        ('input[name="location"]', "Location"),
         ('input[name="org"]', "Current company"),
         ('input[name="urls[LinkedIn]"]', "LinkedIn"),
         ('input[name="urls[GitHub]"]', "GitHub"),
@@ -410,11 +413,8 @@ class LeverAutofillEngine(LabeledFormEngine):
 
     def _attach_resume(self, page, profile: ApplicantProfile, report: FillReport) -> None:
         super()._attach_resume(page, profile, report)
-        # Lever's core set has no city field and its custom questions are cards[...]
-        # groups; say so rather than leaving Duc to notice an empty required box.
-        if page.locator('input[name="location"]').count():
-            report.skipped.append(SkippedField(
-                label="Location", reason="Lever wants a city here and the profile has only a country"))
+        # Lever's custom questions are cards[...] groups; say so rather than leaving
+        # Duc to notice an empty required box after he has stopped reading.
         cards = page.locator('[name^="cards["]').count()
         if cards:
             report.skipped.append(SkippedField(

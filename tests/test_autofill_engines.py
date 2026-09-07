@@ -168,16 +168,14 @@ def test_an_empty_profile_field_says_so_rather_than_filling_blank(engine):
 class FakeLeverPage:
     """Lever identifies core fields by `name`, so the fake is selector-keyed."""
 
-    def __init__(self, present, cards=0, location=True):
+    def __init__(self, present, cards=0):
         self._present = set(present)
-        self._cards, self._location = cards, location
+        self._cards = cards
         self.filled = {}
 
     def locator(self, selector):
         if selector.startswith('[name^="cards['):
             return FakeLocator(present=self._cards > 0, label="cards", count_override=self._cards)
-        if 'name="location"' in selector:
-            return FakeLocator(present=self._location, label="location")
         # names contain brackets ("urls[LinkedIn]"), so cut at the closing quote
         name = selector.split('name="')[1].split('"')[0] if 'name="' in selector else selector
         return FakeLocator(present=name in self._present, label=name, value_sink=self.filled)
@@ -191,9 +189,9 @@ def test_lever_application_url():
 
 
 def test_lever_walks_named_fields_and_labels_them_like_the_other_boards():
-    page = FakeLeverPage({"name", "email", "phone", "org", "urls[LinkedIn]", "urls[GitHub]", "urls[Portfolio]"})
+    page = FakeLeverPage({"name", "email", "phone", "location", "org", "urls[LinkedIn]", "urls[GitHub]", "urls[Portfolio]"})
     got = [label for _loc, label in LeverAutofillEngine()._form_fields(page)]
-    assert got == ["Name", "Email", "Phone", "Current company", "LinkedIn", "GitHub", "Portfolio"]
+    assert got == ["Name", "Email", "Phone", "Location", "Current company", "LinkedIn", "GitHub", "Portfolio"]
     # a form without the optional link fields yields only what is there
     thin = FakeLeverPage({"name", "email"})
     assert [lab for _l, lab in LeverAutofillEngine()._form_fields(thin)] == ["Name", "Email"]
@@ -207,14 +205,22 @@ def test_lever_labels_map_onto_the_shared_profile_maps():
     assert [f.value for f in report.filled] == ["Duc Vo", "Escaype", "https://li/x", "https://site/x"]
 
 
-def test_lever_reports_what_it_cannot_answer():
+def test_lever_reports_its_custom_questions():
     engine, report = LeverAutofillEngine(), FillReport(url="u")
-    page = FakeLeverPage({"name"}, cards=60, location=True)
-    engine._attach_resume(page, _profile(), report)
-    reasons = {s.label: s.reason for s in report.skipped}
-    assert any("city" in r for r in reasons.values())
-    assert "60 custom question field(s)" in reasons
-    # a form with no cards and no location box says nothing extra
+    engine._attach_resume(FakeLeverPage({"name"}, cards=60), _profile(), report)
+    assert "60 custom question field(s)" in {s.label for s in report.skipped}
     quiet = FillReport(url="u")
-    engine._attach_resume(FakeLeverPage({"name"}, cards=0, location=False), _profile(), quiet)
+    engine._attach_resume(FakeLeverPage({"name"}, cards=0), _profile(), quiet)
     assert [s.label for s in quiet.skipped] == ["Resume"]  # the fake has no file input
+
+
+def test_location_is_filled_when_set_and_flagged_when_not():
+    """Lever's location box is required; the profile field exists so Duc can fill
+    it once instead of typing a city on every application - but it is never guessed."""
+    engine = LeverAutofillEngine()
+    filled = FillReport(url="u")
+    engine._fill_one(FakeLocator(label="Location"), "Location", _profile(location="Berkeley, CA"), filled)
+    assert filled.filled[0].value == "Berkeley, CA"
+    empty = FillReport(url="u")
+    engine._fill_one(FakeLocator(label="Location"), "Location", _profile(), empty)
+    assert "location is empty" in empty.skipped[0].reason

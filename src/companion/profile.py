@@ -36,6 +36,11 @@ class ApplicantProfile:
     last_name: str = ""
     email: str = ""
     phone: str = ""
+    # Lever's application form has a required "Location" box wanting a city, and
+    # Greenhouse forms often ask too. Left empty on purpose rather than inferred
+    # from anything Kyra knows: a guessed address on a real application is exactly
+    # the class of invention this project refuses. Fill it in the PROFILE tab.
+    location: str = ""
     country: str = "United States"
 
     linkedin_url: str = ""
