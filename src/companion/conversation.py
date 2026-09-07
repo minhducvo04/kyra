@@ -6,6 +6,7 @@ from companion.memory import MemoryStore
 from companion.memory_notes import MarkdownMemoryNotesStore, MemoryNotesStore
 from companion.persona import Persona
 from companion.tools import ToolRegistry
+from companion.voice_text import SPOKEN_REGISTER
 
 __all__ = ["ConversationManager", "Message"]
 
@@ -34,7 +35,7 @@ class ConversationManager:
         self.memory_notes = memory_notes or MarkdownMemoryNotesStore()
         self.history: list[Message] = []
 
-    def _build_system(self, user_input: str) -> str:
+    def _build_system(self, user_input: str, register: str | None = None) -> str:
         memories = self.memory.retrieve(user_input, k=5)
         memory_block = "\n".join(f"- {m.text}" for m in memories) or "(no relevant memories yet)"
         notes_block = self.memory_notes.render()
@@ -50,10 +51,13 @@ class ConversationManager:
             f"Current date and time: {now_str}\n\n"
             f"Durable facts you've saved about Duc (always shown, not search-retrieved):\n{notes_block}\n\n"
             f"Relevant things you remember about Duc from past conversations:\n{memory_block}"
+            + (f"\n\n{SPOKEN_REGISTER}" if register == "voice" else "")
         )
 
-    def handle_turn(self, user_input: str, on_token=None) -> str:
-        system = self._build_system(user_input)
+    def handle_turn(self, user_input: str, on_token=None, register: str | None = None) -> str:
+        """register="voice" when the reply will be spoken: one extra line in the
+        system prompt asks for the spoken shape (see voice_text.py)."""
+        system = self._build_system(user_input, register)
         if on_token is not None and getattr(self.llm, "supports_streaming", False):
             reply = self.llm.respond(system, self.history, user_input, on_token=on_token)
         else:

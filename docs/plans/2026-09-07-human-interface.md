@@ -64,9 +64,10 @@ JS/CSS is small (1.5k lines) and every slice below is additive.
 3. **Cancel in flight** - the mic click already stops playback; add an AbortController on the streaming chat
    request so a new message or the space bar cancels a reply mid-generation, and the partial text stays in the
    transcript marked "(interrupted)". -> verify: interrupt mid-sentence; the next utterance is handled cleanly.
-4. **Voice register** - a `channel="voice"` hint on `/api/voice` that adds one line to the system prompt ("this
-   will be spoken: short sentences, no lists or markdown") and strips markdown before synthesis. -> verify: the
-   same question in text and voice gets a reply of a different shape.
+4. **Voice register** - DONE 2026-09-07. `/api/voice` answers with `register="voice"`, which adds one line to the
+   system prompt (`voice_text.SPOKEN_REGISTER`), and `spoken_text()` strips markdown before synthesis as the
+   guarantee; the transcript keeps the written reply. -> verified: unit tests on the prompt line and the stripper,
+   the endpoint with stubbed speech, and a real Kokoro clip round-tripped through the running server.
 5. **Persistent transcript + "that was wrong"** - `localStorage` for the session transcript (restored on reload,
    cleared by a button), and a small ✕ on any Kyra line that saves a `corrections` memory note ("Duc marked this
    reply as wrong: <first 120 chars>"). -> verify: reload keeps the conversation; the note lands in

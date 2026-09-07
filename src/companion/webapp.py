@@ -61,6 +61,7 @@ from companion.reminders import RemindersStore
 from companion.router import TurnRouter, route_and_answer_verbose
 from companion.science import ScienceFactsTool
 from companion.settings import get_settings
+from companion.voice_text import spoken_text
 
 app = FastAPI(title="Kyra")
 install_error_handlers(app)
@@ -252,7 +253,7 @@ def set_backend(body: BackendIn) -> dict:
     return {"backend": _current_backend}
 
 
-def _answer(message: str, on_token=None) -> ChatOut:
+def _answer(message: str, on_token=None, register: str | None = None) -> ChatOut:
     """Shared by /api/chat, /api/chat/stream and /api/voice - text in, routed
     reply out. The only thing voice adds on top is transcribing in and
     synthesizing out; the only thing streaming adds is on_token, which
@@ -260,11 +261,11 @@ def _answer(message: str, on_token=None) -> ChatOut:
     text turns) and nothing otherwise (tool turns, the local model).
     """
     if _current_backend != "auto":
-        reply = _rt.conversation.handle_turn(message, on_token=on_token)
+        reply = _rt.conversation.handle_turn(message, on_token=on_token, register=register)
         return ChatOut(reply=reply, backend=_current_backend)
 
     reply, decision = route_and_answer_verbose(
-        message, _rt.conversation, _router, _backends, _registry, on_token=on_token
+        message, _rt.conversation, _router, _backends, _registry, on_token=on_token, register=register
     )
     if decision is None:  # a mode-switch command ("focus mode" etc.), not a routed turn
         return ChatOut(reply=reply, backend="auto")
@@ -333,8 +334,10 @@ def voice(audio: UploadFile) -> VoiceOut:
             reply="", backend=_current_backend, transcript="", reply_audio_b64="", reply_audio_rate=0
         )
 
-    chat_out = _answer(transcript)
-    reply_audio, rate = _rt.tts.speak(chat_out.reply)
+    # Spoken register: the prompt asks for a spoken shape, spoken_text() guarantees no
+    # markdown reaches the synthesiser. The transcript still shows the reply as written.
+    chat_out = _answer(transcript, register="voice")
+    reply_audio, rate = _rt.tts.speak(spoken_text(chat_out.reply))
     wav_bytes = encode_wav_bytes(reply_audio, rate)
 
     return VoiceOut(
