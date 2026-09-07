@@ -1,0 +1,17 @@
+{"message": "how much detail should a behavioral interview answer have", "path": "text", "backend": "claude", "note": "advice bait: interview prep, not a tool"}
+{"message": "is it worth negotiating a first offer as a new grad", "path": "text", "backend": "claude", "note": "advice bait: compensation question"}
+{"message": "how long should my resume be if I only have two internships", "path": "text", "backend": "claude", "note": "advice bait: resume advice, no draft asked"}
+{"message": "do hiring managers actually read cover letters these days", "path": "text", "backend": "claude", "note": "advice bait: 'cover letter' but an opinion question"}
+{"message": "what's the etiquette on following up after an onsite", "path": "text", "backend": "claude", "note": "advice bait: 'following up' but no contact"}
+{"message": "why do some companies repost the same role every few weeks", "path": "text", "backend": "claude", "note": "advice bait: repost, no posting given"}
+{"message": "should I reach out to alumni before or after applying", "path": "text", "backend": "claude", "note": "advice bait: outreach strategy, not a contact to save"}
+{"message": "what's a fair equity number to expect at a seed stage startup", "path": "text", "backend": "claude", "note": "advice bait: comp question"}
+{"message": "my roommate just got an offer, so jealous lol", "path": "text", "backend": "local", "note": "casual bait: offer talk"}
+{"message": "recruiters on linkedin are something else honestly", "path": "text", "backend": "local", "note": "casual bait: recruiters/linkedin"}
+{"message": "add Marcus Lin at Ramp to my outreach, he used to run infra there", "path": "tool", "backend": "claude", "note": "add_outreach_contact"}
+{"message": "write the connection note for Marcus", "path": "tool", "backend": "claude", "note": "draft_outreach_note"}
+{"message": "check this posting for red flags: Staff Engineer, 10+ years, $90k-$250k, wear many hats", "path": "tool", "backend": "claude", "note": "analyze_job_posting"}
+{"message": "start on jobs.lever.co/ramp/9a71b2 for me", "path": "tool", "backend": "claude", "note": "target_job_posting"}
+{"message": "who haven't I followed up with yet", "path": "tool", "backend": "claude", "note": "list_outreach - due follow-ups"}
+{"message": "jot down that I interview better in the afternoon", "path": "tool", "backend": "claude", "note": "save_memory_note - the shape v3 regressed on"}
+{"message": "I messaged Marcus yesterday, mark that one sent", "path": "tool", "backend": "claude", "note": "update_outreach_status"}

@@ -17,9 +17,11 @@ from companion.logging_setup import configure_logging
 from companion.paths import PROJECT_ROOT
 from companion.router_ft import (
     FT_DIR,
+    TESTSET2_PATH,
     CompactPromptClassifier,
     Example,
     FewShotBaselineClassifier,
+    _norm,
     evaluate,
     generate_synthetic,
     load_testset,
@@ -39,7 +41,9 @@ def cmd_gen(args):
 
     llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=8000)
     cats = [c.strip() for c in args.categories.split(",") if c.strip()] if args.categories else None
-    rows = generate_synthetic(llm, args.per_category, load_testset(), categories=cats)
+    # Block BOTH held-out sets from the generated data, not just the main one.
+    blocked = load_testset() + load_testset(TESTSET2_PATH)
+    rows = generate_synthetic(llm, args.per_category, blocked, categories=cats)
     FT_DIR.mkdir(parents=True, exist_ok=True)
     out = FT_DIR / args.out
     with out.open("w", encoding="utf-8") as f:
@@ -49,10 +53,22 @@ def cmd_gen(args):
 
 
 def _load_synth(names: list[str]) -> list[Example]:
+    """Load and concatenate generated files, deduped across them - each `gen`
+    run only dedupes within itself, so two runs that produced the same phrasing
+    would otherwise give that message double weight."""
     rows: list[Example] = []
+    seen: set[str] = set()
     for name in names:
         path = FT_DIR / name
-        rows += [Example(**json.loads(line)) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            e = Example(**json.loads(line))
+            key = _norm(e.message)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(e)
     return rows
 
 
@@ -70,7 +86,7 @@ def cmd_train(args):
            "--data", str(FT_DIR / f"data-{args.data}"), "--adapter-path", str(adapter), "--iters", str(args.iters),
            "--batch-size", str(args.batch_size), "--num-layers", str(args.num_layers), "--learning-rate", str(args.lr),
            "--max-seq-length", "512", "--mask-prompt", "--steps-per-eval", "100", "--steps-per-report", "50",
-           "--save-every", "200", "--seed", "7"]
+           "--save-every", "200", "--seed", str(args.seed)]
     print(" ".join(cmd))
     subprocess.run(cmd, check=True, cwd=PROJECT_ROOT)
     print(f"adapter -> {adapter}")
@@ -79,7 +95,7 @@ def cmd_train(args):
 def cmd_eval(args):
     from companion.llm import LocalLLM
 
-    testset = load_testset()
+    testset = load_testset(Path(args.testset)) if args.testset else load_testset()
     results = []
     if args.baseline:
         from companion.default_tools import default_tool_registry
@@ -100,7 +116,7 @@ def cmd_eval(args):
         results.append(evaluate(CompactPromptClassifier(f"zero-shot compact ({model.split('/')[-1]})", llm), testset))
         print(results[-1].row())
     report = render_report(results)
-    out = FT_DIR / "eval.json"
+    out = FT_DIR / (args.out or "eval.json")
     out.write_text(json.dumps([r.__dict__ for r in results], indent=2), encoding="utf-8")
     print("\n" + report + f"\n\n(details incl. misses -> {out})")
 
@@ -127,11 +143,14 @@ def main():
     t.add_argument("--batch-size", type=int, default=4)
     t.add_argument("--num-layers", type=int, default=8)
     t.add_argument("--lr", type=float, default=1e-4)
+    t.add_argument("--seed", type=int, default=7, help="training seed - vary it to measure run-to-run spread")
     t.set_defaults(fn=cmd_train)
     e = sub.add_parser("eval")
     e.add_argument("--baseline", action="store_true")
+    e.add_argument("--testset", help="path to a held-out jsonl (default: tests/data/router_testset.jsonl)")
     e.add_argument("--adapter", action="append")
     e.add_argument("--zero-shot", action="append")
+    e.add_argument("--out", help="result file under data/router_ft/ (default: eval.json)")
     e.set_defaults(fn=cmd_eval)
     args = p.parse_args()
     configure_logging()

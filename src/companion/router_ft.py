@@ -35,6 +35,11 @@ logger = logging.getLogger(__name__)
 
 FT_DIR = DATA_DIR / "router_ft"
 TESTSET_PATH = PROJECT_ROOT / "tests" / "data" / "router_testset.jsonl"
+# A second held-out set, written 2026-09-07 before the round-4 data was generated:
+# job-search advice bait plus real outreach/posting requests. Used to read whether a
+# bucket generalizes, not to pick what ships (that stays TESTSET_PATH). Both are
+# blocked from the generator.
+TESTSET2_PATH = PROJECT_ROOT / "tests" / "data" / "router_testset_holdout2.jsonl"
 
 # The prompt the fine-tuned model sees. Short on purpose - the few-shot
 # examples and tool descriptions that make router.CLASSIFIER_PROMPT long
@@ -43,7 +48,8 @@ COMPACT_SYSTEM = (
     "Classify the user's message for an assistant router. Reply with JSON only: "
     '{"path": "tool"|"text", "backend": "claude"|"local"}. '
     "tool = it asks for a reminder, tech news, science facts, saving/reviewing learning items, "
-    "job-application tracking/drafting/autofill, or saving a durable fact about the user. "
+    "job-application tracking/drafting/autofill, reading a job posting's signals or targeting a posting URL, "
+    "outreach contacts and their LinkedIn notes/follow-ups, or saving a durable fact about the user. "
     "text = anything else; backend claude for explanations, careful reasoning, or work coordination, local for casual chat."
 )
 
@@ -77,8 +83,11 @@ CATEGORIES: dict[str, tuple[str, str, str, list[str]]] = {
                                    ["draft a cover letter for this posting", "write me resume bullets for an ML role"]),
     "autofill_job_application": ("tool", "claude", "asking to fill in a job application form at a URL (Greenhouse)",
                                  ["fill out this application for me: greenhouse.io/acme/jobs/123", "autofill that posting I sent"]),
-    "save_memory_note": ("tool", "claude", "asking to remember/note a durable fact about the user (preference, person, ongoing project)",
-                         ["remember that I prefer standing desks", "note that my sister's name is Linh"]),
+    "save_memory_note": ("tool", "claude", "asking to remember/note a durable fact about the user (preference, person, ongoing project); "
+                         "often phrased as a bare instruction with a colon or an imperative - 'note for later: ...', 'jot this down: ...', "
+                         "'for the record, ...' - with no question attached",
+                         ["remember that I prefer standing desks", "note that my sister's name is Linh",
+                          "jot this down: I get sluggish after 3pm", "for the record, I'd rather have tea than coffee"]),
     "text_explain": ("text", "claude", "asking for an explanation or summary of a technical topic in some depth (not asking to save it)",
                      ["give me a quick summary of the CAP theorem", "explain how Raft elects a leader"]),
     "text_reasoning": ("text", "claude", "asking for help thinking through a design decision, tradeoff, or plan",
@@ -106,6 +115,46 @@ CATEGORIES: dict[str, tuple[str, str, str, list[str]]] = {
                                  "news, remember, review, save, fill, list, science) with no request behind it",
                                 ["can you snooze for a second, I need to think", "what jobs did people have before computers",
                                  "my review at work went fine btw", "I saved a seat for you"]),
+    # Added 2026-09-07 for the seven tools that landed after the first adapter was
+    # trained (outreach assist, posting signals, target-this-posting). The two
+    # bait buckets exist because the untrained adapter sent "what's a good salary
+    # range for a new grad SWE in NYC?" to the tool path.
+    "add_outreach_contact": ("tool", "claude", "asking to record a person (often an alum or recruiter) at a company as an outreach contact, "
+                             "with a name, company, LinkedIn URL or how they are connected",
+                             ["add Alex Rivera at Northwind as an outreach contact, he's a Berkeley alum", "track this recruiter: linkedin.com/in/jane-doe, Stripe"]),
+    "draft_outreach_note": ("tool", "claude", "asking to draft the LinkedIn connection note or follow-up message for a specific saved contact",
+                            ["draft a connection note for Alex", "write the follow-up for my Stripe contact"]),
+    "copy_outreach_note": ("tool", "claude", "asking to copy a contact's drafted note/follow-up to the clipboard or open their profile so the user can send it",
+                           ["copy Alex's note so I can paste it", "put the follow-up for the Stripe guy on my clipboard"]),
+    "update_outreach_status": ("tool", "claude", "reporting what happened with an outreach contact: note sent, connection accepted, they replied, "
+                               "had the call, got referred, no reply",
+                               ["I sent the note to Alex", "the Northwind contact accepted and replied, update it"]),
+    "list_outreach": ("tool", "claude", "asking which outreach contacts exist, their statuses, or whose follow-up is due",
+                      ["who do I still need to follow up with", "list my outreach contacts at Northwind"]),
+    "analyze_job_posting": ("tool", "claude", "asking to read a job posting's warning signs/signals (age, repost, salary spread, requirement count, "
+                            "problem language) from pasted posting text",
+                            ["read the warning signs in this posting: ...", "any red flags in this job description?"]),
+    "target_job_posting": ("tool", "claude", "asking to start on / target a specific posting URL (Greenhouse, Lever, Ashby): fetch it, read the signals, "
+                           "log it as targeting",
+                           ["target this posting jobs.ashbyhq.com/netic/abc123", "let's go after this one: jobs.lever.co/acme/xyz"]),
+    "text_hard_negative_outreach": ("text", "claude", "general questions or advice requests about job postings, salaries, LinkedIn networking, "
+                                    "referrals, or job-search strategy that mention no specific saved contact or posting URL and ask for "
+                                    "no record to be kept - NOT a request to use a tool",
+                                   ["what's a good salary range for a new grad SWE in NYC?", "how do I write a good LinkedIn note in general",
+                                    "what does it mean when a job gets reposted", "is it rude to follow up twice on LinkedIn"]),
+    "text_hard_negative_outreach_local": ("text", "local", "casual chat that happens to mention LinkedIn, recruiters, referrals, postings, "
+                                          "targets, or reaching out, with no request behind it",
+                                         ["a recruiter liked my post lol", "my friend got referred and ghosted anyway", "I hit my target pace on the run today"]),
+    # Added 2026-09-07 (round 4): round 3 fixed the salary question but sent
+    # "what does a good STAR answer for Ownership look like" and "what does a
+    # reposted job mean" to the tool path. Both are career ADVICE - the whole
+    # class needed its own bucket, not one more phrasing.
+    "text_hard_negative_jobsearch_advice": ("text", "claude", "a general career or job-search question asking for advice, an explanation, or a walkthrough - "
+                                            "how to answer an interview question, resume length/format, whether to negotiate, what some hiring behaviour means, "
+                                            "whether cover letters get read, when to network - with NO specific saved contact, NO posting text or URL supplied, "
+                                            "and nothing asked to be recorded. These are explanations, not tool calls",
+                                           ["how much detail belongs in a behavioral answer", "how long should a new grad resume be",
+                                            "when is it worth negotiating a first offer", "do companies actually read cover letters"]),
 }
 
 GEN_PROMPT = """Generate {n} distinct, realistic messages a user might type or say to a personal AI assistant, all of which fall \
@@ -191,7 +240,7 @@ def split(
     """Deterministic shuffle + split. `limit` caps the TRAIN size (for the
     data-size ablation) after the split, so valid stays the same.
     `cap_per_category` drops examples beyond N per category BEFORE the
-    split - the class-balance ablation (15 tool categories vs 7 text ones
+    split - the class-balance ablation (22 tool categories vs 9 text ones
     otherwise leaves tools 2:1 over text)."""
     rng = random.Random(seed)
     rows = list(examples)
@@ -361,7 +410,7 @@ def render_report(results: list[EvalResult], notes: str = "") -> str:
 
 __all__ = [
     "COMPACT_SYSTEM", "CATEGORIES", "Example", "EvalResult", "Prediction", "Classifier", "CompactPromptClassifier",
-    "FewShotBaselineClassifier", "FT_DIR", "TESTSET_PATH", "Message", "evaluate", "generate_synthetic",
+    "FewShotBaselineClassifier", "FT_DIR", "TESTSET_PATH", "TESTSET2_PATH", "Message", "evaluate", "generate_synthetic",
     "load_testset", "parse_json_array", "parse_label", "render_report", "score", "split", "to_chat_row",
     "write_mlx_dataset",
 ]
