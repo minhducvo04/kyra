@@ -41,6 +41,11 @@ class Message:
 
 
 class LLMBackend(ABC):
+    # True when respond() can hand tokens to an on_token callback as they arrive.
+    # Callers check this instead of passing on_token blindly, so a backend that
+    # cannot stream (the local MLX one today) never gets an argument it rejects.
+    supports_streaming = False
+
     """Interface: swap the model answering a turn without touching the caller."""
 
     @abstractmethod
@@ -71,7 +76,14 @@ class AnthropicLLM(LLMBackend):
         # returning a blank reply - see the conversation this was debugged in.
         self._tool_max_tokens = tool_max_tokens
 
-    def respond(self, system: str, history: list[Message], user_input: str) -> str:
+    supports_streaming = True
+
+    def respond(self, system: str, history: list[Message], user_input: str, on_token=None) -> str:
+        """on_token(str), when given, receives each text delta as it arrives -
+        the web UI and the Vision Pro client render time-to-first-token, which
+        the research (docs/plans/2026-09-07-human-interface.md) ranks above
+        time-to-complete. The return value is unchanged: the full reply, with
+        the truncation marker when the budget ran out."""
         messages = [{"role": m.role, "content": m.content} for m in history]
         messages.append({"role": "user", "content": user_input})
         # Streamed on purpose: the SDK refuses a non-streaming request whose max_tokens implies more than
@@ -82,6 +94,9 @@ class AnthropicLLM(LLMBackend):
         with self._client.messages.stream(
             model=self._model, max_tokens=self._max_tokens, system=system, messages=messages,
         ) as stream:
+            if on_token is not None:
+                for delta in stream.text_stream:
+                    on_token(delta)
             response = stream.get_final_message()
         if response.stop_reason == "max_tokens":
             # Same bug class documented for respond_with_tools() above -

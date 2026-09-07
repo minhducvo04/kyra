@@ -11,14 +11,17 @@ use - one router, three front doors.
 import base64
 import json
 import logging
+import queue
+import secrets
+import threading
 import time
 from dataclasses import asdict, replace
 from functools import cached_property
 from pathlib import Path
 
 from anthropic import Anthropic
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -61,6 +64,31 @@ from companion.settings import get_settings
 
 app = FastAPI(title="Kyra")
 install_error_handlers(app)
+
+_LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+
+
+@app.middleware("http")
+async def _require_api_token(request: Request, call_next):
+    """The one boundary between the Wi-Fi and Kyra's API once KYRA_HOST is 0.0.0.0.
+
+    Only enforced when KYRA_API_TOKEN is set, and only for callers that are not the
+    laptop itself - the browser HUD on localhost keeps working untouched, while a
+    headset or phone on the LAN must present the token. Not authentication in the
+    Phase-2 sense (no users, no sessions); the minimum that makes exposing the
+    server defensible, in code rather than a note.
+    """
+    token = get_settings().api_token
+    host = request.client.host if request.client else ""
+    if token and request.url.path.startswith("/api/") and host not in _LOOPBACK:
+        header = request.headers.get("authorization", "")
+        if not (header.startswith("Bearer ") and secrets.compare_digest(header[7:], token)):
+            return JSONResponse(
+                status_code=401,
+                content={"error": {"code": "unauthorized", "message": "missing or wrong API token", "details": {}}},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    return await call_next(request)
 
 # A resume or writing sample is a few hundred KB at most; a bound keeps
 # a mis-dropped file (a video, a giant PDF) from being read into memory
@@ -224,15 +252,20 @@ def set_backend(body: BackendIn) -> dict:
     return {"backend": _current_backend}
 
 
-def _answer(message: str) -> ChatOut:
-    """Shared by /api/chat and /api/voice - text in, routed reply out. The
-    only thing voice adds on top is transcribing in and synthesizing out.
+def _answer(message: str, on_token=None) -> ChatOut:
+    """Shared by /api/chat, /api/chat/stream and /api/voice - text in, routed
+    reply out. The only thing voice adds on top is transcribing in and
+    synthesizing out; the only thing streaming adds is on_token, which
+    receives each text delta when the backend that answers can stream (Claude
+    text turns) and nothing otherwise (tool turns, the local model).
     """
     if _current_backend != "auto":
-        reply = _rt.conversation.handle_turn(message)
+        reply = _rt.conversation.handle_turn(message, on_token=on_token)
         return ChatOut(reply=reply, backend=_current_backend)
 
-    reply, decision = route_and_answer_verbose(message, _rt.conversation, _router, _backends, _registry)
+    reply, decision = route_and_answer_verbose(
+        message, _rt.conversation, _router, _backends, _registry, on_token=on_token
+    )
     if decision is None:  # a mode-switch command ("focus mode" etc.), not a routed turn
         return ChatOut(reply=reply, backend="auto")
     return ChatOut(
@@ -243,6 +276,46 @@ def _answer(message: str) -> ChatOut:
 @app.post("/api/chat", response_model=ChatOut)
 def chat(body: ChatIn) -> ChatOut:
     return _answer(body.message)
+
+
+@app.post("/api/chat/stream")
+def chat_stream(body: ChatIn) -> StreamingResponse:
+    """The same turn as /api/chat, as server-sent events: `token` events with
+    each text delta as it arrives, then one `done` event carrying the full
+    ChatOut (or `error`). Time-to-first-token is what a conversation feels
+    like (docs/plans/2026-09-07-human-interface.md, point 2); the whole-reply
+    endpoint stays for callers that do not care.
+
+    POST, not GET with a query string, so the message never lands in an
+    access log. The turn runs on a worker thread and tokens cross to the
+    response through a queue; a turn that cannot stream simply yields `done`.
+    """
+    q: queue.Queue = queue.Queue()
+    done = object()
+
+    def run() -> None:
+        try:
+            out = _answer(body.message, on_token=lambda delta: q.put(("token", delta)))
+            q.put(("done", out.model_dump()))
+        except Exception as e:  # noqa: BLE001 - surfaced to the client as an error event, never swallowed
+            logger.exception("chat stream failed")
+            q.put(("error", f"{type(e).__name__}: {e}"))
+        finally:
+            q.put(done)
+
+    threading.Thread(target=run, name="kyra-chat-stream", daemon=True).start()
+
+    def events():
+        while True:
+            item = q.get()
+            if item is done:
+                return
+            kind, payload = item
+            yield f"event: {kind}\ndata: {json.dumps(payload)}\n\n"
+
+    return StreamingResponse(
+        events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
 
 
 @app.post("/api/voice", response_model=VoiceOut)

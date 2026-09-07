@@ -57,3 +57,60 @@ def test_budget_is_passed_through_unchanged(budget):
     client = _FakeStreamingClient()
     AnthropicLLM(client, max_tokens=budget).respond("sys", [], "hi")
     assert client.stream_kwargs["max_tokens"] == budget
+
+
+class _FakeTokenStreamClient(_FakeStreamingClient):
+    """Adds the SDK's text_stream: the deltas respond() hands to on_token."""
+
+    def __init__(self, deltas):
+        super().__init__(text="".join(deltas))
+        self._deltas = deltas
+
+    @contextmanager
+    def stream(self, **kwargs):
+        self.stream_kwargs = kwargs
+        yield SimpleNamespace(text_stream=iter(self._deltas), get_final_message=lambda: self._final)
+
+
+def test_respond_streams_tokens_to_the_callback_and_still_returns_the_whole_reply():
+    seen = []
+    llm = AnthropicLLM(_FakeTokenStreamClient(["Hel", "lo ", "Duc"]))
+    assert llm.supports_streaming
+    assert llm.respond("sys", [], "hi", on_token=seen.append) == "Hello Duc"
+    assert seen == ["Hel", "lo ", "Duc"]
+
+
+def test_respond_without_callback_never_touches_text_stream():
+    class Explodes(_FakeStreamingClient):
+        @contextmanager
+        def stream(self, **kwargs):
+            def boom():
+                raise AssertionError("text_stream must not be read when no callback is given")
+            yield SimpleNamespace(text_stream=property(boom), get_final_message=lambda: self._final)
+
+    assert AnthropicLLM(Explodes(text="ok")).respond("sys", [], "hi") == "ok"
+
+
+def test_conversation_only_streams_when_the_backend_can():
+    from companion.conversation import ConversationManager
+    from tests.fakes import ScriptedLLM
+
+    class NoStreamMemory:
+        def retrieve(self, *_a, **_k):
+            return []
+
+        def add(self, *_a, **_k):
+            pass
+
+    class Notes:
+        def render(self):
+            return ""
+
+    local = ScriptedLLM(["plain reply"])  # supports_streaming is False on the base class
+    cm = ConversationManager.__new__(ConversationManager)
+    cm.llm, cm.memory, cm.memory_notes, cm.history = local, NoStreamMemory(), Notes(), []
+    from companion.persona import KYRA
+    cm.persona = KYRA
+    tokens = []
+    assert cm.handle_turn("hi", on_token=tokens.append) == "plain reply"
+    assert tokens == []  # never passed to a backend that cannot take it

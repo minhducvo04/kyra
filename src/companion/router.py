@@ -237,7 +237,7 @@ def route_and_answer(user_input: str, conversation, router: "TurnRouter", backen
 
 
 def route_and_answer_verbose(
-    user_input: str, conversation, router: "TurnRouter", backends: dict, registry: ToolRegistry
+    user_input: str, conversation, router: "TurnRouter", backends: dict, registry: ToolRegistry, on_token=None,
 ) -> tuple[str, "RoutingDecision | None"]:
     """Same as route_and_answer, but also returns the RoutingDecision that
     was made (None for a mode-switch command, which isn't routed at all) -
@@ -254,5 +254,5 @@ def route_and_answer_verbose(
         reply = conversation.handle_turn_with_tools(user_input, backends["claude"], registry)
     else:
         conversation.llm = backends[decision.backend]
-        reply = conversation.handle_turn(user_input)
+        reply = conversation.handle_turn(user_input, on_token=on_token)  # tool turns above never stream
     return reply, decision

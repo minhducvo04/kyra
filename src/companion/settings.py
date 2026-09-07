@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Mass apply tailors every resume from this .tex (relative paths resolve under data_dir). The library copy of
     # the LaTeX source went stale once, so the base is a file Duc edits directly, not a library document.
     resume_base_tex: str = Field(default="resumes/Duc_Vo_Resume_General_AI_Engineer.tex", validation_alias="KYRA_RESUME_BASE_TEX")
+    # LAN readiness (2026-09-07, for the Vision Pro client): when set, any request to /api/*
+    # from a non-loopback address must carry "Authorization: Bearer <token>". Unset keeps the
+    # laptop exactly as it was. KYRA_HOST=0.0.0.0 is the switch that exposes the server at all.
+    api_token: str = Field(default="", validation_alias="KYRA_API_TOKEN")
     host: str = Field(default="127.0.0.1", validation_alias="KYRA_HOST")
     port: int = Field(default=8420, validation_alias="KYRA_PORT")
 

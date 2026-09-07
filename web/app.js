@@ -46,6 +46,74 @@ function setThinking(on) {
   micBtn.disabled = on;
 }
 
+function replyMeta(data) {
+  return data.actual_backend ? `${data.actual_backend}${data.path === "tool" ? " · tool" : ""}` : "";
+}
+
+// Streams a turn from /api/chat/stream, painting tokens into one Kyra line as they
+// arrive - time-to-first-token is what makes the conversation feel live. Resolves to
+// the final ChatOut, or null if nothing at all came back (the caller then falls back
+// to the whole-reply endpoint, so a proxy that buffers SSE can't break chat).
+async function streamTurn(text) {
+  const res = await fetch("/api/chat/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: text }),
+  });
+  if (!res.ok || !res.body) throw new Error(`server returned ${res.status}`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let line = null;
+  let textNode = null;
+  let final = null;
+  const handle = (event, payload) => {
+    if (event === "token") {
+      if (!line) {
+        line = addLine("kyra", "");
+        textNode = line.querySelector(".line-text").lastChild;
+        coreSub.textContent = "responding…";
+      }
+      textNode.textContent += payload;
+      transcript.scrollTop = transcript.scrollHeight;
+    } else if (event === "done") {
+      final = payload;
+      if (line) {
+        textNode.textContent = payload.reply; // the authoritative text (e.g. a truncation marker)
+        const meta = replyMeta(payload);
+        if (meta) {
+          const metaSpan = document.createElement("span");
+          metaSpan.className = "line-meta";
+          metaSpan.textContent = meta;
+          line.querySelector(".line-text").prepend(metaSpan);
+        }
+      } else {
+        addLine("kyra", payload.reply, replyMeta(payload));
+      }
+    } else if (event === "error") {
+      throw new Error(payload);
+    }
+  };
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buffer.indexOf("\n\n")) >= 0) {
+      const block = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      let event = "message";
+      let data = "";
+      for (const l of block.split("\n")) {
+        if (l.startsWith("event: ")) event = l.slice(7);
+        else if (l.startsWith("data: ")) data += l.slice(6);
+      }
+      if (data) handle(event, JSON.parse(data));
+    }
+  }
+  return final;
+}
+
 async function send() {
   const text = input.value.trim();
   if (!text) return;
@@ -53,17 +121,23 @@ async function send() {
   input.value = "";
   setThinking(true);
   try {
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text }),
-    });
-    if (!res.ok) throw new Error(`server returned ${res.status}`);
-    const data = await res.json();
-    const meta = data.actual_backend
-      ? `${data.actual_backend}${data.path === "tool" ? " · tool" : ""}`
-      : "";
-    addLine("kyra", data.reply, meta);
+    let data = null;
+    try {
+      data = await streamTurn(text);
+    } catch (err) {
+      if (err.message.startsWith("server returned")) throw err;
+      addLine("error", `stream failed — ${err.message}`);
+    }
+    if (!data) {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      if (!res.ok) throw new Error(`server returned ${res.status}`);
+      data = await res.json();
+      addLine("kyra", data.reply, replyMeta(data));
+    }
   } catch (err) {
     addLine("error", `connection lost — ${err.message}`);
     statusText.textContent = "OFFLINE";

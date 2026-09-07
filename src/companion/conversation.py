@@ -52,9 +52,12 @@ class ConversationManager:
             f"Relevant things you remember about Duc from past conversations:\n{memory_block}"
         )
 
-    def handle_turn(self, user_input: str) -> str:
+    def handle_turn(self, user_input: str, on_token=None) -> str:
         system = self._build_system(user_input)
-        reply = self.llm.respond(system, self.history, user_input)
+        if on_token is not None and getattr(self.llm, "supports_streaming", False):
+            reply = self.llm.respond(system, self.history, user_input, on_token=on_token)
+        else:
+            reply = self.llm.respond(system, self.history, user_input)
         self._record_turn(user_input, reply)
         return reply
 
