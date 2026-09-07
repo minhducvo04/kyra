@@ -165,7 +165,7 @@ so every added stage has to earn its place with a number.
 - `--answer` on the CLI
   -> verify: real end-to-end run, output pasted into the session record
 
-### Slice 3 — web SEARCH panel
+### Slice 3 — web SEARCH panel — DONE 2026-09-07
 
 - `POST /api/search`, `POST /api/search/answer` (SSE, reusing the `/api/chat/stream` shape),
   `POST /api/search/reindex`
@@ -238,3 +238,27 @@ Deviations from the design above, and why:
 
 Still open, unchanged: slice 3 (web SEARCH panel) and slice 4 (`search_kyra_data` chat tool +
 router round 5, and routing the drafting paths through `search(include_sensitive=False)`).
+
+## Slice 3 as built (2026-09-07)
+
+`POST /api/search`, `POST /api/search/answer` (SSE, same event shape as `/api/chat/stream`),
+`POST /api/search/reindex`, plus a third slide-in panel reusing the `.jobs-panel` shell.
+`tests/test_search_api.py` (8 tests); 238 pass, ruff clean.
+
+Two things worth knowing:
+
+- **The index is a `cached_property` on `_Runtime` and the local model is fetched inside the
+  worker thread**, not at request time. `LazyBackends["local"]` builds a 14B MLX model on first
+  access, so evaluating it eagerly made the endpoint untestable and hung the first test run for
+  minutes before it was moved.
+- **`k` is clamped to 1..50** so a single request cannot ask for the whole index.
+
+Verified against the real index in a real browser, not fixtures: the same query ("what needs my
+input") returned 8 hits with **zero** private ones by default and 4 with the toggle on; kind chips
+filtered to a single kind; reindex reported `2 added, 5 updated, 122 unchanged, 0 removed; 109
+chunks written`; and the answer endpoint, run against the real local model, produced a correct
+answer citing `docs/search-eval.md` and `CLAUDE.md` with no invented citations and no private
+content in its sources.
+
+Still open: slice 4 (the `search_kyra_data` chat tool) remains deferred - it needs router
+adapter round 5, per the standing rule that a new tool means a retrain on two seeds.
