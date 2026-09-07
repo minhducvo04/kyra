@@ -127,6 +127,14 @@ class _Runtime:
     # and the audio stack, and the HTTP layer must import (and be testable)
     # without them - the first real CI run failed at collection on exactly
     # this (ModuleNotFoundError: numpy) with the slim install list.
+    # The search index loads Chroma and the BGE embedding model, so it is built on
+    # first use like everything else here - importing webapp must stay cheap.
+    @cached_property
+    def search_index(self):
+        from companion.search import HybridSearchIndex
+
+        return HybridSearchIndex()
+
     @cached_property
     def stt(self):
         from companion.voice import FasterWhisperSTT
@@ -346,6 +354,114 @@ def voice(audio: UploadFile) -> VoiceOut:
         reply_audio_b64=base64.b64encode(wav_bytes).decode("ascii"),
         reply_audio_rate=rate,
     )
+
+
+# ---------------- Search panel ----------------
+# One front door over everything Kyra stores (docs, digests, resumes, stores,
+# conversation log). Sensitivity is a default argument rather than a prompt:
+# nothing under data/private_docs/ is returned or shown to the model unless the
+# caller explicitly asks, and the request model defaults that to False.
+
+
+class SearchIn(BaseModel):
+    query: str
+    k: int = 8
+    kinds: list[str] | None = None
+    include_sensitive: bool = False
+    mode: str = "hybrid"
+
+
+def _hit_out(hit) -> dict:
+    c = hit.chunk
+    return {
+        "chunk_id": c.chunk_id, "path": c.path, "kind": c.kind, "title": c.title,
+        "index": c.index, "sensitive": c.sensitive, "score": round(hit.score, 5),
+        "lexical_rank": hit.lexical_rank, "vector_rank": hit.vector_rank,
+        "snippet": c.text[:400],
+    }
+
+
+@app.post("/api/search")
+def search_endpoint(body: SearchIn) -> dict:
+    query = body.query.strip()
+    if not query:
+        raise ApiError(400, "empty_query", "give me something to search for")
+    if body.mode not in ("hybrid", "lexical", "vector"):
+        raise ApiError(400, "bad_mode", f"unknown mode {body.mode!r}", {"allowed": ["hybrid", "lexical", "vector"]})
+    hits = _rt.search_index.search(
+        query, k=max(1, min(body.k, 50)), kinds=body.kinds or None,
+        include_sensitive=body.include_sensitive, mode=body.mode,
+    )
+    return {"query": query, "count": len(hits), "include_sensitive": body.include_sensitive,
+            "hits": [_hit_out(h) for h in hits]}
+
+
+@app.post("/api/search/answer")
+def search_answer(body: SearchIn) -> StreamingResponse:
+    """Retrieval plus a cited answer from the LOCAL model, as SSE - the same
+    event shape as /api/chat/stream. It is a stream because the local model
+    takes seconds and the panel should say what it is doing meanwhile; the
+    answer itself arrives whole in `done`, since answer() returns citations
+    and warnings together with the text."""
+    query = body.query.strip()
+    if not query:
+        raise ApiError(400, "empty_query", "give me something to search for")
+
+    q: queue.Queue = queue.Queue()
+    finished = object()
+
+    def run() -> None:
+        try:
+            from companion.search import answer as search_answer_fn
+
+            q.put(("progress", "searching the index…"))
+            index = _rt.search_index
+            # The local model is fetched here, not above: LazyBackends builds a 14B
+            # MLX model on first access, and that must not happen until an answer is
+            # genuinely being written (it also makes this endpoint testable without it).
+            q.put(("progress", "asking the local model to write it up…"))
+            result = search_answer_fn(
+                index, query, k=max(1, min(body.k, 20)), llm=_backends["local"],
+                include_sensitive=body.include_sensitive, kinds=body.kinds or None,
+            )
+            q.put(("done", {
+                "query": query,
+                "text": result.text,
+                "warnings": result.warnings,
+                "citations": [{"n": i + 1, "path": c.path, "title": c.title, "kind": c.kind}
+                              for i, c in enumerate(result.citations)],
+                "hits": [_hit_out(h) for h in result.hits],
+            }))
+        except Exception as e:  # noqa: BLE001 - surfaced to the client, never swallowed
+            logger.exception("search answer failed")
+            q.put(("error", f"{type(e).__name__}: {e}"))
+        finally:
+            q.put(finished)
+
+    threading.Thread(target=run, name="kyra-search-answer", daemon=True).start()
+
+    def events():
+        while True:
+            item = q.get()
+            if item is finished:
+                return
+            kind, payload = item
+            yield f"event: {kind}\ndata: {json.dumps(payload)}\n\n"
+
+    return StreamingResponse(
+        events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
+
+
+@app.post("/api/search/reindex")
+def search_reindex() -> dict:
+    """Incremental by content hash, so a refresh after a few edits is quick;
+    a first build is not. The index never refreshes itself on search, which is
+    why this button exists at all."""
+    stats = _rt.search_index.index()
+    return {"added": stats.added, "updated": stats.updated, "unchanged": stats.unchanged,
+            "deleted": stats.deleted, "chunks": stats.chunks, "errors": stats.errors,
+            "summary": str(stats)}
 
 
 # ---------------- Job Application panel ----------------

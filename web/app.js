@@ -1683,3 +1683,179 @@ document.getElementById("learning-add").addEventListener("click", async () => {
 });
 
 document.getElementById("learning-refresh").addEventListener("click", loadLearningDue);
+
+/* ---- SEARCH panel -------------------------------------------------------
+   One front door over everything Kyra stores. The privacy rule is the same
+   one the Python side enforces: private docs are excluded unless the toggle
+   is on, and the toggle is the only control here that changes what the
+   local model is allowed to read. */
+
+const searchPanel = document.getElementById("search-panel");
+const searchToggle = document.getElementById("search-toggle");
+const searchClose = document.getElementById("search-close");
+const searchQuery = document.getElementById("search-query");
+const searchStatus = document.getElementById("search-status");
+const searchResults = document.getElementById("search-results");
+const searchAnswerBox = document.getElementById("search-answer-box");
+const searchSensitive = document.getElementById("search-sensitive");
+let searchKind = "";
+
+function openSearchPanel() {
+  searchPanel.classList.add("is-open");
+  searchPanel.setAttribute("aria-hidden", "false");
+  searchToggle.classList.add("is-active");
+  searchQuery.focus();
+}
+function closeSearchPanel() {
+  searchPanel.classList.remove("is-open");
+  searchPanel.setAttribute("aria-hidden", "true");
+  searchToggle.classList.remove("is-active");
+}
+searchToggle.addEventListener("click", () => {
+  searchPanel.classList.contains("is-open") ? closeSearchPanel() : openSearchPanel();
+});
+searchClose.addEventListener("click", closeSearchPanel);
+
+document.querySelectorAll("#search-kinds .search-chip").forEach((chip) => {
+  chip.addEventListener("click", () => {
+    searchKind = chip.dataset.kind;
+    document.querySelectorAll("#search-kinds .search-chip").forEach((c) => c.classList.toggle("is-active", c === chip));
+    if (searchQuery.value.trim()) runSearch();
+  });
+});
+
+function setSearchStatus(text, isError) {
+  searchStatus.textContent = text;
+  searchStatus.classList.toggle("is-error", !!isError);
+}
+
+function searchBody() {
+  return {
+    query: searchQuery.value.trim(),
+    kinds: searchKind ? [searchKind] : null,
+    include_sensitive: searchSensitive.checked,
+  };
+}
+
+function renderHits(hits) {
+  searchResults.replaceChildren();
+  for (const hit of hits) {
+    const row = document.createElement("div");
+    row.className = `search-hit${hit.sensitive ? " is-sensitive" : ""}`;
+    const head = document.createElement("div");
+    head.className = "search-hit-head";
+    const kind = document.createElement("span");
+    kind.className = "search-hit-kind";
+    kind.textContent = hit.sensitive ? `${hit.kind} · private` : hit.kind;
+    const path = document.createElement("span");
+    path.className = "search-hit-path";
+    path.textContent = hit.path;
+    const score = document.createElement("span");
+    score.className = "search-hit-score";
+    score.textContent = hit.score.toFixed(3);
+    head.append(kind, path, score);
+    const snippet = document.createElement("div");
+    snippet.className = "search-hit-snippet";
+    snippet.textContent = hit.snippet;
+    row.append(head, snippet);
+    searchResults.appendChild(row);
+  }
+}
+
+async function runSearch() {
+  const body = searchBody();
+  if (!body.query) return;
+  searchAnswerBox.hidden = true;
+  setSearchStatus("searching…");
+  try {
+    const res = await fetch("/api/search", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const data = await readJson(res);
+    renderHits(data.hits);
+    setSearchStatus(
+      `${data.count} result${data.count === 1 ? "" : "s"}${data.include_sensitive ? " · private docs included" : ""}`
+    );
+  } catch (err) {
+    searchResults.replaceChildren();
+    setSearchStatus(`search failed — ${err.message}`, true);
+  }
+}
+
+async function runSearchAnswer() {
+  const body = searchBody();
+  if (!body.query) return;
+  setSearchStatus("thinking…");
+  searchAnswerBox.hidden = false;
+  searchAnswerBox.textContent = "";
+  try {
+    const res = await fetch("/api/search/answer", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (!res.ok || !res.body) throw new Error(`server returned ${res.status}`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+        const block = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        let event = "message";
+        let data = "";
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event: ")) event = line.slice(7);
+          else if (line.startsWith("data: ")) data += line.slice(6);
+        }
+        if (!data) continue;
+        const payload = JSON.parse(data);
+        if (event === "progress") setSearchStatus(payload);
+        else if (event === "error") throw new Error(payload);
+        else if (event === "done") {
+          searchAnswerBox.textContent = payload.text;
+          if (payload.citations.length) {
+            const cites = document.createElement("span");
+            cites.className = "search-answer-cites";
+            cites.textContent = payload.citations.map((c) => `[${c.n}] ${c.path}`).join("  ·  ");
+            searchAnswerBox.appendChild(cites);
+          }
+          for (const w of payload.warnings || []) {
+            const warn = document.createElement("span");
+            warn.className = "search-answer-warn";
+            warn.textContent = `⚠ ${w}`;
+            searchAnswerBox.appendChild(warn);
+          }
+          renderHits(payload.hits || []);
+          setSearchStatus(`answered from ${payload.citations.length} source(s)`);
+        }
+      }
+    }
+  } catch (err) {
+    searchAnswerBox.hidden = true;
+    setSearchStatus(`answer failed — ${err.message}`, true);
+  }
+}
+
+async function runSearchReindex() {
+  setSearchStatus("reindexing — the index only refreshes when you ask…");
+  try {
+    const res = await fetch("/api/search/reindex", { method: "POST" });
+    const data = await readJson(res);
+    setSearchStatus(data.summary + (data.errors.length ? ` · ${data.errors.length} error(s)` : ""));
+  } catch (err) {
+    setSearchStatus(`reindex failed — ${err.message}`, true);
+  }
+}
+
+document.getElementById("search-run").addEventListener("click", runSearch);
+document.getElementById("search-answer").addEventListener("click", runSearchAnswer);
+document.getElementById("search-reindex").addEventListener("click", runSearchReindex);
+searchQuery.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.keyCode === 13) runSearch();
+});
+searchSensitive.addEventListener("change", () => {
+  if (searchQuery.value.trim()) runSearch();
+});

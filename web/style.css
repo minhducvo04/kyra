@@ -1091,3 +1091,50 @@ body[data-presence="failed"] .ring-core { stroke: var(--danger); opacity: 0.9; a
 body[data-presence="failed"] .core-dot { fill: var(--danger); animation: none; }
 body[data-presence="failed"] .core-label { color: var(--danger); }
 body[data-presence="failed"] .core-sub { color: var(--danger); }
+
+/* ---- SEARCH panel: one front door over everything Kyra stores. Reuses the
+   .jobs-panel / .jobs-tab / .jobs-btn shell; only the result list and the
+   privacy toggle are new. ---- */
+.search-kinds { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.6rem 0.7rem 0.2rem; }
+.search-chip {
+  font-family: "Orbitron", sans-serif; font-size: 0.55rem; letter-spacing: 0.1em;
+  padding: 0.28rem 0.5rem; background: transparent; color: var(--text-faint);
+  border: 1px solid var(--grid); border-radius: 2px; cursor: pointer; transition: all 0.2s ease;
+}
+.search-chip:hover { color: var(--text-dim); border-color: var(--accent-dim); }
+.search-chip.is-active { color: var(--accent); border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+
+.search-actions { display: flex; gap: 0.4rem; margin: 0.6rem 0.7rem 0.3rem; }
+.search-actions .jobs-btn { flex: 1; margin: 0; }
+
+/* The privacy toggle is deliberately conspicuous: it is the one control here
+   that changes what leaves the machine. */
+.search-private {
+  display: flex; align-items: center; gap: 0.45rem; margin: 0.2rem 0.7rem 0.5rem;
+  font-size: 0.62rem; color: var(--text-faint);
+}
+.search-private:has(input:checked) { color: var(--danger); }
+
+.search-status { margin: 0 0.7rem 0.4rem; font-size: 0.62rem; color: var(--text-dim); min-height: 0.9rem; }
+.search-status.is-error { color: var(--danger); }
+
+.search-answer {
+  margin: 0 0.7rem 0.6rem; padding: 0.6rem; border: 1px solid var(--accent-dim);
+  border-left-width: 3px; background: var(--panel-2); font-size: 0.72rem; line-height: 1.5;
+  color: var(--text); white-space: pre-wrap;
+}
+.search-answer .search-answer-warn { display: block; margin-top: 0.5rem; color: var(--danger); font-size: 0.6rem; }
+.search-answer .search-answer-cites { display: block; margin-top: 0.5rem; color: var(--text-faint); font-size: 0.6rem; }
+
+.search-results { margin: 0 0.7rem 0.8rem; display: flex; flex-direction: column; gap: 0.45rem; }
+.search-hit { border: 1px solid var(--grid); border-left: 2px solid var(--accent-dim); padding: 0.45rem 0.55rem; background: var(--panel-2); }
+.search-hit.is-sensitive { border-left-color: var(--danger); }
+.search-hit-head { display: flex; align-items: baseline; gap: 0.4rem; margin-bottom: 0.25rem; }
+.search-hit-kind {
+  font-family: "Orbitron", sans-serif; font-size: 0.5rem; letter-spacing: 0.08em;
+  color: var(--accent); border: 1px solid var(--accent-dim); padding: 0.1rem 0.25rem; border-radius: 2px;
+}
+.search-hit.is-sensitive .search-hit-kind { color: var(--danger); border-color: var(--danger); }
+.search-hit-path { font-size: 0.6rem; color: var(--text-dim); word-break: break-all; flex: 1; }
+.search-hit-score { font-size: 0.55rem; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.search-hit-snippet { font-size: 0.66rem; line-height: 1.45; color: var(--text-dim); }

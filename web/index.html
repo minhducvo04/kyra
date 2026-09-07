@@ -32,6 +32,7 @@
           <span class="dot"></span>LOCAL
         </button>
       </div>
+      <button class="jobs-toggle" id="search-toggle" type="button">SEARCH</button>
       <button class="jobs-toggle" id="tools-toggle" type="button">TOOLS</button>
       <button class="jobs-toggle" id="jobs-toggle" type="button">JOBS</button>
       <div class="status">
@@ -243,6 +244,46 @@
       <button class="jobs-btn" id="apply-run" type="button">Apply to all</button>
       <p class="jobs-hint">For each URL: tracker entry, resume tailored from your base .tex to one page and saved under data/resumes/, cover letter if asked, then the form filled in a browser window (Greenhouse only for now). Nothing gets submitted: ready_to_submit means review and click, needs_attention means read the list first.</p>
       <div id="apply-jobs"></div>
+    </section>
+  </aside>
+
+  <aside class="jobs-panel" id="search-panel" aria-hidden="true">
+    <div class="jobs-panel-header">
+      <span>SEARCH</span>
+      <button id="search-close" type="button" aria-label="Close">&times;</button>
+    </div>
+
+    <section class="jobs-tab-panel is-active">
+      <label class="jobs-field">
+        <span>Search everything Kyra stores</span>
+        <input id="search-query" type="text" autocomplete="off"
+               placeholder="why did we pick BGE, or RECENCY_WEIGHT&hellip;">
+      </label>
+
+      <div class="search-kinds" id="search-kinds" role="group" aria-label="Filter by kind">
+        <button class="search-chip is-active" data-kind="" type="button">ALL</button>
+        <button class="search-chip" data-kind="doc" type="button">DOCS</button>
+        <button class="search-chip" data-kind="plan" type="button">PLANS</button>
+        <button class="search-chip" data-kind="digest" type="button">DIGESTS</button>
+        <button class="search-chip" data-kind="resume" type="button">RESUMES</button>
+        <button class="search-chip" data-kind="memory_note" type="button">NOTES</button>
+        <button class="search-chip" data-kind="conversation" type="button">CHAT</button>
+      </div>
+
+      <div class="search-actions">
+        <button class="jobs-btn" id="search-run" type="button">SEARCH</button>
+        <button class="jobs-btn" id="search-answer" type="button">SYNTHESIZE ANSWER</button>
+        <button class="jobs-btn" id="search-reindex" type="button">REINDEX</button>
+      </div>
+
+      <label class="search-private">
+        <input type="checkbox" id="search-sensitive">
+        <span>Include private docs &mdash; off by default</span>
+      </label>
+
+      <div class="search-status" id="search-status"></div>
+      <div class="search-answer" id="search-answer-box" hidden></div>
+      <div class="search-results" id="search-results"></div>
     </section>
   </aside>
 
