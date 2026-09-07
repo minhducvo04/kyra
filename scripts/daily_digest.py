@@ -40,18 +40,44 @@ logger = logging.getLogger("kyra.digest")
 DIGEST_DIR = DATA_DIR / "digests"
 
 
+def _osascript_notify(title: str, message: str) -> None:
+    def safe(s: str) -> str:
+        return s.replace('"', "'")
+
+    subprocess.run(
+        ["osascript", "-e", f'display notification "{safe(message)}" with title "{safe(title)}"'],
+        check=False, capture_output=True, timeout=10,
+    )
+
+
 def notify(title: str, message: str, open_path: Path | None = None) -> None:
-    """macOS notification. Uses terminal-notifier when available so the
-    click has somewhere to go; falls back to osascript (fires, but the
-    click lands on Script Editor - see the module docstring)."""
+    """macOS notification, preferring terminal-notifier so the click has
+    somewhere to go.
+
+    Falls back to osascript whenever terminal-notifier can't post. That is
+    not theoretical: macOS 26 refused the ad-hoc-signed Homebrew build
+    permission outright ("Notifications are not allowed for this
+    application") three times before granting it, and permission can be
+    revoked in System Settings at any point. A notification that fires but
+    clicks through to Script Editor still beats no notification at all -
+    and terminal-notifier exits 0 even when it fails, so the output has to
+    be read, not just the return code.
+    """
     tn = shutil.which("terminal-notifier")
     if tn and open_path is not None:
-        cmd = [tn, "-title", title, "-message", message,
-               "-open", open_path.as_uri(), "-group", "com.kyra.daily-digest"]
-    else:
-        safe = lambda s: s.replace('"', "'")  # noqa: E731 - one-line quoting for osascript
-        cmd = ["osascript", "-e", f'display notification "{safe(message)}" with title "{safe(title)}"']
-    subprocess.run(cmd, check=False, capture_output=True, timeout=10)
+        r = subprocess.run(
+            [tn, "-title", title, "-message", message,
+             "-open", open_path.as_uri(), "-group", "com.kyra.daily-digest"],
+            check=False, capture_output=True, timeout=10, text=True,
+        )
+        output = f"{r.stdout or ''}{r.stderr or ''}".strip()
+        if r.returncode == 0 and "not allowed" not in output.lower():
+            return
+        logger.warning(
+            "terminal-notifier could not post (%s) - falling back to osascript",
+            output or f"exit {r.returncode}",
+        )
+    _osascript_notify(title, message)
 
 
 def main() -> None:
