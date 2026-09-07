@@ -28,6 +28,14 @@ diffs entry headings (\\resumeSubheading / \\resumeProjectHeading first
 arguments), course codes (CS 61B, EECS 127), and capitalized terms
 against the sources. Same warn-don't-block posture.
 
+Inflation qualifiers (2026-09-06): the Northwind run added "high-performance",
+"large-scale", "scalable", "high-throughput", "distributed" to bullets with no
+source for them, and none of the checks above can see a lowercase
+adjective. So a short list of resume-inflation words is diffed against the
+sources too (case-insensitive, whole-word, "high throughput" == "high-
+throughput"). Same warn-don't-block posture; the list is deliberately
+small and boring rather than a style linter.
+
 Sources vs. output are treated differently for LaTeX comments: a
 commented-out line in the ORIGINAL resume is still Duc's own real
 content (his stash of alternate bullets), so comments count as source
@@ -126,6 +134,26 @@ def capitalized_terms(text: str, keep_comments: bool = False) -> set[str]:
     return terms
 
 
+# Qualifiers a tailoring pass likes to add to make a bullet sound bigger.
+# Lowercase, so nothing above catches them; whole-word and hyphen/space
+# insensitive so "high throughput" in a source covers "high-throughput".
+INFLATION_QUALIFIERS = [
+    "high-performance", "high-throughput", "high-availability", "large-scale", "scalable",
+    "distributed", "enterprise-grade", "cutting-edge", "state-of-the-art", "mission-critical",
+    "robust", "seamless", "fault-tolerant", "production-grade", "probabilistic modeling",
+]
+_QUALIFIER_RES = {
+    q: re.compile(r"(?<![A-Za-z0-9-])" + r"[-\s]+".join(map(re.escape, re.split(r"[-\s]+", q))) + r"(?![A-Za-z0-9-])", re.IGNORECASE)
+    for q in INFLATION_QUALIFIERS
+}
+
+
+def qualifiers(text: str, keep_comments: bool = False) -> set[str]:
+    """Which of INFLATION_QUALIFIERS occur in `text` (canonical hyphenated form)."""
+    text = text if keep_comments else _strip_latex_comments(text)
+    return {q for q, rx in _QUALIFIER_RES.items() if rx.search(text)}
+
+
 def _unsupported(fn, output: str, sources: list[str]) -> list[str]:
     allowed: set[str] = set()
     for src in sources:
@@ -153,6 +181,12 @@ def unsupported_headings(output: str, sources: list[str]) -> list[str]:
     """Entry headings (a job, a project) in the output that no source has -
     the exact shape of the fabricated-Projects-entry bug."""
     return _unsupported(headings, output, sources)
+
+
+def unsupported_qualifiers(output: str, sources: list[str]) -> list[str]:
+    """Inflation qualifiers ("scalable", "high-performance") in the output
+    that no source uses - the model puffing up a bullet, not a fact."""
+    return _unsupported(qualifiers, output, sources)
 
 
 def unsupported_terms(output: str, sources: list[str]) -> list[str]:
@@ -207,4 +241,10 @@ def check_resume_output(output: str, sources: list[str]) -> list[str]:
     if terms:
         shown = ", ".join(terms[:8]) + (" …" if len(terms) > 8 else "")
         warnings.append(f"fact check: {len(terms)} capitalized term(s) not in your sources (names, tools, courses) - verify: {shown}")
+    quals = unsupported_qualifiers(output, sources)
+    if quals:
+        warnings.append(
+            f"fact check: {len(quals)} qualifier(s) not in your sources (the model may be inflating a bullet) - verify: "
+            + ", ".join(quals[:8])
+        )
     return warnings

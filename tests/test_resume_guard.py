@@ -69,3 +69,34 @@ def test_reworded_bullet_with_known_words_is_not_flagged():
 
     out = ORIGINAL_TEX.replace("Reduced OpenRouter API overhead", "Cut OpenRouter API overhead")
     assert unsupported_terms(out, [ORIGINAL_TEX]) == []
+
+
+def test_inflation_qualifier_added_by_the_model_is_flagged():
+    from companion.resume_guard import unsupported_qualifiers
+
+    out = ORIGINAL_TEX.replace("Reduced OpenRouter API overhead", "Reduced OpenRouter API overhead in a high-performance, scalable pipeline")
+    assert unsupported_qualifiers(out, [ORIGINAL_TEX]) == ["scalable", "high-performance"]
+    warnings = check_resume_output(out, [ORIGINAL_TEX])
+    assert any("2 qualifier(s)" in w and "high-performance" in w and "scalable" in w for w in warnings)
+
+
+def test_qualifier_present_in_a_source_is_not_flagged():
+    from companion.resume_guard import unsupported_qualifiers
+
+    out = ORIGINAL_TEX + r"\resumeItem{Built a distributed, high throughput ingest service.}" + "\n"
+    # case-insensitive and hyphen/space-insensitive: "High-Throughput" covers "high throughput"
+    facts = "Duc built a Distributed ingest service with High-Throughput requirements"
+    assert unsupported_qualifiers(out, [ORIGINAL_TEX]) == ["distributed", "high-throughput"]
+    assert unsupported_qualifiers(out, [ORIGINAL_TEX, facts]) == []
+    assert check_resume_output(out, [ORIGINAL_TEX, facts]) == []
+
+
+def test_qualifier_in_a_commented_source_line_counts_as_evidence():
+    from companion.resume_guard import unsupported_qualifiers
+
+    src = ORIGINAL_TEX + "% \\resumeItem{Ran a large-scale scraping job over 3 years of filings.}\n"
+    out = ORIGINAL_TEX + r"\resumeItem{Ran a large-scale scraping job.}" + "\n"
+    assert unsupported_qualifiers(out, [src]) == []
+    # but a qualifier that only appears inside an OUTPUT comment is invisible and not flagged either
+    out2 = ORIGINAL_TEX + "% \\resumeItem{a mission-critical service}\n"
+    assert unsupported_qualifiers(out2, [ORIGINAL_TEX]) == []
