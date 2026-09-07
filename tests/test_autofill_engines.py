@@ -224,3 +224,23 @@ def test_location_is_filled_when_set_and_flagged_when_not():
     empty = FillReport(url="u")
     engine._fill_one(FakeLocator(label="Location"), "Location", _profile(), empty)
     assert "location is empty" in empty.skipped[0].reason
+
+
+def test_chat_tool_picks_the_engine_from_the_url(tmp_path):
+    """Asking Kyra in chat to autofill an Ashby posting must not use Greenhouse's
+    selectors - the tool defaulted to Greenhouse for every URL until 2026-09-07."""
+    from companion.job_applications import JobApplicationStore
+    from companion.job_autofill import AutofillJobApplicationTool
+
+    store = JobApplicationStore(tmp_path / "apps.db")
+    resume = tmp_path / "r.pdf"
+    resume.write_bytes(b"%PDF-1.4")
+    tool = AutofillJobApplicationTool(profile=_profile(resume_path=str(resume)), applications=store)
+    assert sorted(tool._engines) == ["ashby", "greenhouse", "lever"]
+
+    out = tool.run("https://acme.wd1.myworkdayjobs.com/careers/job/1")
+    assert "no autofill engine" in out["error"] and out["supported"] == ["ashby", "greenhouse", "lever"]
+
+    # an explicit engine still wins, so tests and callers can inject one
+    injected = GreenhouseAutofillEngine()
+    assert AutofillJobApplicationTool(engine=injected)._engine is injected

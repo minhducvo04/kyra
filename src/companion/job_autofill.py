@@ -437,7 +437,7 @@ def default_engines(headless: bool = False) -> dict[str, AutofillEngine]:
 class AutofillJobApplicationTool(Tool):
     name = "autofill_job_application"
     description = (
-        "Open a job application page (currently Greenhouse-hosted only) and fill in the standard fields "
+        "Open a job application page (Greenhouse, Ashby or Lever) and fill in the standard fields "
         "(name, email, phone, resume, LinkedIn, etc.) from Duc's saved profile. Opens a real, visible browser "
         "window and leaves it open - it never clicks Submit. Also writes a plain-text summary of exactly what "
         "was filled and what was skipped (custom questions with no matching profile field), so it's easy to "
@@ -455,7 +455,11 @@ class AutofillJobApplicationTool(Tool):
     def __init__(
         self, engine: AutofillEngine | None = None, profile: ApplicantProfile | None = None, applications=None,
     ):
-        self._engine = engine or GreenhouseAutofillEngine()
+        # An explicit engine (tests, a caller that knows better) wins; otherwise the
+        # board is chosen per URL at run time. Defaulting to Greenhouse would silently
+        # use the wrong selectors on the Ashby postings Duc actually tracks.
+        self._engine = engine
+        self._engines = None if engine else default_engines()
         self._profile = profile
         self._applications = applications
 
@@ -476,6 +480,18 @@ class AutofillJobApplicationTool(Tool):
                 "fix": "edit data/applicant_profile.json (or ask Duc to fill it in) before trying again",
             }
 
+        engine = self._engine
+        if engine is None:
+            from companion.apply_pipeline import engine_for_url
+
+            engine, ats = engine_for_url(url, self._engines)
+            if engine is None:
+                return {
+                    "error": f"no autofill engine for {ats} postings yet",
+                    "supported": sorted(self._engines),
+                    "fix": "fill this one by hand - the tailored resume is on the tracked application",
+                }
+
         # One resume per company: prefer the tracked application's own file.
         try:
             tailored, why = resume_for_url(url, self._applications_list())
@@ -487,7 +503,7 @@ class AutofillJobApplicationTool(Tool):
         if tailored:
             profile = replace(profile, resume_path=tailored)
 
-        report = self._engine.fill(url, profile)
+        report = engine.fill(url, profile)
         return {
             "url": url,
             "filled_count": len(report.filled),
