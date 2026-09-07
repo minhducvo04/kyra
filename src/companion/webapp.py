@@ -12,7 +12,7 @@ import base64
 import json
 import logging
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from functools import cached_property
 from pathlib import Path
 
@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from companion.apply_pipeline import ApplyError, run_apply_pipeline
+from companion.apply_pipeline import ApplyError, engine_for_url, run_apply_pipeline
 from companion.config import require_api_key
 from companion.conversation import ConversationManager
 from companion.db import engine_for_store
@@ -41,7 +41,7 @@ from companion.job_applications import (
     generate_latex_from_selection,
     optimize_latex_resume_one_page,
 )
-from companion.job_autofill import GreenhouseAutofillEngine
+from companion.job_autofill import GreenhouseAutofillEngine, default_engines, resume_for_url
 from companion.job_documents import JobDocumentStore
 from companion.job_posting_fetch import fetch_posting as _fetch_posting
 from companion.jobs import DbJobQueue, Handler, start_inline_worker
@@ -148,7 +148,10 @@ _draft_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=2500)
 _resume_llm = AnthropicLLM(Anthropic(api_key=require_api_key()), max_tokens=40000)
 _autofill_engine = GreenhouseAutofillEngine()
 # apply_pipeline routes by the posting URL's ATS; add a Lever/Ashby engine here when one exists.
-_autofill_engines = {"greenhouse": _autofill_engine}
+# One engine per supported ATS, keyed the way job_posting_fetch parses a posting URL.
+# Ashby joined on 2026-09-07 (built against real Composio and Netic forms), which is
+# where most of the new-grad postings Duc tracks actually live.
+_autofill_engines = default_engines()
 _job_documents = JobDocumentStore()
 _memory_notes = MarkdownMemoryNotesStore()
 
@@ -1041,14 +1044,28 @@ def job_autofill(body: AutofillIn) -> dict:
     missing = profile.is_ready_for_autofill()
     if missing:
         raise ApiError(409, "profile_incomplete", "profile isn't ready for autofill", {"missing_fields": missing})
+    # Route by the posting's ATS instead of assuming Greenhouse: the Autofill tab
+    # is where Duc pastes any posting URL, and most of the ones he tracks are Ashby.
+    engine, ats = engine_for_url(body.url, _autofill_engines)
+    if engine is None:
+        raise ApiError(
+            400, "unsupported_ats", f"no autofill engine for {ats} postings yet - fill this one by hand",
+            {"supported": sorted(_autofill_engines)},
+        )
+    # The company-tailored resume, when the tracker has one for this posting.
+    tailored, why = resume_for_url(body.url, _job_store.list())
+    if tailored and Path(tailored).is_file():
+        profile = replace(profile, resume_path=tailored)
     try:
-        report = _autofill_engine.fill(body.url, profile)
+        report = engine.fill(body.url, profile)
     except Exception as e:
         raise ApiError(502, "autofill_failed", f"autofill failed: {e}") from e
     return {
         "url": body.url,
         "filled": [asdict(f) for f in report.filled],
         "skipped": [asdict(s) for s in report.skipped],
+        "resume_attached": Path(profile.resume_path).name,
+        "resume_choice": why,
         "summary_path": report.summary_path,
     }
 

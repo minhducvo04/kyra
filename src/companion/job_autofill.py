@@ -61,6 +61,14 @@ CORE_FIELD_MAP = {
     "preferred name": "preferred_name",
 }
 
+# Ashby renders ONE "Name" field where Greenhouse has first/last, and labels its
+# link questions "Your GitHub" / "Your Personal Website". Checked before the core
+# map so "name" alone resolves to the full name instead of falling through.
+ASHBY_FIELD_MAP = {
+    "personal website": "portfolio_url",
+    "website": "portfolio_url",
+}
+
 EEO_FIELD_MAP = {
     "gender identity": "eeo_gender_identity",
     "hispanic": "eeo_hispanic_latino",
@@ -113,7 +121,27 @@ class AutofillEngine(ABC):
     def fill(self, url: str, profile: ApplicantProfile) -> FillReport: ...
 
 
-class GreenhouseAutofillEngine(AutofillEngine):
+class LabeledFormEngine(AutofillEngine):
+    """Shared behaviour for any ATS that renders standard `<label for=...>`
+    markup: walk the labels, fill the fields whose label maps to a profile
+    value, attach the resume, report everything else as skipped. Greenhouse
+    and Ashby both do this; only the resume input and a couple of label
+    conventions differ, which is what subclasses override.
+
+    What this never does, on any ATS: touch a checkbox (consent and
+    "willing to relocate" are Duc's to answer), answer a free-text custom
+    question, or go anywhere near a CAPTCHA. And it never submits.
+    """
+
+    field_maps: tuple[dict, ...] = (CORE_FIELD_MAP, EEO_FIELD_MAP)
+    resume_selector = "input[type=file]"
+    # A selector that only exists once the form is really usable. Greenhouse
+    # server-renders its form, so domcontentloaded is enough; Ashby renders it
+    # client-side and a fill attempted at domcontentloaded finds an empty page
+    # and reports every field missing (caught on a real Netic form, 2026-09-07).
+    ready_selector: str | None = None
+    ready_timeout_ms = 15000
+
     def __init__(self, headless: bool = False, log_dir: Path | str = LOG_DIR):
         # headless=False by default - Duc should see the browser fill
         # live, not just trust a log file. This is the point of
@@ -134,6 +162,14 @@ class GreenhouseAutofillEngine(AutofillEngine):
         browser = playwright.chromium.launch(headless=self._headless)
         page = browser.new_page()
         page.goto(url, wait_until="domcontentloaded")
+        if self.ready_selector:
+            try:
+                page.wait_for_selector(self.ready_selector, timeout=self.ready_timeout_ms)
+            except Exception:
+                report.skipped.append(SkippedField(
+                    label="(form)", reason=f"the form never rendered ({self.ready_selector}) - filled nothing"))
+                report.summary_path = self._save_summary(report)
+                return report
 
         # Every text/textarea input on the page, matched by its
         # associated <label> text - Greenhouse renders standard
@@ -172,12 +208,16 @@ class GreenhouseAutofillEngine(AutofillEngine):
                 continue
             tag = target.evaluate("el => el.tagName.toLowerCase()")
             input_type = (target.get_attribute("type") or "").lower()
-            if tag == "textarea" or (tag == "input" and input_type in ("text", "tel", "email", "")):
+            # "number" is here so a required numeric question ("years of industry
+            # experience") is REPORTED as skipped rather than silently ignored -
+            # the summary is what Duc checks before submitting, so a field missing
+            # from it is worse than one listed as needing him.
+            if tag == "textarea" or (tag == "input" and input_type in ("text", "tel", "email", "number", "url", "")):
                 yield target, text
 
     def _fill_one(self, locator, label_text, profile: ApplicantProfile, report: FillReport) -> None:
         key = label_text.lower()
-        attr = self._match(key, CORE_FIELD_MAP) or self._match(key, EEO_FIELD_MAP)
+        attr = next((a for m in self.field_maps if (a := self._match(key, m))), None)
         if attr is None:
             report.skipped.append(SkippedField(label=label_text, reason="no matching profile field - custom question"))
             return
@@ -199,7 +239,9 @@ class GreenhouseAutofillEngine(AutofillEngine):
         return None
 
     def _attach_resume(self, page, profile: ApplicantProfile, report: FillReport) -> None:
-        resume_input = page.locator("input[type=file]").first
+        resume_input = page.locator(self.resume_selector).first
+        if resume_input.count() == 0 and self.resume_selector != "input[type=file]":
+            resume_input = page.locator("input[type=file]").first
         if resume_input.count() == 0:
             report.skipped.append(SkippedField(label="Resume", reason="no file input found on page"))
             return
@@ -267,6 +309,69 @@ def resume_for_url(url: str, applications: list) -> tuple[str | None, str]:
         names = ", ".join(a.company for a in by_company)
         return None, f"several tracked companies match this URL ({names}) - using the profile default"
     return None, "no tracked application matched this URL - using the profile default"
+
+
+class GreenhouseAutofillEngine(LabeledFormEngine):
+    """Greenhouse (boards.greenhouse.io / job-boards.greenhouse.io). Built
+    against a real live posting. It needs no overrides: the base behaviour
+    (labels, core/EEO maps, the first file input) is exactly Greenhouse's
+    shape, which is why that behaviour lives in the base class.
+    """
+
+
+class AshbyAutofillEngine(LabeledFormEngine):
+    """Ashby (jobs.ashbyhq.com). Built by reading two real live forms
+    (Composio and Netic, 2026-09-07) rather than guessing the DOM, the same
+    way the Greenhouse engine was built against a real Affirm posting.
+
+    What the real forms showed: the core fields carry stable ids
+    (`_systemfield_name`, `_systemfield_email`, `_systemfield_resume`),
+    everything else is a custom question whose id is a UUID and whose label
+    is human text, and a UUID beginning with a digit is not a valid bare CSS
+    `#id` - the same attribute-selector lesson Greenhouse's numeric ids
+    taught. Name is ONE field here, not first plus last.
+    """
+
+    field_maps = (ASHBY_FIELD_MAP, CORE_FIELD_MAP, EEO_FIELD_MAP)
+    resume_selector = 'input[type=file][id="_systemfield_resume"]'
+    ready_selector = 'input[id="_systemfield_email"]'
+
+    @staticmethod
+    def application_url(url: str) -> str:
+        """Ashby serves the form at <posting>/application; the posting page
+        itself only has an Apply button."""
+        trimmed = url.split("?")[0].rstrip("/")
+        return trimmed if trimmed.endswith("/application") else f"{trimmed}/application"
+
+    def fill(self, url: str, profile: ApplicantProfile) -> FillReport:
+        return super().fill(self.application_url(url), profile)
+
+    def _fill_one(self, locator, label_text, profile: ApplicantProfile, report: FillReport) -> None:
+        # The single "Name" field: first + last, and only when both exist.
+        if label_text.strip().lower() in ("name", "full name"):
+            full = f"{profile.first_name} {profile.last_name}".strip()
+            if not full:
+                report.skipped.append(SkippedField(label=label_text, reason="profile has no name"))
+                return
+            try:
+                locator.fill(full)
+                report.filled.append(FilledField(label=label_text, value=full))
+            except Exception as e:  # noqa: BLE001 - one field failing must not stop the rest
+                report.skipped.append(SkippedField(label=label_text, reason=f"couldn't fill: {e}"))
+            return
+        super()._fill_one(locator, label_text, profile, report)
+
+
+ENGINES_BY_SOURCE: dict[str, type[LabeledFormEngine]] = {
+    "greenhouse": GreenhouseAutofillEngine,
+    "ashby": AshbyAutofillEngine,
+}
+
+
+def default_engines(headless: bool = False) -> dict[str, AutofillEngine]:
+    """One engine per supported ATS, keyed the way job_posting_fetch parses a
+    URL - so apply_pipeline.engine_for_url() finds them without a translation."""
+    return {name: cls(headless=headless) for name, cls in ENGINES_BY_SOURCE.items()}
 
 
 class AutofillJobApplicationTool(Tool):
