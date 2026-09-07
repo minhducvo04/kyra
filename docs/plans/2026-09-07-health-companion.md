@@ -168,12 +168,52 @@ The real costs, which are not small:
 code on, for $39 more than the Polar Loop. If it is not acceptable, the **Garmin vívosmart 5 ($150)** is the pick,
 with the **Polar Loop ($200)** if screenless matters more than SpO₂. That is Duc's call, not a technical one.
 
-### Rings, since he said he is open to suggestions
+### Rings vs the Garmin vívosmart 5 - what you give up and what you gain
 
-| Ring | Weight | Writes to Apple Health | Privacy | Price |
-|---|---|---|---|---|
-| Ultrahuman Ring AIR | **2.4 g** - nothing on either wrist | sleep stages, HRV, HR, temperature, SpO₂, activity | transparent (Mozilla gave full marks for data access) but an account is mandatory and there are many cloud subprocessors | $349, no subscription |
-| Oura Ring 4 | ~4-6 g | sleep stages, HR, steps, respiration (**not HRV**) | Finnish, GDPR; public API v2 | $349 + $5.99/mo |
+| Ring | Weight | Battery | Sizes | Reaches Apple Health | Privacy | Cost (3 yr) |
+|---|---|---|---|---|---|---|
+| **Oura Ring 4** | ~4-6 g | 5-8 d | 4-15 | sleep stages, HR, steps, respiration (**not HRV**) | Finnish, GDPR; **public API v2** | $349 + $5.99/mo = **$565** |
+| **Ultrahuman Ring AIR** | **2.4 g** | 4-6 d | 5-14 | sleep stages, HRV, HR, **skin temperature**, SpO₂, activity | transparent (Mozilla gave full marks for data access) but a mandatory account and many cloud subprocessors | **$349**, no subscription |
+| Amazfit Helio Ring | ~4 g | **4 d** | **only 8, 10, 12** | sleep, HR, SpO₂, stress, skin temperature | Zepp Health (China) - same concern as the strap | $199, no subscription |
+
+**Where a ring is worse than the vívosmart 5**
+
+1. **Sizing is a one-shot commitment.** Order a sizing kit first and wait. Fingers swell with heat, salt and
+   exercise, and unlike a strap you cannot adjust it. The Amazfit ships in **three sizes only** (8, 10, 12).
+2. **Typing.** Duc is at a Mac most of the day. A ring on a typing hand is the most-reported comfort complaint,
+   and it is the single most likely reason a ring ends up in a drawer for someone in this job.
+3. **The gym is a problem.** Rings scratch, and barbell work means taking it off - which means not tracking.
+4. **Movement data is weaker.** Rings misread steps and struggle with strength work; a wrist sits where the arm
+   actually swings. Garmin also adds stress, respiration, Body Battery and hydration logging that no ring here
+   matches as a set.
+5. **Battery is shorter, not longer**: 4-6 days (Amazfit 4) against Garmin's 7, and charging means removing it.
+6. **No display at all.** The vívosmart 5 has a small OLED for the time, a heart-rate glance and notifications.
+7. **Price**: $199-349 against **$150**, and Oura adds $72/yr on top.
+8. **REM specifically.** Finger twitches during REM disturb a ring's accelerometer, so rings tend to *under*
+   estimate REM while wrist devices *over* estimate it. Neither is neutral; it is a different bias, not a better one.
+
+**Where a ring is better**
+
+1. **Both wrists stay free.** This is the one that matters most in Duc's case: the traditional watch keeps its
+   place and nothing competes with it, on either arm. No band can offer that.
+2. **The signal is genuinely better.** Thin finger skin, steady contact pressure and no large muscles give a
+   cleaner PPG than a wrist, and sub-optimal strap pressure is a known cause of wrist inaccuracy. This is the
+   research-supported reason rings measure resting heart rate, respiration and SpO₂ well.
+3. **Sleep staging is the strongest here.** Oura's algorithm reaches ~79% four-stage agreement against
+   polysomnography, where two human scorers agree ~83%. Sleep is what this plan reads most.
+4. **Comfortable to sleep in** - nothing pressing on the wrist all night, which is when a band is most noticed.
+5. **Skin temperature**, which the vívosmart 5 does not have at all and the Polar Loop does not expose. Useful for
+   illness and recovery signals.
+6. **2.4-6 g instead of 24.5 g**, and invisible in a meeting or an interview.
+7. **A personal API.** Oura's v2 is public and Ultrahuman's is available on application; **Garmin's is closed to
+   individuals**. For a project meant to be built on, that is a real difference.
+
+**Verdict.** For someone at a keyboard all day the vívosmart 5 remains the safer buy, and it is still the pick
+if the typing risk bothers Duc. But now that he accepts a subscription, **Oura Ring 4 ($349 + $5.99/mo)** is the
+strongest *ring*: the best-validated sleep of anything on this page, the cleanest privacy of the three rings
+(Finnish, GDPR), and a public API. **Ultrahuman Ring AIR ($349, no subscription)** is the choice if a recurring
+cost is unwelcome after all - it is lighter, exposes HRV and temperature that Oura does not send to Apple Health,
+and costs $216 less over three years. The Amazfit ring fails the same privacy criterion as its strap.
 
 ### The two that actually compete
 
