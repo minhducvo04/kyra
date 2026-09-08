@@ -49,7 +49,8 @@ COMPACT_SYSTEM = (
     '{"path": "tool"|"text", "backend": "claude"|"local"}. '
     "tool = it asks for a reminder, tech news, science facts, saving/reviewing learning items, "
     "job-application tracking/drafting/autofill, reading a job posting's signals or targeting a posting URL, "
-    "outreach contacts and their LinkedIn notes/follow-ups, or saving a durable fact about the user. "
+    "outreach contacts and their LinkedIn notes/follow-ups, saving a durable fact about the user, "
+    "or looking something up in the user's own saved material (what was decided, written or noted). "
     "text = anything else; backend claude for explanations, careful reasoning, or work coordination, local for casual chat."
 )
 
@@ -155,6 +156,28 @@ CATEGORIES: dict[str, tuple[str, str, str, list[str]]] = {
                                             "and nothing asked to be recorded. These are explanations, not tool calls",
                                            ["how much detail belongs in a behavioral answer", "how long should a new grad resume be",
                                             "when is it worth negotiating a first offer", "do companies actually read cover letters"]),
+    # Added 2026-09-08 (round 5) for search_kyra_data, plus set_application_resume,
+    # which round 4's adapter predates and has never had held-out coverage. The bait
+    # bucket is the class this tool invites: "look up" / "find" / "what does X say"
+    # aimed at general knowledge rather than at anything Duc has actually saved.
+    "search_kyra_data": ("tool", "claude", "asking to look something up in the user's OWN saved material - what was decided, written, measured "
+                         "or noted, in his docs, plans, digests, resumes, applications, memory notes or past conversations; often phrased as "
+                         "'what did we decide about X', 'find the note where...', 'what does <file> say about...', 'dig up the ...'",
+                        ["what did we decide about the embedding model", "find the note where I wrote down my interview prep",
+                         "search my digests for that posting", "what does my plan say about the reranker"]),
+    "set_application_resume": ("tool", "claude", "asking to attach/point a specific tailored resume file at a specific tracked job application, "
+                               "so that application sends that file instead of the general one",
+                              ["use the Northwind resume for that application", "attach the tailored pdf to the Netic application",
+                               "set the resume on application 12 to the one we just built"]),
+    "text_hard_negative_lookup": ("text", "claude", "a question shaped like a lookup - 'look up', 'find', 'search', 'what's the difference between', "
+                                  "'where do I find' - that is really about general knowledge, a tool other than Kyra, or advice, and has nothing "
+                                  "to do with material the user has saved",
+                                 ["what's the difference between BM25 and TF-IDF", "how do I search for a file by name in bash",
+                                  "where do I find the setting for that in VS Code", "what should I look for in a startup offer"]),
+    "text_hard_negative_lookup_local": ("text", "local", "casual chat that happens to use search/find/look up/dig up about everyday things, "
+                                        "with no request to search anything the user has saved",
+                                       ["I searched everywhere for my keys this morning", "still looking for a decent coffee place around here",
+                                        "found a great ramen spot yesterday"]),
 }
 
 GEN_PROMPT = """Generate {n} distinct, realistic messages a user might type or say to a personal AI assistant, all of which fall \
@@ -215,12 +238,24 @@ def generate_synthetic(
     for cat, (path, backend, desc, seeds) in CATEGORIES.items():
         if categories and cat not in categories:
             continue
-        raw = llm.respond(
-            system="You write realistic user messages for training a small classifier. JSON array of strings only.",
-            history=[],
-            user_input=GEN_PROMPT.format(n=per_category, cat=cat, desc=desc, seeds=json.dumps(seeds)),
-        )
-        msgs = parse_json_array(raw)
+        # Retry, then fail loudly. parse_json_array() returns [] for anything it
+        # cannot read, and a category that silently contributes nothing is how a
+        # tool ends up untrained while the run still looks like it worked - the
+        # exact gap round 3 existed to close. Seen for real on 2026-09-08: two of
+        # four new categories returned got=0 on one run and 60 on the next.
+        msgs: list[str] = []
+        for attempt in range(3):
+            raw = llm.respond(
+                system="You write realistic user messages for training a small classifier. JSON array of strings only.",
+                history=[],
+                user_input=GEN_PROMPT.format(n=per_category, cat=cat, desc=desc, seeds=json.dumps(seeds)),
+            )
+            msgs = parse_json_array(raw)
+            if msgs:
+                break
+            logger.warning("gen %s: unreadable reply (%d chars), retrying (%d/3)", cat, len(raw), attempt + 1)
+        if not msgs:
+            raise RuntimeError(f"gen {cat}: no parseable messages after 3 attempts - refusing to train a category blind")
         kept = 0
         for msg in msgs:
             key = _norm(msg)
