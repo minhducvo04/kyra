@@ -76,7 +76,8 @@ a session.
    stream, so the browser plays them from a queue with an ordinary `<audio>` element and no MediaSource.
 2. **Transcribe while he is still talking.** STT is 1.56s for 3.0s of speech - about half real time - and all
    of it is spent after he stops. Feeding the recorder's chunks to faster-whisper as they arrive would recover
-   most of it. Worth **~1.2s**.
+   most of it. Worth **~1.2s**. Still open, and see the STT section below before reaching for the easy version
+   of it: a smaller model is not the shortcut it looks like.
 3. **Shorten spoken replies.** 189 characters became 11.2s of speech. The spoken register exists
    (`voice_text.SPOKEN_REGISTER`) but asks for shape, not length. This does not change time-to-first-word, but
    it is the difference between a conversation and a lecture.
@@ -97,3 +98,34 @@ feeling like a request and starts feeling like a reply.
   the fraction this improvement applies to.
 - Two turns is not a distribution. The reply length dominates TTS, and reply length varies a lot.
 - No microphone was involved. Real capture adds the recorder's own buffering.
+
+
+## The STT model: `small` stays, and the clean-speech benchmark would have said otherwise
+
+Reproduce with `python3 scripts/measure_stt.py` and `--noise`. Speech is synthesised with Kokoro so the
+reference text is exact; noise is added at calibrated SNRs and each noisy row is averaged over three draws.
+
+On clean speech, `base` transcribes **3.6x faster than `small` with identical 0% WER** - which reads like a
+free second off every turn, and `KYRA_STT_MODEL` already exists to take it. Clean speech cannot tell the
+models apart, though: almost every configuration scored 0%. Adding noise can.
+
+| config | clean | 20 dB | 10 dB | 5 dB | 0 dB | speed |
+|---|---|---|---|---|---|---|
+| **small beam5 (current)** | 0.0% | **0.0%** | **4.1%** | **17.6%** | **41.4%** | 0.58x |
+| base beam5 | 0.0% | 1.0% | 11.5% | 26.3% | 71.5% | 0.16x |
+| tiny beam5 | 0.0% | 2.0% | 9.3% | 61.6% | 100.0% | 0.07x |
+
+`small` wins at every noise level, and at 10 dB - an ordinary room with something going on in it - `base`
+makes **2.8x the errors**. So the 3.6x speedup is not free; it is paid for in mishearing, which for a
+companion is worse than a second of waiting. **Keep `small`.**
+
+Two cautions about these numbers. With a single noise draw the 0 dB row flipped the ranking between runs,
+which is why it is averaged now - at 0 dB the signal is barely present and one sample is mostly luck; the
+decision rests on the 5-10 dB columns, where the ordering is stable. And the speed column moves with the model
+cache (0.22x to 0.58x for `small` across runs) while the *ratio* between models holds, so read it as a ratio.
+
+The remaining STT latency therefore has to come from overlapping the work with speech rather than from a
+smaller model, and doing that without losing accuracy means a real streaming approach (overlapping windows
+committing words that agree across passes), not just sending chunks earlier. That is a real build with real
+accuracy risk, and it wants a baseline recorded through Duc's actual microphone first - synthetic speech
+cannot stand in for the thing being optimised.
