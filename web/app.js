@@ -316,6 +316,72 @@ async function streamTurn(text) {
   return final;
 }
 
+/* Speak her typed replies too, not just spoken turns. A voice turn already comes
+   back as audio; a typed one had no way to be heard, which made the voice half of
+   her only reachable through the microphone. Uses /api/speak and the same
+   sentence queue, so the first sentence starts while the rest is still being
+   synthesised. Off by default - she should not start talking unasked. */
+const btnSpeak = document.getElementById("btn-speak");
+let speakReplies = localStorage.getItem("kyra.speak") === "1";
+// The synthesis stream outlives the audio it produced: stopping playback without
+// stopping this keeps feeding the queue, and she starts talking again a moment
+// after being cut off. Caught by toggling SPEAK off mid-reply.
+let speakAbort = null;
+
+function applySpeakToggle() {
+  btnSpeak.classList.toggle("is-active", speakReplies);
+  btnSpeak.setAttribute("aria-pressed", speakReplies ? "true" : "false");
+}
+applySpeakToggle();
+
+btnSpeak.addEventListener("click", () => {
+  speakReplies = !speakReplies;
+  localStorage.setItem("kyra.speak", speakReplies ? "1" : "0");
+  applySpeakToggle();
+  if (!speakReplies) interruptPlayback();
+});
+
+async function speakReply(text) {
+  if (!speakReplies || !text) return;
+  speakAbort = new AbortController();
+  const mine = speakAbort;
+  try {
+    const res = await fetch("/api/speak", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+      signal: mine.signal,
+    });
+    if (!res.ok || !res.body) return;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+        const chunk = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        let event = "message";
+        let data = "";
+        for (const l of chunk.split("\n")) {
+          if (l.startsWith("event: ")) event = l.slice(7);
+          else if (l.startsWith("data: ")) data += l.slice(6);
+        }
+        // Re-checked per chunk, not once at the top: she may have been stopped
+        // since this stream started.
+        if (event === "audio" && data && speakReplies && mine === speakAbort) {
+          enqueueAudio(JSON.parse(data).b64);
+        }
+      }
+    }
+  } catch (_) {
+    // Failing to speak is not failing the turn - the reply is already on screen.
+  }
+}
+
 async function send() {
   const text = input.value.trim();
   if (!text) return;
@@ -337,6 +403,7 @@ async function send() {
       input.focus();
       return;
     }
+    if (data && data.reply) speakReply(data.reply);
     if (!data) {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -540,6 +607,11 @@ async function playQueue() {
 }
 
 function interruptPlayback() {
+  // Stop the synthesis too, not just the sound, or the queue refills behind it.
+  if (speakAbort) {
+    speakAbort.abort();
+    speakAbort = null;
+  }
   if (!speaking()) return;
   // Drop what has not been said yet as well as what is playing, or she would
   // carry on with the next sentence a moment after being cut off.

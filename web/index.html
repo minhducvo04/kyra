@@ -8,7 +8,6 @@
      404 for /favicon.ico, which is a permanent false positive in any console
      check. The mark is the wordmark's own glyph. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='25' x='4' font-size='24' fill='%2329d8ff'%3E%E2%97%88%3C/text%3E%3C/svg%3E">
-<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -411,6 +410,9 @@
         </svg>
       </button>
       <span class="mic-label" id="mic-label">MIC OFF</span>
+    </div>
+    <div class="voice-mode-toggle" role="group" aria-label="Speak replies">
+      <button class="voice-mode-btn" id="btn-speak" type="button" aria-pressed="false" title="Read her replies aloud">SPEAK</button>
     </div>
     <div class="input-frame">
       <span class="bracket" aria-hidden="true">&#91;</span>
