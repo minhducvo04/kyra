@@ -344,6 +344,9 @@ h2[id] { scroll-margin-top:118px; }
 .links a { font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
   text-transform:uppercase; color:var(--faint); text-decoration:none; }
 .links a:hover { color:var(--accent); }
+.urls { width:100%; margin-top:9px; box-sizing:border-box; resize:vertical;
+        font-family:var(--mono); font-size:10.5px; line-height:1.6; padding:8px;
+        color:var(--fg); background:transparent; border:1px solid currentColor; border-radius:2px; }
 .empty { color:var(--faint); font-family:var(--mono); font-size:12.5px; padding:6px 0 2px; }
 .warn { border-left-color:var(--warn); color:var(--warn); font-size:14px; font-family:var(--mono); }
 footer { margin-top:56px; padding-top:18px; border-top:1px solid var(--grid);
@@ -494,6 +497,22 @@ def render_html(data: DigestData, *, prev_day: str | None = None, next_day: str 
                 f'<p class="links"><a href="{_e(p.url)}" target="_blank" rel="noopener">'
                 f"Open posting →</a></p></article>"
             )
+    # Every posting here came off a watched Greenhouse/Lever/Ashby board, so every one
+    # of these URLs is something the apply pipeline can actually fetch, tailor for and
+    # fill. Duc's ask was "get the jobs, click apply": the digest already does the
+    # finding, so the URLs leave it as one block to paste into JOBS -> APPLY rather than
+    # a dozen separate copies. A textarea, not a link list, because the page is
+    # deliberately JavaScript-free - clicking inside it and selecting all is the whole
+    # interaction, and no copy button can exist without script.
+    if d.report and d.report.new:
+        urls = "\n".join(p.url for p in d.report.new)
+        jobs.append(
+            '<article class="card"><p class="m"><span class="co">Apply to all of these</span></p>'
+            '<p class="links">Paste into JOBS &rarr; APPLY, one per line. Kyra fills the forms; '
+            "nothing is submitted.</p>"
+            f'<textarea class="urls" readonly rows="{min(len(d.report.new), 12)}">{_e(urls)}</textarea>'
+            "</article>"
+        )
     still = f"{d.report.still_open} open" if d.report else "no watchlist"
     parts += _section(
         "New postings", f"{d.new_postings} new · {still}", "jobs", jobs,

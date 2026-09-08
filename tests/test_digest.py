@@ -297,3 +297,34 @@ def test_stale_postings_sink_to_the_bottom_instead_of_being_hidden():
     # fresh, undated (no age is not evidence of staleness) and the repost stay up top,
     # in their original order; the two genuinely stale ones fall to the bottom, also in order.
     assert ids == ["2", "4", "5", "1", "3"]
+
+
+def _digest_with_postings(*postings):
+    from companion.job_boards import WatchReport
+
+    d = _data()
+    d.report = WatchReport(new=list(postings), still_open=len(postings), errors=[], checked_at="2026-09-08T05:00:00")
+    return d
+
+
+def _posting(company, title, url):
+    from companion.job_boards import Posting
+
+    return Posting("greenhouse", company, url.rsplit("/", 1)[-1], title, "SF", url, "2026-09-07")
+
+
+def test_new_postings_come_with_a_paste_ready_block_for_apply():
+    """Duc's ask was "get the jobs, click apply" - the digest already finds the
+    postings, so the URLs must leave it as one copyable block rather than a dozen
+    separate copies into the APPLY tab."""
+    a = "https://job-boards.greenhouse.io/acme/jobs/1"
+    b = "https://jobs.ashbyhq.com/beta/2"
+    html = render_html(_digest_with_postings(_posting("Acme", "SWE", a), _posting("Beta", "MLE", b)))
+    assert "<textarea" in html and 'readonly' in html
+    block = html.split("<textarea", 1)[1].split("</textarea>", 1)[0]
+    assert a in block and b in block
+    assert block.index(a) < block.index(b)  # same order as the cards
+
+
+def test_no_postings_means_no_paste_block():
+    assert "<textarea" not in render_html(_data())
