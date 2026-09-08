@@ -34,6 +34,7 @@ from companion.job_applications import (
     optimize_latex_resume_one_page,
 )
 from companion.job_autofill import AutofillEngine, FillReport
+from companion.job_boards import find_posting
 from companion.job_posting_fetch import TargetPostingTool, fetch_posting, parse_posting_url
 from companion.llm import LLMBackend
 from companion.paths import DATA_DIR, RESUMES_DIR
@@ -71,6 +72,10 @@ class ApplyResult:
     questions: list[str] = field(default_factory=list)
     cover_letter: str | None = None
     cover_letter_path: str | None = None
+    # Set only when the URL Duc pasted was not the one applied through - a LinkedIn
+    # listing resolved to the company's own posting. Kept so the provenance of a row
+    # is visible after the link has been upgraded.
+    source_url: str | None = None
     autofill_summary_path: str | None = None
     autofill_filled: int = 0
     autofill_skipped: list[str] = field(default_factory=list)
@@ -109,6 +114,52 @@ def wants_cover_letter(mode: str, posting_text: str) -> bool:
     return mode == "always"
 
 
+def resolve_apply_url(
+    url: str,
+    *,
+    store: JobApplicationStore,
+    company: str = "",
+    role: str = "",
+    posting_text: str = "",
+    resolve: Callable = find_posting,
+) -> tuple[str, str]:
+    """(the URL to apply through, why it was chosen).
+
+    Most postings Duc finds are on LinkedIn, and a LinkedIn URL cannot be
+    fetched or filled - so those tracker rows had no way into this pipeline at
+    all. The way through is not to read LinkedIn: the same company almost always
+    hosts the req on Greenhouse, Lever or Ashby, whose public APIs the board
+    watch already polls, so the company and role Duc recorded are enough to find
+    it. LinkedIn is never opened, which keeps the standing decision intact.
+
+    Raises ApplyError rather than guessing: applying to the wrong req with a
+    resume tailored for a different one is worse than stopping and asking.
+    """
+    if parse_posting_url(url):
+        return url, ""
+    if posting_text.strip():
+        return url, ""  # Duc supplied the posting; nothing to look up
+
+    if not (company.strip() and role.strip()):
+        tracked = next((a for a in store.list() if a.link == url), None)
+        if tracked:
+            company = company.strip() or tracked.company
+            role = role.strip() or tracked.role
+    if not (company.strip() and role.strip()):
+        raise ApplyError(
+            f"company and role are needed to find {url} on a real job board - pass them, add them to its tracker "
+            "row, or paste the posting text instead"
+        )
+
+    match = resolve(company, role)
+    if match is None:
+        raise ApplyError(
+            f"could not find {role!r} at {company} on any public Greenhouse, Lever or Ashby board. Open the posting, "
+            "use its 'Apply on company website' link and paste that URL instead - or paste the posting text"
+        )
+    return match.posting.url, match.reason
+
+
 def run_apply_pipeline(
     url: str,
     *,
@@ -124,6 +175,7 @@ def run_apply_pipeline(
     role: str = "",
     cover_letter: str = "auto",
     fetch: Callable = fetch_posting,
+    resolve: Callable = find_posting,
     resumes_dir: Path = RESUMES_DIR,
     cover_letters_dir: Path = COVER_LETTERS_DIR,
     on_progress: Callable[[str], None] | None = None,
@@ -135,13 +187,23 @@ def run_apply_pipeline(
         if on_progress:
             on_progress(line)
 
-    # 1. Target: posting text + tracker entry (fetch for the three boards, pasted text otherwise).
+    # 1. Resolve: a LinkedIn or careers-page URL becomes the company's own board posting,
+    # which is the only kind an engine can fill. Board URLs pass straight through.
+    pasted_url = url
+    url, why = resolve_apply_url(
+        url, store=store, company=company, role=role, posting_text=posting_text, resolve=resolve
+    )
+    if url != pasted_url:
+        note(f"{pasted_url} is not a job board - applying through {why}")
+
+    # 2. Target: posting text + tracker entry (fetch for the three boards, pasted text otherwise).
     target = TargetPostingTool(store, fetch=fetch).run(url=url, posting_text=posting_text, company=company, role=role)
     if "error" in target:
         raise ApplyError(target["error"])
     app = JobApplication(**target["application"])
     text = target["posting_text"]
     result = ApplyResult(url=url, application_id=app.id, company=app.company, role=app.role, status=app.status)
+    result.source_url = pasted_url if pasted_url != url else None
     result.steps = steps
     note(f"targeted {app.company} - {app.role} (tracker #{app.id}, {'new' if target['created'] else 'already tracked'})")
     if app.status in ALREADY_DONE:
@@ -149,7 +211,7 @@ def run_apply_pipeline(
         note(result.attention[-1])
         return result
 
-    # 2. Resume: the one-page tailoring loop from the base .tex, saved next to Duc's own files.
+    # 3. Resume: the one-page tailoring loop from the base .tex, saved next to Duc's own files.
     if not base_latex.strip():
         raise ApplyError("no base resume LaTeX to tailor from")
     note("tailoring the resume to this posting")
@@ -174,7 +236,7 @@ def run_apply_pipeline(
     for w in fit.guard_warnings:
         result.attention.append(f"resume check: {w}")
 
-    # 3. Cover letter, only when the posting asks for one (or Duc says always).
+    # 4. Cover letter, only when the posting asks for one (or Duc says always).
     if wants_cover_letter(cover_letter, text):
         note("drafting a cover letter (the posting mentions one)" if cover_letter == "auto" else "drafting a cover letter")
         try:
@@ -187,7 +249,7 @@ def run_apply_pipeline(
         except Exception as e:  # noqa: BLE001 - a letter failure must not cost the resume or the fill
             result.attention.append(f"cover letter draft failed: {type(e).__name__}: {e}")
 
-    # 4. Autofill, when an engine exists for this ATS and there is a PDF to attach.
+    # 5. Autofill, when an engine exists for this ATS and there is a PDF to attach.
     engine, ats = engine_for_url(url, engines)
     if engine is None:
         result.attention.append(f"no autofill engine for {ats} postings yet - fill the form by hand with {Path(result.resume_pdf_path).name if result.resume_pdf_path else 'the resume'}")
@@ -213,7 +275,7 @@ def run_apply_pipeline(
             except Exception as e:  # noqa: BLE001 - report it, keep the resume and the tracker entry
                 result.attention.append(f"autofill failed: {type(e).__name__}: {e}")
 
-    # 5. Status. Never `applied` - that is Duc's click.
+    # 6. Status. Never `applied` - that is Duc's click.
     result.status = "needs_attention" if result.attention else "ready_to_submit"
     stamp = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
     summary = f"[apply {stamp}] {result.status}"

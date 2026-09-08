@@ -281,3 +281,185 @@ def slug_from_url(url: str) -> tuple[str, str] | None:
     if m:
         return "ashby", m.group(1)
     return None
+
+
+# --- Resolving a posting Duc found somewhere unfetchable ---------------------
+# Mass-apply slice 3. Most postings Duc actually finds are on LinkedIn, and a
+# LinkedIn URL cannot be fetched (their terms, and there is no personal API) -
+# so those tracker rows sat at `targeting` with no way into the apply pipeline.
+# The way through is not to read LinkedIn at all: a company that posts on
+# LinkedIn is almost always hiring through Greenhouse, Lever or Ashby, and
+# those boards are the same public APIs the watch already polls. Given the
+# company and the role title Duc already recorded, the posting can be found on
+# the company's own board.
+#
+# The property that matters most is the refusal. Resolving to the WRONG req
+# means a resume tailored for one job is sent to another, which is worse than
+# not resolving at all - so a weak match, or two matches too close to separate,
+# comes back as nothing with a reason. Same rule job_autofill.resume_for_url
+# already applies to picking a resume.
+
+MIN_TITLE_SCORE = 0.62
+# Two postings this close in score are not separable by title alone (the usual
+# cause is one req per office), so the resolver declines rather than picking.
+AMBIGUITY_MARGIN = 0.05
+# When several postings clear the bar, the leader is only trusted if it is an
+# essentially exact title, or it leads by a wide margin. Found by a real run
+# against Anthropic's live board: the role "AI Engineer" as Duc might record it
+# scores 0.80 against "Applied AI Engineer" and 0.67 against the posting he
+# actually meant, so the score alone would have picked a different req with
+# confidence. A short title simply does not identify one posting.
+CONFIDENT_SCORE = 0.95
+DECISIVE_LEAD = 0.25
+# Below this length a prefix match is noise ("new" would match "network").
+_MIN_PREFIX = 4
+
+
+@dataclass(frozen=True)
+class PostingMatch:
+    posting: Posting
+    score: float
+    reason: str
+
+
+def _tokens(title: str) -> list[str]:
+    return _norm_title(title).split()
+
+
+def _same(a: str, b: str) -> bool:
+    """Token equality, tolerant of the endings boards vary on: engineer /
+    engineering, grad / graduate. Length-bounded so it stays a real signal."""
+    if a == b:
+        return True
+    short, long = (a, b) if len(a) <= len(b) else (b, a)
+    return len(short) >= _MIN_PREFIX and long.startswith(short)
+
+
+def title_score(wanted: str, candidate: str) -> float:
+    """0..1 on how well a board title matches the role Duc recorded.
+
+    An F1 over matched tokens, so it rewards covering the whole role Duc named
+    AND penalises a title that is mostly other words - "Software Engineer, New
+    Grad" should match "Software Engineer, New Grad (2026) - SF" and should not
+    match "Engineering Manager".
+    """
+    want, cand = _tokens(wanted), _tokens(candidate)
+    if not want or not cand:
+        return 0.0
+    if _norm_title(wanted) == _norm_title(candidate):
+        return 1.0
+    matched = sum(1 for w in want if any(_same(w, c) for c in cand))
+    if not matched:
+        return 0.0
+    coverage, precision = matched / len(want), matched / len(cand)
+    return 2 * coverage * precision / (coverage + precision)
+
+
+def board_candidates(company: str, watchlist_path: Path = WATCHLIST_PATH) -> list[tuple[str, str]]:
+    """(source, token) pairs to try for this company, curated ones first.
+
+    The watchlist is Duc's own mapping and is always right when it has the
+    company. Otherwise the slug is guessed from the name across all three
+    boards: a guess that does not exist just 404s, which costs one request.
+    """
+    watched: list[tuple[str, str]] = []
+    try:
+        for entry in load_watchlist(watchlist_path):
+            if _norm_title(entry.company) == _norm_title(company):
+                watched.append((entry.source, entry.token))
+    except Exception:  # noqa: BLE001 - a malformed watchlist must not stop a guess
+        logger.warning("could not read the watchlist while resolving %r", company)
+
+    words = _norm_title(company).split()
+    guesses = {"".join(words), "-".join(words)} - {""}
+    guessed = [(name, token) for token in sorted(guesses) for name in sorted(SOURCES)]
+    return watched + [c for c in guessed if c not in watched]
+
+
+def find_posting(
+    company: str,
+    role: str,
+    *,
+    sources: dict[str, JobBoardSource] | None = None,
+    watchlist_path: Path = WATCHLIST_PATH,
+    min_score: float = MIN_TITLE_SCORE,
+) -> PostingMatch | None:
+    """The company's own posting for this role, or None with a logged reason.
+
+    Never touches LinkedIn: the only requests are the three public board APIs.
+    """
+    if not company.strip():
+        raise ValueError("company is required to look up a board")
+    if not role.strip():
+        raise ValueError("role is required to match a posting title")
+    sources = sources or {name: cls() for name, cls in SOURCES.items()}
+
+    candidates = board_candidates(company, watchlist_path)
+    # Curated boards are consulted as their own group: a guessed slug must never
+    # make a watchlist hit look ambiguous.
+    watched = _watched_only(company, watchlist_path)
+    watched_candidates = [c for c in candidates if c in watched]
+    guessed_candidates = [c for c in candidates if c not in watched]
+
+    for group in (watched_candidates, guessed_candidates):
+        if not group:
+            continue
+        scored = _scan(group, company, role, sources, min_score, watchlist_path)
+        if scored:
+            return _pick(scored)
+    logger.info("no board posting matched %r / %r", company, role)
+    return None
+
+
+def _watched_only(company: str, watchlist_path: Path) -> set[tuple[str, str]]:
+    try:
+        return {
+            (e.source, e.token) for e in load_watchlist(watchlist_path)
+            if _norm_title(e.company) == _norm_title(company)
+        }
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _scan(
+    candidates: list[tuple[str, str]], company: str, role: str,
+    sources: dict[str, JobBoardSource], min_score: float, watchlist_path: Path,
+) -> list[PostingMatch]:
+    out: list[PostingMatch] = []
+    for source_name, token in candidates:
+        source = sources.get(source_name)
+        if source is None:
+            continue
+        display = company_for_token(source_name, token, watchlist_path) or company
+        try:
+            postings = source.fetch(display, token)
+        except Exception as e:  # noqa: BLE001 - a guessed slug that 404s is the normal case, not an error
+            logger.debug("board %s/%s did not answer: %s", source_name, token, e)
+            continue
+        for posting in postings:
+            score = title_score(role, posting.title)
+            if score >= min_score:
+                out.append(PostingMatch(
+                    posting=posting, score=score,
+                    reason=f"{posting.title!r} on the {source_name} board {token!r} (title match {score:.2f})",
+                ))
+    return out
+
+
+def _pick(matches: list[PostingMatch]) -> PostingMatch | None:
+    ranked = sorted(matches, key=lambda m: m.score, reverse=True)
+    best = ranked[0]
+    others = [m for m in ranked[1:] if m.posting.url != best.posting.url]
+    if not others:
+        return best
+    runner_up = others[0]
+    lead = best.score - runner_up.score
+    if lead <= AMBIGUITY_MARGIN:
+        logger.info("refusing an ambiguous posting match: %s vs %s", best.reason, runner_up.reason)
+        return None
+    if best.score < CONFIDENT_SCORE and lead < DECISIVE_LEAD:
+        logger.info(
+            "refusing a posting match that only leads on a generic title: %s vs %s", best.reason, runner_up.reason
+        )
+        return None
+    return best

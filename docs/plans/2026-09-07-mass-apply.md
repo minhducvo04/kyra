@@ -23,8 +23,15 @@ discovery stays his, delivery stays his click.
 ## Slice 2 - Ashby and Lever autofill engines (next)
 Same `AutofillEngine` interface; the pipeline already routes by ATS and reports "no engine" as attention.
 
-## Slice 3 - LinkedIn posting -> company site
-Paste a LinkedIn job URL; Kyra takes the "Apply on company website" link Duc pastes with it, no LinkedIn reads.
+## Slice 3 - LinkedIn posting -> company site (DONE 2026-09-08)
+Paste a LinkedIn (or careers-page) URL and the pipeline resolves it to the company's own posting before doing
+anything else: `job_boards.find_posting(company, role)` searches the Greenhouse/Lever/Ashby public APIs the watch
+already polls, and `apply_pipeline.resolve_apply_url` feeds the result to the rest of the run. Company and role come
+from the tracker row when they are not passed, so an existing LinkedIn row needs nothing typed. LinkedIn is never
+read. A weak, ambiguous or generic-title match refuses with an instruction to use the posting's own "Apply on
+company website" link instead - applying to the wrong req with a resume tailored for another is the failure that
+matters here. -> verified: unit tests + a real run against Anthropic's live Greenhouse board (exact title resolves
+to the same posting; the bare title "AI Engineer" refuses rather than picking "Applied AI Engineer").
 
 ## Not in scope
 Clicking Submit. Easy Apply. Anything that logs into LinkedIn.
