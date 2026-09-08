@@ -351,3 +351,38 @@ class TestChatPathResolves:
             url=LINKEDIN, posting_text="Join the team. Python.", company="Netic", role="SWE"
         )
         assert "error" not in out and out["application"]["link"] == LINKEDIN
+
+
+@requires_latex
+def test_resolving_does_not_open_a_second_tracker_row(tmp_path):
+    """A resolved posting must land on the row Duc already curated, not beside it.
+
+    The hazard is real and has bitten before: Ashby and Lever hand back only a board
+    slug, so targeting the resolved URL could file it under "netic" while his row says
+    "Netic" - dedup on company+role misses and the tracker grows a duplicate pair, which
+    is how four of them appeared. Two existing pieces prevent it (`_company_name` maps a
+    slug through the watchlist, `_key` ignores case and punctuation); this pins that they
+    still do once resolution puts a *different* URL in front of targeting.
+    """
+    store = JobApplicationStore(tmp_path / "j.db")
+    ashby = "https://jobs.ashbyhq.com/netic/d9bcb6a2-0e54-4cb3-baec-43f2d74db18f"
+    tracked = store.add("Netic", "Software Engineer (Agent Platform) - New Grad - 2026-2027",
+                        link=LINKEDIN, status="targeting")
+
+    def _slug_named(*a, **k):
+        return PostingMatch(
+            posting=Posting("ashby", "netic", "d9", "Software Engineer (Agent Platform)", "SF", ashby, "2026-08-01"),
+            score=1.0, reason=f"matched {ashby}",
+        )
+
+    run_apply_pipeline(
+        LINKEDIN, store=store,
+        resume_llm=ScriptedLLM([TAILORED, "BULLET: b | ASK: q"]), draft_llm=ScriptedLLM([]),
+        base_latex=ONE_PAGE, profile=ApplicantProfile(first_name="Duc", last_name="Vo", email="d@x.com", phone="1"),
+        engines={}, fetch=_fake_fetch, resolve=_slug_named,
+        resumes_dir=tmp_path / "resumes", cover_letters_dir=tmp_path / "letters",
+    )
+    rows = store.list()
+    assert len(rows) == 1, [f"{r.company} | {r.role}" for r in rows]
+    assert rows[0].id == tracked.id and rows[0].company == "Netic"
+    assert rows[0].link == ashby  # upgraded to the URL an engine can fill

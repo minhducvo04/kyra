@@ -168,18 +168,31 @@ def _rename_to_convention(existing: Path, wanted: Path, note: Callable[[str], No
     removed. Renaming here rather than in a one-off cleanup keeps it true whenever
     the convention changes again. If the correctly-named file already exists it is
     the real one: the stale copy is left on disk untouched rather than overwriting it.
+
+    Only ever renames a file that is *this application's* under an older name prefix,
+    which is what sharing a `_Resume_<company>_<role>` tail means. `set_application_resume`
+    accepts any path, and `Settings.resume_base_tex` lives in this same directory - so a
+    row pointed at the general resume would otherwise drag the base .tex every future
+    tailoring reads into a company-specific name, breaking mass apply silently.
     """
-    if existing == wanted:
+    if existing == wanted or _application_tail(existing) != _application_tail(wanted):
         return existing
     if wanted.is_file():
         note(f"using {wanted.name} rather than the older {existing.name}")
         return wanted
+    tex, wanted_tex = existing.with_suffix(".tex"), wanted.with_suffix(".tex")
     existing.rename(wanted)
-    tex = existing.with_suffix(".tex")
-    if tex.is_file():
-        tex.rename(wanted.with_suffix(".tex"))
+    if tex.is_file() and not wanted_tex.exists():
+        tex.rename(wanted_tex)
     note(f"renamed {existing.name} to {wanted.name} (the name an employer should see)")
     return wanted
+
+
+def _application_tail(path: Path) -> str | None:
+    """`Duc_Vo_Resume_Netic_SWE` -> `Netic_SWE`: what identifies the application rather
+    than the naming convention. None when the file is not one of these at all."""
+    stem = path.stem
+    return stem.split("_Resume_", 1)[1] if "_Resume_" in stem else None
 
 
 def _tailor_resume(
@@ -252,6 +265,14 @@ def run_apply_pipeline(
     )
     if url != pasted_url:
         note(f"{pasted_url} is not a job board - applying through {why}")
+        # Target under the row's OWN company and role. Dedup matches on company+role,
+        # and the two spellings differ in practice - his LinkedIn row reads "... New
+        # Grad - 2026-2027" where the Ashby board says "... New Grad" - so targeting
+        # under the board's wording files a sibling row and orphans the one he curated.
+        # That is how four duplicate pairs appeared in the real tracker.
+        tracked = next((a for a in store.list() if a.link == pasted_url), None)
+        if tracked:
+            company, role = company.strip() or tracked.company, role.strip() or tracked.role
 
     # 2. Target: posting text + tracker entry (fetch for the three boards, pasted text otherwise).
     target = TargetPostingTool(store, fetch=fetch).run(url=url, posting_text=posting_text, company=company, role=role)

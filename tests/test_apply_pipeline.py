@@ -240,3 +240,27 @@ def test_renaming_never_clobbers_a_correctly_named_file(tmp_path):
 
     assert r.resume_pdf_path == str(new_pdf) and new_pdf.read_bytes() == b"current"
     assert old_pdf.exists()  # left alone rather than deleted
+
+
+def test_reuse_never_renames_a_file_that_is_not_this_application_s(tmp_path):
+    """The destructive case: set_application_resume lets any path sit on a row, and
+    Settings.resume_base_tex is a real file in the same directory. Renaming it to a
+    company name would take the .tex every future tailoring reads with it, breaking
+    mass apply silently until the next run failed. Only rename a file that is this
+    application's own, under an older name prefix."""
+    store = JobApplicationStore(tmp_path / "j.db")
+    resumes = tmp_path / "resumes"
+    resumes.mkdir()
+    base_pdf = resumes / "Duc_Vo_Resume_General_AI_Engineer.pdf"
+    base_tex = resumes / "Duc_Vo_Resume_General_AI_Engineer.tex"
+    base_pdf.write_bytes(b"%PDF general")
+    base_tex.write_text("\\documentclass{article}% the base every tailoring reads", encoding="utf-8")
+    store.add("Meridian", "Software Engineer, New Grad", link=GH_URL,
+              status="needs_attention", resume_path=str(base_pdf))
+
+    r = _run(tmp_path, store, engine=RecordingEngine(), resume_llm=_ExplodingLLM())
+
+    assert base_pdf.is_file() and base_tex.is_file(), "the base resume must survive untouched"
+    assert base_tex.read_text().startswith("\\documentclass")
+    assert r.resume_pdf_path == str(base_pdf)  # used as-is, not renamed
+    assert not (resumes / "Duc_Vo_Resume_Meridian_Software_Engineer_New_Grad.tex").exists()
