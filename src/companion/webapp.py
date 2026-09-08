@@ -505,6 +505,11 @@ def correction(body: CorrectionIn) -> dict:
     return {"saved": True, "category": "corrections"}
 
 
+# Measured against the real API on 2026-09-08: 6,797 characters of real system
+# prompt came to 2,386 tokens. Re-measure if the notes' shape changes a lot.
+CHARS_PER_TOKEN = 2.85
+
+
 class MemoryNoteIn(BaseModel):
     category: str = "general"
     note: str
@@ -528,9 +533,25 @@ def list_memory_notes() -> dict:
     being able to throw one away, is a real control rather than a nicety.
     """
     notes = _memory_notes.list_notes()
+    # How heavy the layer has become. It is rendered in full into every system
+    # prompt, and was measured at about 65% of one (docs/voice-latency.md); the
+    # design rests on the set staying small, and nothing said when it had stopped
+    # being small.
+    #
+    # Characters are exact. The token figure is an estimate, but not the usual
+    # chars/4 rule: a real prompt measured against the API was 6,797 characters
+    # for 2,386 tokens, so this content runs about 2.85 characters per token -
+    # dated bullets with markdown are denser than the prose that rule assumes,
+    # and chars/4 understated it by a third. Estimated rather than counted
+    # because a count_tokens call per page load is a network round trip to
+    # answer a question that only needs a sense of scale.
+    rendered = _memory_notes.render()
+    chars = 0 if rendered == "(no saved notes yet)" else len(rendered)
     return {
         "notes": [asdict(n) for n in notes],
         "categories": sorted({n.category for n in notes}) or SUGGESTED_CATEGORIES,
+        "rendered_chars": chars,
+        "approx_tokens": round(chars / CHARS_PER_TOKEN),
     }
 
 

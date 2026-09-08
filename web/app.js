@@ -2004,6 +2004,14 @@ async function loadMemoryNotes() {
   try {
     const data = await readJson(await fetch("/api/memory-notes"));
     renderMemoryNotes(data.notes || []);
+    // What the layer costs, since it is paid on every single turn. Flagged past
+    // ~2k tokens: at that point it is the largest thing in the prompt and the
+    // "small curated set" the design assumes has stopped being small.
+    const weight = document.getElementById("memnote-weight");
+    const heavy = data.approx_tokens > 2000;
+    weight.textContent = `${(data.notes || []).length} notes · ~${data.approx_tokens} tokens on every turn`
+      + (heavy ? " — worth pruning" : "");
+    weight.style.color = heavy ? "var(--fit-medium)" : "";
   } catch (err) {
     memnoteList.textContent = `couldn't load — ${err.message}`;
   }
