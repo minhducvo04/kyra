@@ -114,6 +114,10 @@ class AnthropicLLM(LLMBackend):
 
     supports_streaming = True
 
+    @property
+    def model(self) -> str:
+        return self._model
+
     def respond(self, system: str, history: list[Message], user_input: str, on_token=None) -> str:
         """on_token(str), when given, receives each text delta as it arrives -
         the web UI and the Vision Pro client render time-to-first-token, which
@@ -273,13 +277,43 @@ class LazyBackends:
     def __init__(self, **prebuilt: LLMBackend):
         self._cache: dict[str, LLMBackend] = dict(prebuilt)
 
+    # Only these are ever built on demand. Anything else ("voice") exists only when it
+    # was prebuilt, so asking for a backend nobody configured is a KeyError rather than
+    # build_llm() quietly handing back a second default Claude.
+    _BUILDABLE = ("claude", "local")
+
     def __getitem__(self, name: str) -> LLMBackend:
         if name not in self._cache:
+            if name not in self._BUILDABLE:
+                raise KeyError(name)
             self._cache[name] = build_llm(name)
         return self._cache[name]
 
     def __contains__(self, name: str) -> bool:
         return name in self._cache
+
+
+def voice_backends(claude: LLMBackend, voice_model: str | None = None) -> LazyBackends:
+    """The backends every front door hands the router: `claude` prebuilt, `local`
+    lazy, and - only when KYRA_VOICE_MODEL is set - a `voice` entry that
+    route_and_answer_verbose() substitutes for spoken text turns on Claude.
+    Shares the prebuilt AnthropicLLM's client so the key is checked once.
+    """
+    if voice_model is None:
+        from companion.settings import get_settings
+
+        voice_model = get_settings().voice_model
+    if not voice_model:
+        return LazyBackends(claude=claude)
+    if isinstance(claude, AnthropicLLM):
+        client = claude._client
+    else:
+        from anthropic import Anthropic
+
+        from companion.config import require_api_key
+
+        client = Anthropic(api_key=require_api_key())
+    return LazyBackends(claude=claude, voice=AnthropicLLM(client, model=voice_model))
 
 
 def build_llm(backend: str = "claude") -> LLMBackend:
