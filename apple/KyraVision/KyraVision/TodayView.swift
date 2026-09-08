@@ -1,0 +1,135 @@
+import SwiftUI
+
+/// The daily loop, on the headset: what is due, and what is due to be recalled.
+///
+/// The digest already assembles this at 05:00 on the Mac and writes a page Duc
+/// reads in a browser. This is the two parts he acts on rather than reads -
+/// reminders he can tick off and reviews he can answer - because those are the
+/// ones worth having in front of him while he is wearing it, and everything
+/// else in the digest is reading matter.
+///
+/// Deliberately not here: profile, documents, autofill, the tracker. Those are
+/// desk work, and putting them on a headset would be interface for its own sake.
+struct TodayView: View {
+    let client: KyraClient
+
+    @State private var reminders: [Reminder] = []
+    @State private var reviews: [LearningItem] = []
+    @State private var loading = true
+    @State private var problem: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 26) {
+                if let problem {
+                    Label(problem, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
+                } else if loading {
+                    ProgressView().frame(maxWidth: .infinity)
+                } else if reminders.isEmpty && reviews.isEmpty {
+                    // Not an error state, and worth saying warmly rather than as a blank.
+                    VStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle").font(.system(size: 42)).foregroundStyle(.tertiary)
+                        Text("Nothing due. Go and do the interesting thing.")
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 60)
+                }
+
+                if !reminders.isEmpty {
+                    section("Due", count: reminders.count) {
+                        ForEach(reminders) { reminder in
+                            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                                Button {
+                                    complete(reminder)
+                                } label: {
+                                    Image(systemName: "circle").font(.system(size: 20))
+                                }
+                                .buttonStyle(.plain)
+                                .frame(minWidth: 60, minHeight: 60)
+                                .accessibilityLabel("Complete: \(reminder.text)")
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(reminder.text)
+                                    if let day = reminder.day {
+                                        Text(day).font(.caption).foregroundStyle(.tertiary)
+                                    }
+                                }
+                                Spacer()
+                            }
+                        }
+                    }
+                }
+
+                if !reviews.isEmpty {
+                    section("To recall", count: reviews.count) {
+                        ForEach(reviews) { item in
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(item.topic).font(.headline)
+                                // The summary is hidden behind a disclosure on purpose: a
+                                // review you can read the answer to is not a review.
+                                DisclosureGroup("Show what you saved") {
+                                    Text(item.summary)
+                                        .font(.callout)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.top, 6)
+                                }
+                                HStack(spacing: 12) {
+                                    Button("Remembered") { review(item, remembered: true) }
+                                        .buttonStyle(.borderedProminent)
+                                    Button("Forgot") { review(item, remembered: false) }
+                                }
+                                .frame(minHeight: 60)
+                            }
+                            .padding(.bottom, 10)
+                        }
+                    }
+                }
+            }
+            .padding(34)
+        }
+        .task { await load() }
+    }
+
+    @ViewBuilder
+    private func section(_ title: String, count: Int, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("\(title.uppercased())  \(count)")
+                .font(.system(.caption, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(.tertiary)
+            content()
+        }
+    }
+
+    private func load() async {
+        loading = true
+        problem = nil
+        do {
+            async let due = client.reminders()
+            async let recall = client.dueReviews()
+            reminders = try await due.filter { !$0.done }
+            reviews = try await recall
+        } catch {
+            problem = error.localizedDescription
+        }
+        loading = false
+    }
+
+    private func complete(_ reminder: Reminder) {
+        // Removed immediately rather than after a refetch: on a headset a tap that
+        // does nothing for half a second reads as a tap that missed.
+        reminders.removeAll { $0.id == reminder.id }
+        Task {
+            do { try await client.completeReminder(reminder.id) } catch { await load() }
+        }
+    }
+
+    private func review(_ item: LearningItem, remembered: Bool) {
+        reviews.removeAll { $0.id == item.id }
+        Task {
+            do { try await client.markReviewed(item.id, remembered: remembered) } catch { await load() }
+        }
+    }
+}

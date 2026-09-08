@@ -33,6 +33,33 @@ struct ChatOut: Codable, Sendable {
     }
 }
 
+struct Reminder: Codable, Sendable, Identifiable {
+    let id: Int
+    let text: String
+    let dueAt: String?
+    let done: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, text, done
+        case dueAt = "due_at"
+    }
+
+    /// Just the date. A headset is read at arm's length; a full ISO timestamp is noise.
+    var day: String? { dueAt.map { String($0.prefix(10)) } }
+}
+
+struct LearningItem: Codable, Sendable, Identifiable {
+    let id: Int
+    let topic: String
+    let summary: String
+    let keyTakeaway: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, topic, summary
+        case keyTakeaway = "key_takeaway"
+    }
+}
+
 struct AudioClip: Codable, Sendable {
     let b64: String
     let text: String
@@ -193,6 +220,36 @@ final class KyraClient {
             }
         }
         flush()
+    }
+
+    // ---- the daily loop -------------------------------------------------------
+    // Read-only endpoints plus the two actions that close a loop. Everything else
+    // (profile, documents, autofill) stays on the Mac: those are desk work, and
+    // putting them on a headset would be interface for its own sake.
+
+    func reminders() async throws -> [Reminder] {
+        let (data, response) = try await Self.session.data(for: try request("/api/reminders"))
+        try Self.check(response)
+        struct Out: Codable { let reminders: [Reminder] }
+        return try JSONDecoder().decode(Out.self, from: data).reminders
+    }
+
+    func dueReviews() async throws -> [LearningItem] {
+        let (data, response) = try await Self.session.data(for: try request("/api/learning/due"))
+        try Self.check(response)
+        struct Out: Codable { let due: [LearningItem] }
+        return try JSONDecoder().decode(Out.self, from: data).due
+    }
+
+    func completeReminder(_ id: Int) async throws {
+        let (_, response) = try await Self.session.data(for: try request("/api/reminders/\(id)/complete", body: Data("{}".utf8)))
+        try Self.check(response)
+    }
+
+    func markReviewed(_ id: Int, remembered: Bool) async throws {
+        let body = try JSONEncoder().encode(["remembered": remembered])
+        let (_, response) = try await Self.session.data(for: try request("/api/learning/\(id)/review", body: body))
+        try Self.check(response)
     }
 
     /// Stop a reply that is still being generated. The server keeps running the

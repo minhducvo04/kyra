@@ -12,6 +12,7 @@
 		A1000000000000000000103 /* KyraClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000003 /* KyraClient.swift */; };
 		A1000000000000000000104 /* PresenceOrb.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000004 /* PresenceOrb.swift */; };
 		A1000000000000000000105 /* SpeechPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000005 /* SpeechPlayer.swift */; };
+		A1000000000000000000107 /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000007 /* TodayView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -21,6 +22,7 @@
 		A1000000000000000000003 /* KyraClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KyraClient.swift; sourceTree = "<group>"; };
 		A1000000000000000000004 /* PresenceOrb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceOrb.swift; sourceTree = "<group>"; };
 		A1000000000000000000005 /* SpeechPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechPlayer.swift; sourceTree = "<group>"; };
+		A1000000000000000000007 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +52,7 @@
 				A1000000000000000000003 /* KyraClient.swift */,
 				A1000000000000000000004 /* PresenceOrb.swift */,
 				A1000000000000000000005 /* SpeechPlayer.swift */,
+				A1000000000000000000007 /* TodayView.swift */,
 			);
 			path = KyraVision;
 			sourceTree = "<group>";
@@ -135,6 +138,7 @@
 				A1000000000000000000103 /* KyraClient.swift in Sources */,
 				A1000000000000000000104 /* PresenceOrb.swift in Sources */,
 				A1000000000000000000105 /* SpeechPlayer.swift in Sources */,
+				A1000000000000000000107 /* TodayView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
