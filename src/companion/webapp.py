@@ -56,7 +56,7 @@ from companion.job_documents import JobDocumentStore
 from companion.job_posting_fetch import fetch_posting as _fetch_posting
 from companion.jobs import DbJobQueue, Handler, start_inline_worker
 from companion.learning import LearningStore
-from companion.llm import AnthropicLLM, LazyBackends, TurnCancelled, build_llm
+from companion.llm import AnthropicLLM, TurnCancelled, build_llm, voice_backends
 from companion.memory import ChromaMemoryStore
 from companion.memory_notes import SUGGESTED_CATEGORIES, MarkdownMemoryNotesStore
 from companion.news import TechNewsTool
@@ -151,7 +151,7 @@ app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 logger = logging.getLogger(__name__)
 
 _claude = build_llm("claude")
-_backends = LazyBackends(claude=_claude)
+_backends = voice_backends(_claude)  # + a `voice` entry when KYRA_VOICE_MODEL is set
 _registry = default_tool_registry()
 _router = TurnRouter(_registry)
 _current_backend = "auto"  # "claude" | "local" | "auto" - auto (the router) is the default now that it exists
