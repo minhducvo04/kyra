@@ -6,10 +6,7 @@ true-but-private fact into a fabricated resume entry. "Don't use private
 notes" is a prompt request; a default argument with a test behind it is a
 guarantee.
 """
-import hashlib
-
 import pytest
-from chromadb.api.types import EmbeddingFunction
 
 from companion.search import (
     MAX_CHUNK_WORDS,
@@ -21,43 +18,7 @@ from companion.search import (
     fts_match_query,
     rrf_fuse,
 )
-from tests.fakes import ScriptedLLM
-
-DIM = 64
-
-
-class HashingEmbedding(EmbeddingFunction):
-    """A real embedding model would make every test a model download and a
-    few seconds of inference. This hashes words into a fixed-width bag so
-    texts sharing vocabulary land near each other - crude, but enough to
-    exercise the vector half's plumbing deterministically.
-    """
-
-    def __init__(self) -> None:
-        pass  # Chroma deprecates embedding functions without one
-
-    def __call__(self, input):  # noqa: A002 - Chroma's parameter name
-        # Plain lists, not numpy arrays: Chroma accepts them, and a test
-        # double should not drag a dependency the module itself never uses.
-        out = []
-        for text in input:
-            vec = [0.0] * DIM
-            for word in text.lower().split():
-                vec[int(hashlib.md5(word.encode()).hexdigest(), 16) % DIM] += 1.0
-            norm = sum(v * v for v in vec) ** 0.5
-            out.append([v / norm for v in vec] if norm else vec)
-        return out
-
-    @staticmethod
-    def name() -> str:
-        return "hashing-test"
-
-    def get_config(self) -> dict:
-        return {}
-
-    @staticmethod
-    def build_from_config(config: dict) -> "HashingEmbedding":
-        return HashingEmbedding()
+from tests.fakes import HashingEmbedding, ScriptedLLM
 
 
 @pytest.fixture

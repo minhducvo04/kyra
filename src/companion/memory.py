@@ -1,6 +1,7 @@
 """Long-term memory for the companion, backed by a local vector store."""
 import math
 import time
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -75,17 +76,26 @@ class ChromaMemoryStore(MemoryStore):
         self._collection = self._client.get_or_create_collection(
             collection_name, embedding_function=embedding_function
         )
-        self._next_id = self._collection.count()
 
     def add(self, text: str, metadata: dict | None = None) -> None:
+        """Store one exchange. The id is random, not a counter, because
+        Chroma *ignores* an add whose id already exists - no exception,
+        no warning, the record is simply gone and count() does not move.
+        Ids used to be `str(self._next_id)` seeded from count() at
+        construction, so a second store over the same collection (the web
+        app and a CLI session, a store built while another was writing) or
+        a deleted row handed out an id already in use and silently lost
+        the memory. Nothing reads these ids as numbers - retrieve() ranks
+        by the `timestamp` metadata - so uuid4 costs nothing, and the
+        existing numeric ids stay valid alongside it.
+        """
         metadata = dict(metadata or {})
         metadata.setdefault("timestamp", time.time())
         self._collection.add(
             documents=[text],
             metadatas=[metadata],
-            ids=[str(self._next_id)],
+            ids=[uuid.uuid4().hex],
         )
-        self._next_id += 1
 
     def retrieve(self, query: str, k: int = 5) -> list[MemoryRecord]:
         count = self._collection.count()
