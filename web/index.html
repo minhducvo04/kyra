@@ -52,6 +52,7 @@
       <button class="jobs-tab is-active" data-tab="draft" type="button">DRAFT</button>
       <button class="jobs-tab" data-tab="profile" type="button">PROFILE</button>
       <button class="jobs-tab" data-tab="tracker" type="button">TRACKER</button>
+      <button class="jobs-tab" data-tab="outreach" type="button">OUTREACH</button>
       <button class="jobs-tab" data-tab="autofill" type="button">AUTOFILL</button>
       <button class="jobs-tab" data-tab="apply" type="button">APPLY</button>
     </div>
@@ -213,6 +214,23 @@
         <button class="jobs-btn" id="tracker-add" type="button">Add</button>
       </div>
       <div class="jobs-tracker-list" id="tracker-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tab-panel="outreach">
+      <div class="jobs-tracker-add">
+        <input id="outreach-name" type="text" placeholder="Name">
+        <input id="outreach-company" type="text" placeholder="Company">
+        <input id="outreach-role" type="text" placeholder="Role (optional)">
+        <input id="outreach-url" type="text" placeholder="Profile URL (optional)">
+        <input id="outreach-relation" type="text" placeholder="How you know them (optional)">
+        <button class="jobs-btn" id="outreach-add" type="button">Add</button>
+      </div>
+      <label class="jobs-field">
+        <input type="checkbox" id="outreach-due-only">
+        <span>only follow-ups that are due</span>
+      </label>
+      <p class="jobs-hint">Kyra drafts and tracks. She never sends anything and never touches LinkedIn &mdash; you paste and press send yourself.</p>
+      <div class="jobs-tracker-list" id="outreach-list"></div>
     </section>
 
     <section class="jobs-tab-panel" data-tab-panel="autofill">

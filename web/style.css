@@ -855,6 +855,26 @@ body {
   gap: 0.5rem;
 }
 .jobs-tracker-item-company { color: var(--text); font-weight: 600; }
+/* Outreach tab: it reuses the tracker's item classes, the same way the TOOLS
+   panel reuses the JOBS panel's. These are the only two shapes it adds. */
+.jobs-tracker-item-link { color: var(--text-faint); font-size: 0.68rem; word-break: break-all; }
+.outreach-where { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.outreach-draft input[type="text"] {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.78rem;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--grid);
+  border-radius: 2px;
+  padding: 0.5rem 0.6rem;
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+.outreach-draft input[type="text"]:focus { outline: none; border-color: var(--accent-dim); }
+.outreach-note { border-left: 2px solid var(--accent-dim); padding-left: 0.6rem; margin-top: 0.7rem; }
+.outreach-note-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; }
+.outreach-note-head span { color: var(--text-dim); font-size: 0.64rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.outreach-note-text { color: var(--text); font-size: 0.78rem; line-height: 1.5; white-space: pre-wrap; }
 .jobs-tracker-item-role { color: var(--text-dim); }
 .jobs-tracker-status {
   font-family: "JetBrains Mono", monospace;

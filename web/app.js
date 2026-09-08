@@ -718,6 +718,7 @@ document.querySelectorAll(".jobs-tab").forEach((tab) => {
       p.classList.toggle("is-active", p.dataset.tabPanel === tab.dataset.tab);
     });
     if (tab.dataset.tab === "tracker") loadTrackerList();
+    if (tab.dataset.tab === "outreach") loadOutreachList();
     if (tab.dataset.tab === "profile") { loadProfile(); loadDocumentList(); }
     if (tab.dataset.tab === "draft") loadDraftDocPickers();
   });
@@ -1571,6 +1572,218 @@ docAddBtn.addEventListener("click", async () => {
     docAddBtn.textContent = "Add to library";
   }
 });
+
+/* ---------------- outreach (JOBS panel) ----------------
+   The five outreach tools have worked through chat since 2026-09-06 but had no
+   UI, the same gap the TOOLS panel closed for reminders and news. Every button
+   here hits a dedicated endpoint, which runs the same tool object the chat path
+   runs - so drafting still reads the linked application's status, and marking a
+   contact "sent" still schedules the follow-up reminder the digest surfaces.
+   Kyra never sends: the last step is always Duc pasting it himself. */
+
+const OUTREACH_STATUSES = ["drafted", "sent", "accepted", "replied", "call_done", "referred", "no_reply"];
+const outreachList = document.getElementById("outreach-list");
+const outreachDueOnly = document.getElementById("outreach-due-only");
+
+async function loadOutreachList() {
+  outreachList.textContent = "loading…";
+  try {
+    const q = outreachDueOnly.checked ? "?due_only=true" : "";
+    const data = await readJson(await fetch(`/api/outreach${q}`));
+    renderOutreachList(data.contacts || []);
+  } catch (err) {
+    outreachList.textContent = `couldn't load — ${err.message}`;
+  }
+}
+
+function outreachField(id, placeholder) {
+  const el = document.createElement("input");
+  el.type = "text";
+  el.placeholder = placeholder;
+  el.dataset.field = id;
+  return el;
+}
+
+function outreachTextBlock(label, text, onCopy) {
+  const wrap = document.createElement("div");
+  wrap.className = "outreach-note";
+  const head = document.createElement("div");
+  head.className = "outreach-note-head";
+  const tag = document.createElement("span");
+  // The 200-character limit is enforced in code, not asked for in the prompt,
+  // so showing the count is showing a real constraint rather than trivia.
+  tag.textContent = `${label} · ${text.length} chars`;
+  const copy = document.createElement("button");
+  copy.className = "jobs-btn";
+  copy.textContent = "Copy";
+  copy.addEventListener("click", onCopy);
+  head.append(tag, copy);
+  const body = document.createElement("div");
+  body.className = "outreach-note-text";
+  body.textContent = text;
+  wrap.append(head, body);
+  return wrap;
+}
+
+function renderOutreachList(contacts) {
+  outreachList.innerHTML = "";
+  if (contacts.length === 0) {
+    outreachList.textContent = outreachDueOnly.checked
+      ? "no follow-ups are due"
+      : "no outreach contacts yet";
+    return;
+  }
+  for (const c of contacts) {
+    const item = document.createElement("div");
+    item.className = "jobs-tracker-item";
+
+    const top = document.createElement("div");
+    top.className = "jobs-tracker-item-top";
+    const left = document.createElement("div");
+    const who = document.createElement("div");
+    who.className = "jobs-tracker-item-company";
+    who.textContent = c.name;
+    const where = document.createElement("div");
+    // Scoped clamp, not on .jobs-tracker-item-role: the tracker's roles are short,
+    // but a real outreach `role` often holds a paragraph of context about the
+    // person, which buries every other contact in the list. Full text on hover.
+    where.className = "jobs-tracker-item-role outreach-where";
+    where.textContent = [c.company, c.role].filter(Boolean).join(" · ");
+    where.title = where.textContent;
+    left.append(who, where);
+    if (c.relation) {
+      const rel = document.createElement("div");
+      rel.className = "jobs-tracker-item-role";
+      rel.textContent = c.relation;
+      left.appendChild(rel);
+    }
+
+    const select = document.createElement("select");
+    select.className = "jobs-tracker-status";
+    for (const st of OUTREACH_STATUSES) {
+      const opt = document.createElement("option");
+      opt.value = st;
+      opt.textContent = st;
+      opt.selected = st === c.status;
+      select.appendChild(opt);
+    }
+    select.addEventListener("change", async () => {
+      try {
+        const out = await readJson(await fetch(`/api/outreach/${c.id}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: select.value }),
+        }));
+        // "sent" is the one status with a side effect worth reporting back.
+        if (out.reminder_id) addLine("system", `follow-up reminder set for ${c.name}`);
+        loadOutreachList();
+      } catch (err) {
+        addLine("error", `status update failed — ${err.message}`);
+        select.value = c.status;
+      }
+    });
+    top.append(left, select);
+    item.appendChild(top);
+
+    if (c.profile_url) {
+      const link = document.createElement("a");
+      link.href = c.profile_url;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.className = "jobs-tracker-item-link";
+      link.textContent = c.profile_url;
+      item.appendChild(link);
+    }
+    if (c.follow_up_at) {
+      const due = document.createElement("div");
+      due.className = "jobs-tracker-item-role";
+      due.textContent = `follow up after ${c.follow_up_at.slice(0, 10)}`;
+      item.appendChild(due);
+    }
+
+    const details = document.createElement("details");
+    details.className = "jobs-details outreach-draft";
+    const summary = document.createElement("summary");
+    summary.textContent = c.note ? "Draft again" : "Draft the note";
+    const context = outreachField("job_context", "The role, a line or two");
+    const mutuals = outreachField("mutual_connections", "Mutual connections (people you both know)");
+    // The prompt asks for one true, specific thing to build the ask around;
+    // without it the note falls back to generic school-and-company framing.
+    const angle = outreachField("personal_angle", "One true, specific thing about them");
+    const go = document.createElement("button");
+    go.className = "jobs-btn";
+    go.textContent = "Draft";
+    const status = document.createElement("div");
+    status.className = "jobs-hint";
+    go.addEventListener("click", async () => {
+      go.disabled = true;
+      status.textContent = "drafting — this is two real Claude calls, give it a moment…";
+      try {
+        const out = await readJson(await fetch(`/api/outreach/${c.id}/draft`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_context: context.value.trim(),
+            mutual_connections: mutuals.value.trim(),
+            personal_angle: angle.value.trim(),
+          }),
+        }));
+        // A draft that failed a post-condition must not read as a clean one.
+        for (const w of out.warnings || []) addLine("error", `outreach draft: ${w}`);
+        loadOutreachList();
+      } catch (err) {
+        status.textContent = `draft failed — ${err.message}`;
+      } finally {
+        go.disabled = false;
+      }
+    });
+    details.append(summary, context, mutuals, angle, go, status);
+    item.appendChild(details);
+
+    const copy = async (which) => {
+      try {
+        const out = await readJson(await fetch(`/api/outreach/${c.id}/copy`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ which }),
+        }));
+        addLine("system", out.message);
+      } catch (err) {
+        addLine("error", `copy failed — ${err.message}`);
+      }
+    };
+    if (c.note) item.appendChild(outreachTextBlock("note", c.note, () => copy("note")));
+    if (c.follow_up) item.appendChild(outreachTextBlock("follow-up", c.follow_up, () => copy("follow_up")));
+
+    outreachList.appendChild(item);
+  }
+}
+
+document.getElementById("outreach-add").addEventListener("click", async () => {
+  const value = (id) => document.getElementById(id).value.trim();
+  try {
+    await readJson(await fetch("/api/outreach", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: value("outreach-name"),
+        company: value("outreach-company"),
+        role: value("outreach-role") || null,
+        profile_url: value("outreach-url") || null,
+        relation: value("outreach-relation") || null,
+      }),
+    }));
+    for (const id of ["outreach-name", "outreach-company", "outreach-role", "outreach-url", "outreach-relation"]) {
+      document.getElementById(id).value = "";
+    }
+    loadOutreachList();
+  } catch (err) {
+    addLine("error", `couldn't add that contact — ${err.message}`);
+  }
+});
+
+outreachDueOnly.addEventListener("change", loadOutreachList);
+
 
 /* ---------------- tools panel ---------------- */
 

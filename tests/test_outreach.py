@@ -162,3 +162,37 @@ def test_draft_tool_tells_the_model_whether_duc_applied(tmp_path):
     llm = ScriptedLLM([_scripted("Hi Alex,", "f"), _scripted("Hi Alex,", "f")])
     DraftOutreachNoteTool(store, llm).run(id=c.id)  # no tracker wired
     assert "unknown - do not claim" in llm.calls[0]["user_input"]
+
+
+def test_dashes_are_caught_after_the_humanizer_pass_and_retried_once():
+    """Duc's standing rule: never an em-dash, an en-dash, or a spaced hyphen
+    standing in for one, in anything a human other than him reads. The critique
+    pass lists em-dashes but does not reliably catch the ASCII stand-in - a real
+    2026-09-08 draft came back with "cutting deploy times - what turned out to
+    be the bottleneck". A prompt is a request; this is the post-condition."""
+    dashed = "Thanks for connecting - what was the biggest bottleneck?"
+    clean = "Thanks for connecting. What was the biggest bottleneck?"
+    llm = ScriptedLLM([_scripted("Hi Alex, note.", dashed), _scripted("Hi Alex, note.", dashed),
+                       _scripted("Hi Alex, note.", clean)])
+    d = draft_outreach_note(llm, name="Alex Rivera", company="Northwind")
+    assert d.follow_up == clean
+    assert len(llm.calls) == 3
+    assert "dash" in llm.calls[2]["user_input"].lower()
+    assert not d.warnings
+
+
+def test_a_dash_that_survives_the_retry_is_reported_not_hidden():
+    # Never raise over punctuation - a usable draft with a flagged dash beats no
+    # draft at all - but it must not reach the clipboard looking clean.
+    dashed = "Thanks for connecting - what was the bottleneck?"
+    llm = ScriptedLLM([_scripted("Hi Alex, note.", dashed)] * 3)
+    d = draft_outreach_note(llm, name="Alex Rivera", company="Northwind")
+    assert d.follow_up == dashed
+    assert any("dash" in w.lower() for w in d.warnings)
+
+
+def test_an_em_dash_counts_too_and_a_plain_hyphen_does_not():
+    from companion.outreach import has_dash
+
+    assert has_dash("a — b") and has_dash("a – b") and has_dash("a - b")
+    assert not has_dash("new-grad role") and not has_dash("Hi Alex, all good.")

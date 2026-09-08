@@ -29,7 +29,7 @@ import re
 import subprocess
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -207,10 +207,36 @@ every fact, drop words not sentences of meaning. Output only the note.
 _PARSE = re.compile(r"NOTE:\s*(.*?)\s*FOLLOW-UP:\s*(.*)", re.S)
 
 
+# Duc's standing rule for anything a human other than him reads: never an
+# em-dash or en-dash, and never a spaced hyphen standing in for one. The
+# humanizer critique pass lists em-dashes but does not reliably catch the ASCII
+# stand-in - a real draft on 2026-09-08 came back with "cutting deploy times -
+# what turned out to be the bottleneck" after the pass had already run. A prompt
+# is a request; this is the post-condition, same shape as the length limit.
+_DASH = re.compile(r"[\u2014\u2013]|(?<=\s)-(?=\s)")
+
+
+def has_dash(text: str) -> bool:
+    """True for an em-dash, an en-dash, or a hyphen used as one ("a - b").
+    A hyphenated word ("new-grad") is not a dash and must not be flagged."""
+    return bool(_DASH.search(text))
+
+
+DEDASH_PROMPT = """Rewrite this so it contains no em-dash, no en-dash, and no hyphen standing in for one
+("x - y"). Use a full stop, a comma, or a rephrase instead. Hyphenated words like "new-grad" are fine.
+Change nothing else: same facts, same voice, same length. Keep the NOTE:/FOLLOW-UP: labels exactly.
+
+NOTE:
+{note}
+FOLLOW-UP:
+{follow_up}"""
+
+
 @dataclass
 class OutreachDraft:
     note: str
     follow_up: str
+    warnings: list[str] = field(default_factory=list)
 
 
 def _parse(text: str) -> OutreachDraft:
@@ -260,6 +286,23 @@ def draft_outreach_note(
         ).strip()
     if len(out.note) > NOTE_LIMIT:
         raise OutreachNoteTooLong(f"note is {len(out.note)} characters; limit is {NOTE_LIMIT}")
+
+    # One rewrite for dashes, then report rather than raise: a usable draft with a
+    # flagged dash beats no draft, but it must not reach the clipboard looking clean.
+    if has_dash(out.note) or has_dash(out.follow_up):
+        logger.info("outreach draft contains a dash after the critique pass; asking for a rewrite")
+        try:
+            retry = _parse(llm.respond(
+                system=OUTREACH_SYSTEM, history=[],
+                user_input=DEDASH_PROMPT.format(note=out.note, follow_up=out.follow_up),
+            ))
+        except ValueError:
+            retry = out
+        if len(retry.note) <= NOTE_LIMIT and not (has_dash(retry.note) or has_dash(retry.follow_up)):
+            out = retry
+        else:
+            out.warnings.append(
+                "still contains a dash after one rewrite - take it out by hand before sending")
     return out
 
 
@@ -383,7 +426,10 @@ class DraftOutreachNoteTool(Tool):
         except (OutreachNoteTooLong, ValueError) as e:
             return {"error": str(e)}
         self._store.set_draft(id, d.note, d.follow_up)
-        return {"id": id, "note": d.note, "note_chars": len(d.note), "follow_up": d.follow_up}
+        out = {"id": id, "note": d.note, "note_chars": len(d.note), "follow_up": d.follow_up}
+        if d.warnings:
+            out["warnings"] = d.warnings
+        return out
 
 
 class CopyOutreachNoteTool(Tool):

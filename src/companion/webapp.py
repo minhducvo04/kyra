@@ -1330,6 +1330,90 @@ def job_autofill(body: AutofillIn) -> dict:
 # JOBS: a UI button already knows what it wants.
 
 
+# ---- outreach (JOBS panel, Outreach tab) ----
+# These go through the same tool objects the chat path uses rather than calling
+# OutreachStore directly, because the logic that matters lives in the tools:
+# drafting reads the linked application's status so a note can never claim Duc
+# applied when he is only targeting, and marking a contact `sent` schedules the
+# follow-up reminder that the digest then surfaces. Two front doors, one
+# implementation - the same reason default_tool_registry() exists, after the
+# three front doors really did drift apart once.
+
+
+def _outreach(tool: str, **kwargs) -> dict:
+    """Run an outreach tool and turn its error convention into an HTTP one.
+
+    A tool returns {"error": ...} because that is what a model reads; an
+    endpoint must not answer 200 with an error body (CLAUDE.md), so a missing
+    contact becomes 404 and everything else a 400 with the tool's own message.
+    """
+    out = _registry.run(tool, **kwargs)
+    if isinstance(out, dict) and "error" in out:
+        message = out["error"]
+        status = 404 if "no outreach contact with id" in message else 400
+        raise ApiError(status, "outreach_invalid", message)
+    return out
+
+
+class OutreachAddIn(BaseModel):
+    name: str
+    company: str
+    role: str | None = None
+    profile_url: str | None = None
+    relation: str | None = None
+    application_id: int | None = None
+
+
+class OutreachDraftIn(BaseModel):
+    job_context: str = ""
+    mutual_connections: str = ""
+    personal_angle: str = ""
+
+
+class OutreachCopyIn(BaseModel):
+    which: str = "note"
+    open_profile: bool = False
+
+
+class OutreachStatusIn(BaseModel):
+    status: str
+
+
+@app.get("/api/outreach")
+def list_outreach(status: str | None = None, company: str | None = None, due_only: bool = False) -> dict:
+    return _outreach("list_outreach", company=company or None, status=status or None, due_only=due_only)
+
+
+@app.post("/api/outreach")
+def add_outreach(body: OutreachAddIn) -> dict:
+    # The add tool returns the contact's fields flat while the status tool wraps
+    # them; wrap here so every outreach response has the same shape. (`name` can
+    # be passed as a keyword because ToolRegistry.run takes the tool name
+    # positional-only, which exists for exactly this tool.)
+    try:
+        return {"contact": _outreach("add_outreach_contact", **body.model_dump())}
+    except ValueError as e:  # the store rejects a blank name or company
+        raise ApiError(400, "outreach_invalid", str(e)) from e
+
+
+@app.post("/api/outreach/{contact_id}/draft")
+def draft_outreach(contact_id: int, body: OutreachDraftIn) -> dict:
+    """Slow on purpose: a draft plus the humanizer critique pass is two or
+    three real Claude calls. Synchronous, unlike the resume fit loop - that
+    one runs for minutes and needs the job queue; this is tens of seconds."""
+    return _outreach("draft_outreach_note", id=contact_id, **body.model_dump())
+
+
+@app.post("/api/outreach/{contact_id}/copy")
+def copy_outreach(contact_id: int, body: OutreachCopyIn) -> dict:
+    return _outreach("copy_outreach_note", id=contact_id, **body.model_dump())
+
+
+@app.post("/api/outreach/{contact_id}/status")
+def set_outreach_status(contact_id: int, body: OutreachStatusIn) -> dict:
+    return _outreach("update_outreach_status", id=contact_id, status=body.status)
+
+
 @app.get("/api/reminders")
 def list_reminders(include_done: bool = False) -> dict:
     return {"reminders": [asdict(r) for r in _reminders_store.list(include_done)]}
