@@ -198,3 +198,38 @@ def test_a_board_that_must_be_searched_says_so_before_it_is_added():
 
     assert SOURCES["workday"].requires_keywords is True
     assert [n for n, c in SOURCES.items() if c.requires_keywords] == ["workday"]
+
+
+def test_adding_a_board_shows_what_is_open_now_and_does_not_flood_tomorrow(tmp_path):
+    """Adding NVIDIA's board really did produce 57 "new" postings in one go, and
+    Anthropic's first run produced 120. That is true and useless: a board Duc just
+    started watching has no "since I last looked", so the whole list arrives as if
+    it appeared overnight and buries whatever genuinely did.
+
+    So the add itself is the first check. He sees the current openings right where
+    he asked for them, and they are recorded as seen, leaving the daily digest to
+    mean what it says. Nothing is hidden - it is shown once, at the moment he asked.
+    """
+    from companion.job_boards import seed_entry
+
+    seen = tmp_path / "seen.json"
+    entry = WatchEntry("Acme", "greenhouse", "acme", ["engineer"])
+    board = GreenhouseBoard(lambda url: GH)
+    opening = seed_entry(entry, seen_path=seen, sources={"greenhouse": board})
+    assert [p.title for p in opening.new] == ["Research Engineer, Agents"], "shown once, at add time"
+
+    later = check_boards([entry], seen_path=seen, sources={"greenhouse": board})
+    assert later.new == [], "and tomorrow's digest only reports what actually changed"
+
+
+def test_a_board_that_cannot_be_reached_is_still_added(tmp_path):
+    """The watchlist entry is the thing Duc asked for; a network failure at that
+    moment must not cost him the entry, only the preview."""
+    from companion.job_boards import seed_entry
+
+    def boom(url):
+        raise OSError("no network")
+
+    entry = WatchEntry("Acme", "greenhouse", "acme", [])
+    report = seed_entry(entry, seen_path=tmp_path / "seen.json", sources={"greenhouse": GreenhouseBoard(boom)})
+    assert report.new == [] and report.errors and "no network" in report.errors[0]

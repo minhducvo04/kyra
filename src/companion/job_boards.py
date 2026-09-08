@@ -350,6 +350,25 @@ def check_boards(
     return WatchReport(checked_at=now, new=new, still_open=still_open, errors=errors, reposted=reposted)
 
 
+def seed_entry(
+    entry: WatchEntry, seen_path: Path = SEEN_PATH, sources: dict[str, JobBoardSource] | None = None,
+) -> WatchReport:
+    """Check one board the moment it is added, and record what is open.
+
+    A board Duc has just started watching has no "since I last looked", so
+    without this its whole current list arrives in the next morning's digest as
+    if it appeared overnight - 57 postings for NVIDIA, 120 for Anthropic - and
+    buries whatever genuinely did. Nothing is hidden by seeding: the openings
+    are printed at the moment he asks for them, which is where he is looking,
+    and the daily digest goes back to meaning "what changed".
+
+    A fetch failure is reported, not raised: the watchlist entry is what he
+    asked for, and losing it to a momentary network problem would be worse
+    than losing the preview.
+    """
+    return check_boards([entry], seen_path=seen_path, sources=sources)
+
+
 def render_report(report: WatchReport) -> str:
     lines = [f"## Job boards ({len(report.new)} new, {report.still_open} matching open)"]
     for p in report.new:

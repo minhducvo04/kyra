@@ -22,6 +22,7 @@ from companion.job_boards import (
     load_watchlist,
     render_report,
     save_watchlist,
+    seed_entry,
     slug_from_url,
 )
 from companion.logging_setup import configure_logging
@@ -53,9 +54,17 @@ def main() -> None:
                 "substring test, so \"grad\" finds it and \"new grad\" does not."
             )
         entries = [e for e in entries if not (e.source == source and e.token == token)]
-        entries.append(WatchEntry(company=args.company, source=source, token=token, title_keywords=kws))
+        entry = WatchEntry(company=args.company, source=source, token=token, title_keywords=kws)
+        entries.append(entry)
         save_watchlist(entries)
         print(f"watching {args.company} ({source}/{token}) keywords={kws or 'all'}")
+        # Check it now, so what is already open is shown here rather than arriving
+        # in tomorrow's digest as if it appeared overnight.
+        report = seed_entry(entry)
+        print()
+        print(render_report(report))
+        if not report.errors:
+            print("\n(recorded as already seen - from now on the digest reports only what is new)")
         return
     if args.cmd == "list":
         for e in entries:
