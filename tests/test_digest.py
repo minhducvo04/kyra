@@ -297,3 +297,58 @@ def test_stale_postings_sink_to_the_bottom_instead_of_being_hidden():
     # fresh, undated (no age is not evidence of staleness) and the repost stay up top,
     # in their original order; the two genuinely stale ones fall to the bottom, also in order.
     assert ids == ["2", "4", "5", "1", "3"]
+
+
+def _app(**kw):
+    from companion.job_applications import JobApplication
+
+    base = dict(id=1, company="Meridian", role="Quant Dev", link="https://x/1",
+                status="ready_to_submit", notes=None, created_at="", updated_at="", resume_path="/r/js.pdf")
+    return JobApplication(**{**base, **kw})
+
+
+def test_an_application_kyra_filled_is_the_first_thing_in_the_morning():
+    """The mass-apply pipeline's whole end state is "ready_to_submit": the resume
+    is tailored, the form was filled, and the only thing left is Duc's click. That
+    was invisible until the next time he opened the JOBS panel, so a batch run
+    overnight could sit there for days. It is an action, so it counts as one."""
+    d = _data(waiting=[_app()], needs_attention=[_app(id=2, company="Netic", role="Agent Platform", status="needs_attention")])
+    assert d.action_count == 2
+
+    html = render_html(d)
+    assert "Meridian" in html and "Netic" in html
+    assert "Nothing due" not in html
+    # the two are not the same job: one is a click, the other is a fix
+    assert "Submit" in html and "js.pdf" in html
+
+    md = render_markdown(d)
+    assert "## Applications" in md
+    assert "Meridian" in md and "Quant Dev" in md
+
+
+def test_the_applications_section_survives_the_json_archive():
+    """`<date>.json` is the canonical record; a section the Markdown drops must
+    still come back on --rebuild."""
+    from companion.digest import from_json, to_json
+
+    d = _data(waiting=[_app()], needs_attention=[_app(id=2, status="needs_attention")])
+    back = from_json(json.loads(json.dumps(to_json(d))))
+    assert [a.company for a in back.waiting] == ["Meridian"]
+    assert [a.id for a in back.needs_attention] == [2]
+    assert back.waiting[0].resume_path == "/r/js.pdf"
+
+
+def test_an_application_already_sent_is_not_waiting_on_anyone():
+    d = _data(waiting=[], needs_attention=[])
+    assert d.action_count == 0
+    assert "## Applications" in render_markdown(d)
+    assert "nothing waiting" in render_markdown(d).lower()
+
+
+def test_an_application_waiting_on_a_click_leads_the_notification():
+    """And only then: "0 to submit" every morning would train him to stop reading
+    the line."""
+    quiet = summary_line(_data())
+    assert "submit" not in quiet and quiet.startswith("0 due")
+    busy = summary_line(_data(waiting=[_app()]))
+    assert busy.startswith("1 to submit, 0 due")
