@@ -13,8 +13,10 @@ from companion.tools import ToolRegistry
 class FakeClassifier:
     def __init__(self, raw: str | Exception):
         self._raw = raw
+        self.calls: list[str] = []
 
     def respond(self, system, history, user_input):
+        self.calls.append(user_input)
         if isinstance(self._raw, Exception):
             raise self._raw
         return self._raw
@@ -113,3 +115,22 @@ def test_adapter_spec_uses_compact_prompt_and_same_decision_shape():
     clf2 = Recording('{"path":"text","backend":"local"}')
     TurnRouter(ToolRegistry([]), classifier=clf2, adapter_spec="").route("hi")
     assert clf2.seen[0] == "" and "User message: hi" in clf2.seen[1]
+
+
+def test_warm_loads_the_classifier_without_logging_a_decision(tmp_path, monkeypatch):
+    """The first turn otherwise pays ~44s to load the adapted 1.5B. Warming up
+    must not leave a routing decision nobody made in data/router.log, which
+    analyze_patterns.py treats as real usage."""
+    from companion import router_log
+
+    log = tmp_path / "router.log"
+    monkeypatch.setattr(router_log, "LOG_PATH", log)
+    clf = FakeClassifier('{"path": "text", "backend": "local", "reason": "warm"}')
+    r = TurnRouter(ToolRegistry([]), classifier=clf)
+
+    r.warm()
+    assert clf.calls, "warm() must actually exercise the model, not just construct it"
+    assert not log.exists(), "warm-up must not write to the router log"
+
+    r.route("something Duc actually said")
+    assert log.exists(), "a real turn still logs"

@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # v2 slice 3: run the job worker as a thread inside the web process (laptop
     # default). The container sets this False and runs scripts/worker.py.
     inline_worker: bool = Field(default=True, validation_alias="KYRA_INLINE_WORKER")
+    # Load the router's classifier when the server starts rather than making the
+    # first turn wait ~44s for it (measured 2026-09-08). Off in tests, where
+    # starting the app must never load a model.
+    warm_up_router: bool = Field(default=True, validation_alias="KYRA_WARM_UP_ROUTER")
     # Mass apply tailors every resume from this .tex (relative paths resolve under data_dir). The library copy of
     # the LaTeX source went stale once, so the base is a file Duc edits directly, not a library document.
     resume_base_tex: str = Field(default="resumes/Duc_Vo_Resume_General_AI_Engineer.tex", validation_alias="KYRA_RESUME_BASE_TEX")

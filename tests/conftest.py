@@ -23,6 +23,9 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-not-real")
 os.environ["KYRA_CLASSIFIER_ADAPTER"] = ""
 # Tests drive the job queue explicitly with run_one(); no background thread racing them.
 os.environ["KYRA_INLINE_WORKER"] = "false"
+# Starting the app in a test must never load the classifier (~44s, and it would
+# race every test that starts a TestClient).
+os.environ["KYRA_WARM_UP_ROUTER"] = "false"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 

@@ -145,6 +145,20 @@ class TurnRouter:
         self._log(decision, t0)
         return decision
 
+    def warm(self) -> None:
+        """Load and exercise the classifier now, so the first real turn does not.
+
+        Measured 2026-09-08 on the M5 Max: constructing the LoRA-adapted 1.5B and
+        running one classification takes ~44s, and it is paid by whoever speaks
+        first - which for a voice companion is the worst possible moment. The
+        rest of the loop is ~5s warm.
+
+        Deliberately `_classify` and not `route`: route() files the decision into
+        data/router.log, and analyze_patterns.py reads that log as real usage. A
+        warm-up is not something Duc asked for and must not appear as if it were.
+        """
+        self._classify("warm up")
+
     def _classify(self, user_input: str) -> RoutingDecision:
         try:
             if self._adapter_spec:

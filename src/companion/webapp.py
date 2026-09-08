@@ -942,6 +942,30 @@ def _start_worker() -> None:
         logger.info("inline job worker started")
 
 
+@app.on_event("startup")
+def _warm_up_router() -> None:
+    """Pay the classifier's load time before anyone is waiting on it.
+
+    Measured 2026-09-08: the first auto-mode turn spends ~44s constructing the
+    LoRA-adapted 1.5B, against ~5s for the whole warm voice loop. On a background
+    thread so the server still serves immediately, and best-effort: a failed
+    warm-up must never stop the app starting, since the classifier would load on
+    demand anyway.
+    """
+    if not get_settings().warm_up_router:
+        return
+
+    def run() -> None:
+        try:
+            t0 = time.perf_counter()
+            _router.warm()
+            logger.info("router classifier warm in %.1fs", time.perf_counter() - t0)
+        except Exception:  # noqa: BLE001 - the on-demand path still works
+            logger.warning("router warm-up failed; it will load on the first turn", exc_info=True)
+
+    threading.Thread(target=run, name="kyra-router-warmup", daemon=True).start()
+
+
 @app.post("/api/jobs/draft")
 def enqueue_draft_job(
     material_type: str = Form(...),
