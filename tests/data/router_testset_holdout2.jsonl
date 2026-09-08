@@ -15,3 +15,8 @@
 {"message": "who haven't I followed up with yet", "path": "tool", "backend": "claude", "note": "list_outreach - due follow-ups"}
 {"message": "jot down that I interview better in the afternoon", "path": "tool", "backend": "claude", "note": "save_memory_note - the shape v3 regressed on"}
 {"message": "I messaged Marcus yesterday, mark that one sent", "path": "tool", "backend": "claude", "note": "update_outreach_status"}
+{"message": "pull up whatever I've written about the router fine-tune", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "where did I write down the BGE decision", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "point the Stripe application at the tailored resume", "path": "tool", "backend": "claude", "note": "set_application_resume"}
+{"message": "what's a good way to search a large codebase", "path": "text", "backend": "claude", "note": "bait: general advice, not his data"}
+{"message": "I'm still searching for a decent standing desk", "path": "text", "backend": "local", "note": "bait: casual search"}
