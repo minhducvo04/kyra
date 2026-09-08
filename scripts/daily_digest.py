@@ -163,9 +163,6 @@ def main() -> None:
             print(render_markdown(build_digest(seen_path=scratch)))
         return
 
-    if not args.no_reindex:
-        reindex_search()
-
     data = build_digest()
 
     DIGEST_DIR.mkdir(parents=True, exist_ok=True)
@@ -191,6 +188,11 @@ def main() -> None:
         notify("Kyra — morning digest", summary, open_path=latest)
     if args.open:
         subprocess.run(["open", str(latest)], check=False)
+
+    # Last, not first: the digest is what Duc is waiting on at 05:00, and the
+    # index refresh is housekeeping nothing downstream reads today.
+    if not args.no_reindex:
+        reindex_search()
 
 
 if __name__ == "__main__":
