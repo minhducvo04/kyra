@@ -214,3 +214,83 @@ production before this round.
 Next, in order: a third seed would tighten the error bars further, but the cheaper win is that the main set is
 now the *only* thing every round is tuned against — the honest move for round 5 is another independent set, or
 folding real `router.log` turns in once enough have accumulated.
+
+## Round 5 (2026-09-08): a search tool, and a category that trained on nothing
+
+Two tools had no coverage. `search_kyra_data` was built the same day (search slice 4), and
+`set_application_resume` landed after round 4's data was generated — CLAUDE.md has been carrying "5/5
+realistic phrasings already reach the tool path, but it has no held-out coverage until round 5" since then.
+
+**Method:**
+
+- **18 more held-out cases, written and committed before any round-5 data was generated** — 13 in the main set
+  (85 total) and 5 in holdout2 (22 total): 6 `search_kyra_data`, 3 `set_application_resume`, and the bait class
+  the new tool invites — lookup-shaped questions that are really general knowledge ("what's the difference
+  between BM25 and TF-IDF", "how do I search for a file by name in bash") and casual uses of search/find.
+- **Four new categories**: `search_kyra_data`, `set_application_resume`, `text_hard_negative_lookup`
+  (claude) and `text_hard_negative_lookup_local`, 60 each. One clause added to `COMPACT_SYSTEM`.
+- 1,699 train / 188 valid (round 4: 1,483 / 164), so **1,150 iters** keeps the epoch count matched to round 4's
+  1,000 at its smaller size. Both seeds again, 7 and 13.
+
+**A defect the round exposed, now fixed in code.** `parse_json_array()` returns `[]` for any reply it cannot
+read, and `generate_synthetic()` logged `got=0` and carried on. On the first round-5 run, two of the four new
+categories returned nothing and the run still reported success; the same command a minute later gave 60 each.
+A category that silently contributes nothing is exactly how a tool ends up untrained while the run looks like
+it worked — the gap round 3 existed to close, reappearing one level up in the pipeline. It now retries twice
+and then raises, with a test.
+
+**Worth knowing for the next tool.** The router decides *path and backend only* — which tool to call is
+Claude's job — so a new tool that overlaps an existing one's domain (`search_kyra_data` vs
+`list_job_applications` for "what jobs am I tracking") costs the router nothing, because both are the tool
+path. The entire risk of adding a tool sits on the text side: the bait it invites. That is why three of the
+four new categories are the tool and its two bait buckets.
+
+### Results, on both held-out sets
+
+| Adapter | Data | Seed | Main 85 | Path-only | Holdout2 (22) | Round-5 cases (13) |
+|---|---|---|---|---|---|---|
+| qwen1.5b-v4-s13 (shipped) | round 4 | 13 | 89.4% | **94.1%** | 95.5% | **11/13** |
+| qwen1.5b-v5 | round 5 | 7 | **91.8%** | 92.9% | **100%** | 12/13 |
+| qwen1.5b-v5-s13 | round 5 | 13 | **91.8%** | **94.1%** | 95.5% | 12/13 |
+
+Latency and prompt size are unchanged: 0.15 s mean, 164 prompt tokens.
+
+### The finding: the retrain bought one case, and the standing rule needs qualifying
+
+**The adapter that had never seen either new tool already scored 11 of 13 on the round-5 cases.**
+"what did we decide about X", "find that note where...", "use the Northwind resume for that application" are
+close enough to phrasings it already knew that it routed them to the tool path anyway. Round 5 moved that to
+12/13 — one case.
+
+And it is a straight trade, not a gain. Both v4-s13 and v5-s13 make **exactly five path errors on 85 cases**.
+v4 fails two round-5 cases and handles the advice bait; v5-s13 fixes one of those and breaks two advice cases
+v4 got right ("what does a good STAR answer for Ownership look like", "what does a reposted job usually mean")
+— the very cases round 4 added its advice bucket for. **Adding categories has a budget**: the new lookup-bait
+bucket appears to have displaced some of what the advice bucket bought. The +2.4 points of headline accuracy
+are backend labels, not paths.
+
+The two sets also disagree, each by a single case: holdout2 prefers seed 7 (100% vs 95.5%), the main set's
+path-only prefers seed 13 (94.1% vs 92.9%). One case is 4.5 points on 22 — the same noise floor round 4
+measured.
+
+**So the standing rule "a new tool means a retrain" is too strong.** The honest version: *measure the current
+adapter against handwritten cases for the new tool first, and retrain only if it actually fails them.* Round 3
+retrained because the new tools genuinely were mishandled; round 5 retrained because the rule said to, and the
+measurement afterwards says it was not needed.
+
+**One case no adapter gets right**, at either seed, in either round: `what does CLAUDE.md say about the resume
+token budget` → text. Naming a file and asking what it says is about as clear a search request as exists, so
+this is a real gap rather than an ambiguous label; it wants its own seed phrasings next round.
+
+### Decision: not activated
+
+`KYRA_CLASSIFIER_ADAPTER` still points at **`qwen1.5b-v4-s13`**. Path accuracy — the metric that decides
+whether a tool loop runs at all, where a wrong backend still answers — is identical at 94.1%, and swapping
+production config on a wash is not worth the two advice regressions. Both v5 adapters are on disk.
+
+If Duc wants the new tools represented in the training data rather than handled by generalization (60 examples
+each versus zero, which the 13 held-out cases cannot measure), the switch is one line in `.env`:
+
+    KYRA_CLASSIFIER_ADAPTER="mlx-community/Qwen2.5-1.5B-Instruct-4bit:data/router_ft/adapters/qwen1.5b-v5-s13"
+
+Verified through the real `TurnRouter` with that spec: **12/13 paths**, identical to the harness, same single miss.
