@@ -18,5 +18,8 @@ COPY alembic.ini ./
 COPY migrations ./migrations
 VOLUME ["/data"]
 EXPOSE 8420
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8420/api/backend',timeout=3)" || exit 1
+# /healthz, not /api/backend: everything under /api/ is gated once KYRA_API_TOKEN is
+# set, so the old check answered 401 in exactly the configuration a real deploy uses
+# and the orchestrator would have restarted a healthy task forever.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8420/healthz',timeout=3)" || exit 1
 CMD ["python", "scripts/web_ui.py", "--host", "0.0.0.0", "--port", "8420"]

@@ -1,0 +1,74 @@
+# Render blueprint - the cheap path to a private, always-on Kyra.
+#
+# Why Render and not deploy/aws/: that stack is ~$85/month for one user, needs an
+# AWS account and a spend ceiling, and its own README says the first apply is Duc's.
+# This is the same shape (web service + Postgres + a disk for /data) in one file at
+# roughly a quarter of the cost. The AWS Terraform stays for when there is a reason
+# to want a VPC.
+#
+# THIS IS NOT A PUBLIC DEMO. There is no concept of a user in the codebase: /api/profile
+# returns Duc's phone number, /api/outreach returns real people's names, and every chat
+# turn spends his Anthropic key. KYRA_API_TOKEN below is what stands between the
+# internet and all of it - do not remove it, and do not paste the value anywhere.
+#
+# Deploy: push this file, then Render dashboard -> New -> Blueprint -> pick the repo.
+# ANTHROPIC_API_KEY is the one value to type in by hand (sync: false keeps it out of git).
+# The generated KYRA_API_TOKEN is under the service's Environment tab; it is what you
+# type into the login page the first time on each device.
+
+services:
+  - type: web
+    name: kyra
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Standard (2GB), not Starter (512MB). The image loads chromadb plus
+    # sentence-transformers with the BGE weights (~130MB) for memory and search, so
+    # Starter OOMs on the first retrieval rather than at boot, which is worse.
+    plan: standard
+    region: oregon
+    healthCheckPath: /healthz
+    # A disk pins the service to exactly ONE instance on Render, and rules out
+    # zero-downtime deploys. That is the right trade here (one user, and Chroma and
+    # the document library are plain files) but it IS the scaling ceiling: lifting it
+    # means moving those two stores off the filesystem, not adding instances.
+    disk:
+      name: kyra-data
+      mountPath: /data
+      sizeGB: 5
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false            # typed into the dashboard, never in git
+      - key: KYRA_API_TOKEN
+        generateValue: true    # read it from the Environment tab to log in
+      - key: KYRA_TRUST_LOOPBACK
+        value: "false"         # nothing reaching this host is Duc's laptop
+      - key: KYRA_DATA_DIR
+        value: /data
+      - key: PORT
+        value: "8420"          # matches the Dockerfile CMD, so detection is not guesswork
+      - key: KYRA_INLINE_WORKER
+        value: "true"          # one service, not two: halves the bill for one user
+      - key: KYRA_WARM_UP_ROUTER
+        value: "false"         # no mlx in this image; warming only logs a failure
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kyra-db
+          property: connectionString
+      - key: KYRA_LOG_LEVEL
+        value: INFO
+
+databases:
+  - name: kyra-db
+    databaseName: kyra
+    user: kyra
+    plan: basic-256mb
+
+# Cost, honestly: web Standard ~$25/mo + Postgres basic ~$7/mo + 5GB disk ~$1.25/mo,
+# so ~$33/month. Suspending the service between uses drops it to the database and disk.
+# Nothing here is free-tier eligible: Render's free plan has no disks and sleeps.
+#
+# What does NOT work here, by the existing decision in requirements-web.txt: the local
+# model, voice, and the router's classifier (no torch/mlx in the image - route() falls
+# back to Claude, which it already handles). Autofill also needs a laptop, since it
+# opens a window you review and submit yourself. So the hosted Kyra is the weaker Kyra:
+# it is remote access for Duc, not the thing to show people.

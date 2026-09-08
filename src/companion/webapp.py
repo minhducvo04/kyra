@@ -21,10 +21,17 @@ from pathlib import Path
 
 from anthropic import Anthropic
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from companion import webauth
 from companion.apply_pipeline import ApplyError, engine_for_url, run_apply_pipeline
 from companion.config import require_api_key
 from companion.conversation import ConversationManager
@@ -67,29 +74,73 @@ app = FastAPI(title="Kyra")
 install_error_handlers(app)
 
 _LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+# Reachable without authenticating, and each for a reason: /healthz so an
+# orchestrator can tell a live task from a dead one (gating it makes every
+# deploy restart-loop the moment a token is set), /login and /api/login or
+# there is no way to obtain a session, /static because the login page needs
+# its stylesheet and neither asset is a secret.
+_OPEN_PATHS = {"/healthz", "/login", "/api/login"}
+# A wrong token is cheap to retry over HTTP, so slow it down per caller.
+_LOGIN_MAX_FAILURES = 5
+_LOGIN_WINDOW_SECONDS = 300
+_login_failures: dict[str, list[float]] = {}
+
+
+def _client_host(request: Request) -> str:
+    """The socket peer, never a header.
+
+    X-Forwarded-For and friends are set by whoever sent the request, so reading
+    them here would let anyone claim 127.0.0.1 and skip the gate entirely. This is
+    also why uvicorn is not started with --proxy-headers: that flag overwrites
+    scope["client"] from exactly that header. The cost is that a proxy on the same
+    host makes every caller look local, which is what KYRA_TRUST_LOOPBACK is for.
+    """
+    return request.client.host if request.client else ""
+
+
+def _authorized(request: Request, token: str) -> bool:
+    """Three ways in, and the browser can only use the third.
+
+    Bearer is what KyraClient.swift sends and must keep working untouched. The
+    cookie exists because web/app.js reaches the API from 43 fetch call sites and
+    2 EventSource ones, and EventSource has no header API - so with a token set
+    behind a proxy the HUD was simply dead before this.
+    """
+    settings = get_settings()
+    if settings.trust_loopback and _client_host(request) in _LOOPBACK:
+        return True
+    header = request.headers.get("authorization", "")
+    if header.startswith("Bearer ") and secrets.compare_digest(header[7:], token):
+        return True
+    return webauth.session_valid(
+        request.cookies.get(webauth.COOKIE_NAME, ""), token, settings.session_ttl_days * 86400
+    )
 
 
 @app.middleware("http")
 async def _require_api_token(request: Request, call_next):
-    """The one boundary between the Wi-Fi and Kyra's API once KYRA_HOST is 0.0.0.0.
+    """The one boundary between the internet and Kyra, once the server is exposed.
 
-    Only enforced when KYRA_API_TOKEN is set, and only for callers that are not the
-    laptop itself - the browser HUD on localhost keeps working untouched, while a
-    headset or phone on the LAN must present the token. Not authentication in the
-    Phase-2 sense (no users, no sessions); the minimum that makes exposing the
-    server defensible, in code rather than a note.
+    Only enforced when KYRA_API_TOKEN is set, so an unconfigured laptop behaves
+    exactly as it always did. When it is set the gate covers the whole app, not
+    just /api/ - a hosted Kyra serving its HUD to strangers would be showing them
+    Duc's profile, outreach contacts and memory notes, and every chat turn spends
+    his key. Still not multi-user auth: one token, one tenant, no accounts.
     """
     token = get_settings().api_token
-    host = request.client.host if request.client else ""
-    if token and request.url.path.startswith("/api/") and host not in _LOOPBACK:
-        header = request.headers.get("authorization", "")
-        if not (header.startswith("Bearer ") and secrets.compare_digest(header[7:], token)):
-            return JSONResponse(
-                status_code=401,
-                content={"error": {"code": "unauthorized", "message": "missing or wrong API token", "details": {}}},
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    return await call_next(request)
+    path = request.url.path
+    if not token or path in _OPEN_PATHS or path.startswith("/static/"):
+        return await call_next(request)
+    if _authorized(request, token):
+        return await call_next(request)
+    if path.startswith("/api/"):
+        return JSONResponse(
+            status_code=401,
+            content={"error": {"code": "unauthorized", "message": "missing or wrong API token", "details": {}}},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    # A browser asking for a page gets sent somewhere it can act, not a JSON 401.
+    return RedirectResponse("/login", status_code=303)
 
 # A resume or writing sample is a few hundred KB at most; a bound keeps
 # a mis-dropped file (a video, a giant PDF) from being read into memory
@@ -229,6 +280,10 @@ class CorrectionIn(BaseModel):
     reply: str
 
 
+class LoginIn(BaseModel):
+    token: str
+
+
 @app.get("/")
 def index() -> HTMLResponse:
     """Serves index.html with each static asset's real file mtime
@@ -247,6 +302,68 @@ def index() -> HTMLResponse:
         mtime = int((WEB_DIR / asset).stat().st_mtime)
         html = html.replace(f'/static/{asset}"', f'/static/{asset}?v={mtime}"')
     return HTMLResponse(html)
+
+
+@app.get("/healthz")
+def healthz() -> dict:
+    """Liveness for a container or load balancer, deliberately touching nothing.
+
+    It must answer while Postgres, Chroma and the model are all unavailable,
+    otherwise a slow dependency reads as a dead process and the orchestrator
+    restarts a server that was fine. Ungated for the same reason: an authenticated
+    healthcheck fails closed the moment a token is set, and the deploy
+    restart-loops with no obvious cause.
+    """
+    return {"status": "ok"}
+
+
+@app.get("/login")
+def login_page() -> HTMLResponse:
+    return HTMLResponse((WEB_DIR / "login.html").read_text(encoding="utf-8"))
+
+
+def _login_throttled(host: str) -> bool:
+    """Per-caller, so a stranger guessing cannot lock Duc out of his own server."""
+    now = time.time()
+    recent = [t for t in _login_failures.get(host, []) if now - t < _LOGIN_WINDOW_SECONDS]
+    _login_failures[host] = recent
+    return len(recent) >= _LOGIN_MAX_FAILURES
+
+
+@app.post("/api/login")
+def login(body: LoginIn, request: Request) -> JSONResponse:
+    """Exchange the token for a session cookie a browser can actually carry."""
+    token = get_settings().api_token
+    if not token:
+        raise ApiError(400, "no_token_configured", "this server has no KYRA_API_TOKEN set")
+    host = _client_host(request)
+    if _login_throttled(host):
+        raise ApiError(429, "too_many_attempts", "too many failed attempts, wait a few minutes")
+    if not secrets.compare_digest(body.token, token):
+        _login_failures.setdefault(host, []).append(time.time())
+        raise ApiError(401, "unauthorized", "wrong token")
+    _login_failures.pop(host, None)
+    response = JSONResponse({"ok": True})
+    response.set_cookie(
+        webauth.COOKIE_NAME,
+        webauth.issue_session(token),
+        max_age=get_settings().session_ttl_days * 86400,
+        httponly=True,
+        samesite="lax",
+        # Over plain http the flag would stop the cookie ever coming back. Worst case
+        # of trusting the proxy header here is a login that visibly fails, not a leak.
+        secure=request.url.scheme == "https"
+        or request.headers.get("x-forwarded-proto", "") == "https",
+        path="/",
+    )
+    return response
+
+
+@app.post("/api/logout")
+def logout() -> JSONResponse:
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(webauth.COOKIE_NAME, path="/")
+    return response
 
 
 @app.get("/api/backend")

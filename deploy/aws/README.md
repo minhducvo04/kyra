@@ -66,7 +66,10 @@ No NAT gateway on purpose: tasks get public IPs and only the ALB may reach their
 - **S3 for PDFs**: the worker writes a PDF the api serves, but so do the document library, memory notes and
   Chroma store - all under `KYRA_DATA_DIR`. One EFS mount solves all of them with zero code change; an
   object-storage adapter per store is the later "JobDocumentStore to S3" slice.
-- **Auth**: Phase 2 (OIDC). Until then the CIDR allow-list is the boundary. Do not widen it.
+- **Real auth (accounts, OIDC)**: Phase 2. Since 2026-09-08 there IS a login - `KYRA_API_TOKEN` plus a
+  signed session cookie, so a browser can authenticate from anywhere - but it is one token for one tenant,
+  not users. Set `KYRA_TRUST_LOOPBACK=false` on any task behind the ALB. The CIDR allow-list is still worth
+  keeping as a second layer; widening it now costs a lot less than it used to, but it is not free.
 - **Remote Terraform state**: local state is fine for one operator; the S3 backend block is commented in
   `providers.tf` for when a second person runs this.
 - **Immutable image tags in the task definition**: the services run `:latest` and CI forces a new deployment;

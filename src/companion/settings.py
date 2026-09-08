@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     # from a non-loopback address must carry "Authorization: Bearer <token>". Unset keeps the
     # laptop exactly as it was. KYRA_HOST=0.0.0.0 is the switch that exposes the server at all.
     api_token: str = Field(default="", validation_alias="KYRA_API_TOKEN")
+    # The loopback exemption above reads the socket peer address and never
+    # X-Forwarded-For, which is attacker-controlled. That is safe behind a proxy on
+    # another host (the peer is then the proxy, so remote callers must authenticate)
+    # but wrong when a reverse proxy runs on the SAME host as Kyra, where the peer is
+    # 127.0.0.1 for everyone. Set this false in that shape and every caller logs in.
+    trust_loopback: bool = Field(default=True, validation_alias="KYRA_TRUST_LOOPBACK")
+    session_ttl_days: int = Field(default=30, validation_alias="KYRA_SESSION_TTL_DAYS")
     host: str = Field(default="127.0.0.1", validation_alias="KYRA_HOST")
     port: int = Field(default=8420, validation_alias="KYRA_PORT")
 

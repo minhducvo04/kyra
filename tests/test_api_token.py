@@ -40,7 +40,16 @@ def test_loopback_browser_is_exempt(token):
     assert local.get("/api/backend").status_code == 200
 
 
-def test_static_and_index_are_not_gated(token):
-    c = _lan_client()
-    assert c.get("/").status_code == 200
+def test_static_is_open_but_the_page_now_asks_for_a_login(token):
+    """Changed deliberately 2026-09-08. The old assertion ("/" is never gated) was
+    right for the LAN-headset case it was written for and wrong the moment the host
+    is reachable from anywhere: the HUD shows Duc's profile, outreach contacts and
+    memory notes, and every turn spends his key. Note the old test only kept passing
+    because TestClient follows redirects - "/" returned 200 from /login, not from the
+    HUD - which is why this asserts the status directly."""
+    c = TestClient(webapp.app, client=("192.168.1.42", 51000), follow_redirects=False)
+    r = c.get("/")
+    assert r.status_code == 303 and r.headers["location"] == "/login"
+    # Still open: the login page needs its stylesheet, and neither asset is a secret.
     assert c.get("/static/app.js").status_code == 200
+    assert c.get("/login").status_code == 200

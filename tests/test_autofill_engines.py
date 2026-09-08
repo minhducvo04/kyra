@@ -244,3 +244,37 @@ def test_chat_tool_picks_the_engine_from_the_url(tmp_path):
     # an explicit engine still wins, so tests and callers can inject one
     injected = GreenhouseAutofillEngine()
     assert AutofillJobApplicationTool(engine=injected)._engine is injected
+
+
+def test_missing_browser_says_what_to_do(monkeypatch, tmp_path):
+    """In a container the playwright package is installed but chromium is not, and
+    that used to surface as an opaque traceback. Chromium stays out of the image on
+    purpose - autofill opens a window Duc reviews and submits himself."""
+    import companion.job_autofill as ja
+
+    stopped = []
+
+    class _Chromium:
+        def launch(self, **kw):
+            raise RuntimeError("Executable doesn't exist at /root/.cache/ms-playwright/...")
+
+    class _PW:
+        chromium = _Chromium()
+
+        def stop(self):
+            stopped.append(True)
+
+    # fill() imports sync_playwright inside the function, so the real module is the
+    # only patch point - a module-level attribute on job_autofill is never consulted.
+    monkeypatch.setattr(
+        "playwright.sync_api.sync_playwright", lambda: type("S", (), {"start": lambda self: _PW()})()
+    )
+    (tmp_path / "r.pdf").write_bytes(b"%PDF-1.4")
+    profile = ApplicantProfile(
+        first_name="A", last_name="B", email="a@b.co", phone="1", resume_path=str(tmp_path / "r.pdf")
+    )
+    engine = GreenhouseAutofillEngine(log_dir=tmp_path)
+    with pytest.raises(ja.BrowserUnavailable) as exc:
+        engine.fill("https://boards.greenhouse.io/x/jobs/1", profile)
+    assert "playwright install chromium" in str(exc.value)
+    assert stopped, "the playwright process was leaked instead of stopped"

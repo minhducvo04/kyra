@@ -48,11 +48,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t kyra-api:ci .
-      - name: Container serves the API (no API key needed for /api/backend)
+      - name: Container serves the API, and the gate holds with a token set
         run: |
-          docker run -d --name kyra -e ANTHROPIC_API_KEY=ci-placeholder -p 8420:8420 kyra-api:ci
-          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8420/api/backend && break; sleep 2; done
-          curl -sf http://127.0.0.1:8420/api/backend | grep -q '"backend"'
+          docker run -d --name kyra -e ANTHROPIC_API_KEY=ci-placeholder \
+            -e KYRA_API_TOKEN=ci-smoke-token -p 8420:8420 kyra-api:ci
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8420/healthz && break; sleep 2; done
+          # Health must answer unauthenticated, or the deploy restart-loops.
+          curl -sf http://127.0.0.1:8420/healthz | grep -q '"ok"'
+          # ...and the API must not, or the host is open to the internet.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8420/api/backend)" = 401
+          curl -sf -H 'Authorization: Bearer ci-smoke-token' http://127.0.0.1:8420/api/backend | grep -q '"backend"'
           docker logs kyra | tail -20
 
   terraform:

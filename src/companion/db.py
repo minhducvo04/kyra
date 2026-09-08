@@ -26,6 +26,23 @@ def sqlite_url(path: Path | str) -> str:
     return f"sqlite:///{path}"
 
 
+def normalize_db_url(url: str) -> str:
+    """Point a managed provider's connection string at the driver we install.
+
+    Render, Heroku, Fly and the RDS console all hand out "postgres://" or
+    "postgresql://". SQLAlchemy resolves both to psycopg2; requirements-web.txt
+    installs psycopg[binary] (psycopg 3). Copy-pasting the string a provider gives
+    you would therefore fail at startup with ModuleNotFoundError: psycopg2, which
+    reads as a broken image rather than a URL that needs one word changed.
+
+    An explicitly chosen driver is left alone - saying +psycopg2 is a decision.
+    """
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
 @cache
 def _engine_for(url: str) -> Engine:
     if url.startswith("sqlite"):
@@ -47,6 +64,6 @@ def engine_for_store(default_path: Path, explicit: Path | str | None = None) -> 
         url = str(explicit)
     else:
         url = get_settings().database_url or sqlite_url(default_path)
-    engine = _engine_for(url)
+    engine = _engine_for(normalize_db_url(url))
     metadata.create_all(engine)
     return engine

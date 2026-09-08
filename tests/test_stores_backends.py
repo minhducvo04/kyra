@@ -88,3 +88,28 @@ def test_outreach_on_backend(engine):
     assert sent.follow_up_at == (now + timedelta(days=FOLLOW_UP_DAYS)).isoformat()
     assert [d.id for d in store.due_follow_ups(now=now + timedelta(days=FOLLOW_UP_DAYS))] == [c.id]
     assert store.update_status(10**6, "sent") is None
+
+
+# --- managed-Postgres URL shapes -------------------------------------------
+# Render, Heroku, Fly and RDS' console all hand out "postgres://" or
+# "postgresql://". SQLAlchemy resolves both to psycopg2, which this project does
+# not install (requirements-web.txt pins psycopg[binary], i.e. psycopg 3), so a
+# copy-pasted connection string dies at startup with ModuleNotFoundError. Caught
+# 2026-09-08 while writing render.yaml, before it could cost a first deploy.
+
+@pytest.mark.parametrize(
+    "given,expected",
+    [
+        ("postgres://u:p@h/db", "postgresql+psycopg://u:p@h/db"),
+        ("postgresql://u:p@h/db", "postgresql+psycopg://u:p@h/db"),
+        # An explicit driver is a deliberate choice; leave it alone.
+        ("postgresql+psycopg://u:p@h/db", "postgresql+psycopg://u:p@h/db"),
+        ("postgresql+psycopg2://u:p@h/db", "postgresql+psycopg2://u:p@h/db"),
+        ("sqlite:////tmp/x.db", "sqlite:////tmp/x.db"),
+        ("", ""),
+    ],
+)
+def test_database_url_is_normalized_to_the_installed_driver(given, expected):
+    from companion.db import normalize_db_url
+
+    assert normalize_db_url(given) == expected

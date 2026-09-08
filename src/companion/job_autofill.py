@@ -113,6 +113,10 @@ class FillReport:
         return "\n".join(lines)
 
 
+class BrowserUnavailable(RuntimeError):
+    """Playwright is installed but has no browser binary to drive."""
+
+
 class AutofillEngine(ABC):
     """Interface: one concrete engine per ATS platform (Greenhouse today;
     Lever/Workday/iCIMS could each be a new subclass later without
@@ -163,7 +167,21 @@ class LabeledFormEngine(AutofillEngine):
 
         report = FillReport(url=url)
         playwright = sync_playwright().start()
-        browser = playwright.chromium.launch(headless=self._headless)
+        try:
+            browser = playwright.chromium.launch(headless=self._headless)
+        except Exception as exc:  # noqa: BLE001 - the message is the point, not the type
+            playwright.stop()
+            # requirements-web.txt installs the playwright package but the image never
+            # runs `playwright install`, so in a container this used to surface as an
+            # opaque traceback. Chromium is deliberately not in the image: autofill opens
+            # a VISIBLE window for Duc to review and submit himself, so it is a laptop
+            # activity by design - shipping a browser to run it headless on a server
+            # would defeat the fill-never-submit boundary rather than serve it.
+            raise BrowserUnavailable(
+                "no Chromium for Playwright in this environment. Autofill runs on the "
+                "laptop by design (it opens a window you review and submit yourself); "
+                "on the laptop, run: python3 -m playwright install chromium"
+            ) from exc
         page = browser.new_page()
         page.goto(url, wait_until="domcontentloaded")
         if self.ready_selector:
