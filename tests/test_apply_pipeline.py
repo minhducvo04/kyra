@@ -49,6 +49,12 @@ def _run(tmp_path, store, url=GH_URL, engine=None, resume_outputs=None, cover_le
 def test_helpers():
     assert resume_stem(PROFILE, "Meridian", "Software Engineer, New Grad") == "Duc_Vo_Resume_Meridian_Software_Engineer_New_Grad"
     assert resume_stem(ApplicantProfile(), "Acme", "SWE") == "Resume_Acme_SWE"
+    # The real profile's legal first name is "Minh Duc" with preferred_name "Duc",
+    # which produced Minh_Duc_Vo_Resume_... on files an employer receives while the
+    # hand-made ones next to them said Duc_Vo_. The name he goes by wins (Duc's
+    # call, 2026-09-08); the legal name still goes in the form fields.
+    legal = ApplicantProfile(first_name="Minh Duc", last_name="Vo", preferred_name="Duc", email="d@x.com", phone="1")
+    assert resume_stem(legal, "Netic", "Agent Platform") == "Duc_Vo_Resume_Netic_Agent_Platform"
     eng = RecordingEngine()
     assert engine_for_url(GH_URL, {"greenhouse": eng}) == (eng, "greenhouse")
     assert engine_for_url(ASHBY_URL, {"greenhouse": eng}) == (None, "ashby")

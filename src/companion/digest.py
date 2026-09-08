@@ -110,6 +110,28 @@ def _news_item(raw: dict) -> NewsItem:
     )
 
 
+STALE_DAYS = 30
+
+
+def sink_stale(report: WatchReport, now: datetime | None = None) -> None:
+    """Move postings older than STALE_DAYS to the end of report.new, in place.
+
+    Duc's call (2026-09-08) over hiding them: a 52-day-old posting is still
+    applyable, so dropping it silently removes an option, but it should not sit
+    above something posted yesterday. A repost is fresh news whatever its listed
+    age - that is what the REPOSTED signal is for - and a posting with no date is
+    not evidence of staleness, so neither sinks. Stable within each group, so the
+    board's own ordering survives.
+    """
+    def stale(p: Posting) -> bool:
+        if p.key in report.reposted:
+            return False
+        age = p.age_days(now)
+        return age is not None and age > STALE_DAYS
+
+    report.new.sort(key=stale)
+
+
 def build_digest(news_per_source: int = 3, seen_path: Path | None = None) -> DigestData:
     """Gather every section. A failure in one section is a warning on the
     page, never an exception - a dead feed at 5am must not cost Duc the
@@ -149,6 +171,9 @@ def build_digest(news_per_source: int = 3, seen_path: Path | None = None) -> Dig
             data.report = (
                 check_boards(watchlist, seen_path=seen_path) if seen_path else check_boards(watchlist)
             )
+            # Ordered once here, so the page, the archived Markdown and the JSON
+            # record all agree rather than each renderer sorting its own way.
+            sink_stale(data.report)
         except Exception as e:  # never let a board hiccup kill the digest
             logger.warning("board watch failed: %s", e)
             data.warnings.append(f"board watch failed - {type(e).__name__}: {e}")

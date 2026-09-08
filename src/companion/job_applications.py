@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import Engine, insert, select, update
+from sqlalchemy import Engine, delete, insert, select, update
 
 from companion.db import engine_for_store
 from companion.latex_compile import CompileResult, compile_latex
@@ -154,6 +154,33 @@ class JobApplicationStore:
             id=app_id, company=row.company, role=row.role, link=row.link, status=row.status,
             notes=row.notes, created_at=row.created_at, updated_at=now, resume_path=resume_path,
         )
+
+    def set_link(self, app_id: int, link: str) -> JobApplication | None:
+        """Correct which posting URL an application points at. Used when the same
+        job is met again by a better URL - a Greenhouse/Ashby/Lever posting rather
+        than the LinkedIn listing it was first noticed on - since that is the one
+        the autofill engines can act on."""
+        with self._engine.begin() as conn:
+            row = conn.execute(select(JA).where(JA.c.id == app_id)).first()
+            if row is None:
+                return None
+            now = datetime.now(UTC).isoformat()
+            conn.execute(update(JA).where(JA.c.id == app_id).values(link=link, updated_at=now))
+        return JobApplication(
+            id=app_id, company=row.company, role=row.role, link=link, status=row.status,
+            notes=row.notes, created_at=row.created_at, updated_at=now, resume_path=row.resume_path,
+        )
+
+    def delete(self, app_id: int) -> bool:
+        """Remove a row. False when there was nothing to remove.
+
+        Needed because there was no way to undo a mistake at all: the real
+        tracker collected four duplicate pairs (the same job met twice, once by
+        its LinkedIn URL and once by its ATS URL) and one row whose "company"
+        was the name of whoever posted it on LinkedIn.
+        """
+        with self._engine.begin() as conn:
+            return conn.execute(delete(JA).where(JA.c.id == app_id)).rowcount > 0
 
     def list(self, status: str | None = None) -> list[JobApplication]:
         q = select(JA)

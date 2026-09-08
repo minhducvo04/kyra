@@ -82,8 +82,13 @@ def _slug(text: str) -> str:
 
 def resume_stem(profile: ApplicantProfile, company: str, role: str) -> str:
     """`Duc_Vo_Resume_Northwind_SWE_University_Graduate` - the naming Duc already uses
-    by hand in data/resumes/, so the pipeline's files sit next to his."""
-    who = _slug(f"{profile.first_name} {profile.last_name}") or "Resume"
+    by hand in data/resumes/, so the pipeline's files sit next to his.
+
+    Preferred name, not legal first name: the profile holds "Minh Duc" so the
+    forms carry his legal name, but an employer receives this *file* under its own
+    name and the ones he sends by hand say Duc_Vo_ (his call, 2026-09-08).
+    """
+    who = _slug(f"{profile.preferred_name or profile.first_name} {profile.last_name}") or "Resume"
     parts = [who, "Resume", _slug(company), _slug(role)] if who != "Resume" else ["Resume", _slug(company), _slug(role)]
     return "_".join(p for p in parts if p)
 

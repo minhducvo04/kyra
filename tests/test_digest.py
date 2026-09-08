@@ -4,7 +4,7 @@ feed text is never trusted into the HTML, and Hacker News' metadata
 """
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from companion.digest import (
     DigestData,
@@ -272,3 +272,28 @@ def test_markdown_omits_a_missing_hn_comment_count():
     )]))
     assert "None" not in md
     assert "(22 pts)" in md
+
+
+def test_stale_postings_sink_to_the_bottom_instead_of_being_hidden():
+    """Duc's call (2026-09-08): a 52-day-old posting is still applyable, so
+    hiding it would silently remove an option; it just should not sit above
+    something posted yesterday. A repost is fresh news whatever its age - that is
+    the whole point of the REPOSTED signal."""
+    from companion.digest import sink_stale
+
+    def posting(pid, days_old):
+        when = "" if days_old is None else (datetime.now().astimezone() - timedelta(days=days_old)).isoformat()
+        return Posting(source="greenhouse", company="Acme", id=pid, title=f"job {pid}",
+                       location="Remote", url=f"https://x/{pid}", updated_at=when)
+
+    old_a, fresh, old_b, undated, reposted_old = (
+        posting("1", 60), posting("2", 1), posting("3", 45), posting("4", None), posting("5", 90),
+    )
+    report = WatchReport(checked_at="now", new=[old_a, fresh, old_b, undated, reposted_old],
+                         still_open=5, errors=[], reposted={reposted_old.key})
+
+    sink_stale(report)
+    ids = [p.id for p in report.new]
+    # fresh, undated (no age is not evidence of staleness) and the repost stay up top,
+    # in their original order; the two genuinely stale ones fall to the bottom, also in order.
+    assert ids == ["2", "4", "5", "1", "3"]

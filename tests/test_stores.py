@@ -185,3 +185,23 @@ def test_deleting_the_last_note_takes_the_file_with_it(tmp_path):
     assert store.delete("preferences", "prefers dark mode") is True
     assert not (tmp_path / "notes" / "preferences.md").exists()
     assert store.render() == "(no saved notes yet)"
+
+
+def test_an_application_can_be_deleted(tmp_path):
+    # There was no way to remove a mistaken or duplicate row at all; the real
+    # tracker had four duplicate pairs and one entry whose company was a
+    # LinkedIn poster's name rather than a company.
+    store = JobApplicationStore(tmp_path / "j.db")
+    a = store.add("Netic", "SWE")
+    b = store.add("Northwind", "SWE")
+    assert store.delete(a.id) is True
+    assert [x.id for x in store.list()] == [b.id]
+    assert store.delete(a.id) is False
+
+
+def test_an_applications_link_can_be_corrected(tmp_path):
+    store = JobApplicationStore(tmp_path / "j.db")
+    a = store.add("Netic", "SWE", link="https://www.linkedin.com/jobs/view/1/")
+    updated = store.set_link(a.id, "https://jobs.ashbyhq.com/netic/abc")
+    assert updated.link == "https://jobs.ashbyhq.com/netic/abc"
+    assert store.set_link(9999, "https://x") is None

@@ -75,3 +75,35 @@ def test_company_name_comes_from_the_watchlist_not_the_board_slug(tmp_path):
     assert titleize_token("retell-ai") == "Retell AI"
     assert titleize_token("composio") == "Composio"
     assert titleize_token("some_new_co") == "Some New Co"
+
+
+def test_the_same_job_from_a_different_url_reuses_the_row_and_takes_the_ats_link(tmp_path):
+    """The real tracker grew four duplicate pairs: a LinkedIn row from browsing,
+    then a second row when the pipeline targeted the same job by its Ashby or
+    Greenhouse URL. Dedup matched on the exact link, and those links differ - so
+    the tracker said eight applications where there were four, and the row Duc
+    had been curating was not the one the pipeline could autofill."""
+    store = JobApplicationStore(tmp_path / "j.db")
+    tool = TargetPostingTool(store, fetch=lambda url: fetch_posting(url, _fake))
+    linkedin = "https://www.linkedin.com/jobs/view/4438446984/"
+    first = tool.run(url=linkedin, posting_text="Join the Agent Platform team. Python.",
+                     company="Netic", role="Software Engineer (Agent Platform) - New Grad")
+    assert first["created"]
+
+    ashby = "https://jobs.ashbyhq.com/netic/d9bcb6a2-0e54-4cb3-baec-43f2d74db18f"
+    again = tool.run(url=ashby)
+    assert not again["created"], "same company and role should not open a second row"
+    assert len(store.list()) == 1
+    # And the row keeps the link the pipeline can actually act on.
+    assert store.list()[0].link == ashby
+    assert again["application"]["id"] == first["application"]["id"]
+
+
+def test_a_different_role_at_the_same_company_is_still_its_own_row(tmp_path):
+    store = JobApplicationStore(tmp_path / "j.db")
+    tool = TargetPostingTool(store, fetch=lambda url: fetch_posting(url, _fake))
+    tool.run(url="https://www.linkedin.com/jobs/view/1/", posting_text="text",
+             company="Netic", role="Software Engineer (Agent Platform) - New Grad")
+    tool.run(url="https://www.linkedin.com/jobs/view/2/", posting_text="text",
+             company="Netic", role="Product Designer")
+    assert len(store.list()) == 2

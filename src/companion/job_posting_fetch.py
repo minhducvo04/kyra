@@ -101,6 +101,13 @@ def fetch_posting(url: str, fetch_json=_get_json) -> FetchedPosting:
     raise ValueError(f"job {job_id} is not on the {token} Ashby board any more (closed?)")
 
 
+def _key(text: str | None) -> str:
+    """Loose match for "the same job": case, spacing and punctuation differ
+    between a LinkedIn listing and the ATS's own title ("New Grad - 2026" vs
+    "New Grad-2026"), and neither spelling is more correct than the other."""
+    return re.sub(r"[^a-z0-9]+", "", (text or "").lower())
+
+
 class TargetPostingTool(Tool):
     name = "target_job_posting"
     description = 'Start on a posting Duc found: fetch its text (Greenhouse/Lever/Ashby URL, else pasted text), read the signals, log it in the tracker as targeting. Never applies.'
@@ -136,10 +143,24 @@ class TargetPostingTool(Tool):
             return {"error": "company and role are needed for a tracker entry when the posting cannot be fetched - pass them"}
         sig = analyze_posting(text, title=role, posted_at=(fetched.posted_at if fetched and fetched.posted_at else None), reposted=reposted)
         summary = render_signals(sig)
-        existing = next((a for a in self._store.list() if a.link == url), None)
+        # Dedup by the job, not just the URL. The same posting is routinely met
+        # twice - once as a LinkedIn listing while browsing, once by its real ATS
+        # URL when the pipeline targets it - and matching only on `link` opened a
+        # second row each time: the real tracker grew four duplicate pairs that
+        # way, and the row Duc had been curating was not the one autofill could
+        # act on. Same company and same role is the same job.
+        existing = next(
+            (a for a in self._store.list()
+             if a.link == url or (_key(a.company) == _key(company) and _key(a.role) == _key(role))),
+            None,
+        )
         if existing:
             app = existing
             created = False
+            # Keep the URL an engine can fill: a real posting URL beats the
+            # LinkedIn listing the row may have been created from.
+            if app.link != url and parse_posting_url(url) and not parse_posting_url(app.link or ""):
+                app = self._store.set_link(app.id, url) or app
         else:
             app = self._store.add(company, role, link=url, notes=f"[signals] {summary}", status="targeting")
             created = True
