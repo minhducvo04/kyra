@@ -31,3 +31,8 @@ handoff/
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+
+# Xcode build output and per-user state (the project file itself is tracked)
+apple/**/build/
+apple/**/*.xcodeproj/xcuserdata/
+apple/**/*.xcodeproj/project.xcworkspace/xcuserdata/
