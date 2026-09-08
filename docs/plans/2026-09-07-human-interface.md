@@ -61,9 +61,22 @@ JS/CSS is small (1.5k lines) and every slice below is additive.
    which already iterates the stream. Tool turns and local turns fall back to one `done` event, so nothing breaks.
    -> verified: real Claude turn, first token at 5.3 s of 7.1 s - adaptive thinking runs before any text, so
    streaming shortens the *visible* tail, not the wait; the mid-stream line read 494 chars, final 569, no errors.
-3. **Cancel in flight** - the mic click already stops playback; add an AbortController on the streaming chat
-   request so a new message or the space bar cancels a reply mid-generation, and the partial text stays in the
-   transcript marked "(interrupted)". -> verify: interrupt mid-sentence; the next utterance is handled cleanly.
+3. **Cancel in flight** - DONE 2026-09-07. An AbortController on the streaming request, plus the half the plan
+   missed: aborting the fetch only stops the browser *listening*, while the turn keeps running here and
+   `_record_turn` files the whole reply into history and Chroma - so Kyra would remember saying something Duc
+   never saw. `POST /api/chat/cancel` is the other half; it rides the `on_token` callback the turn is already
+   calling per delta (`llm.TurnCancelled`), and `respond()` returns what was actually said plus
+   `CANCELLED_MARKER`, the same honesty as `TRUNCATION_MARKER`. SEND becomes STOP while a reply streams and the
+   input stays live, so the natural stop is saying the next thing; Escape also stops, **not** the space bar this
+   plan first sketched - the input is enabled now, so a space there is a space. Each turn owns its own stop
+   signal (`_cancel_current` just points at the newest) so a stop pressed a moment late cannot kill the turn that
+   started next. Only a streamed text turn is stoppable: a tool turn has no `on_token` and runs to completion,
+   which is what you want once a tool has begun doing something real.
+   -> verified in the running page against real Claude turns: stopped mid-sentence at 475 chars, the partial
+   stayed and was labelled, `<body data-presence>` went to `interrupted`, SEND came back, and the memory record
+   ended at exactly the same word plus `[interrupted]`. Three of four real interrupts recorded correctly; the
+   fourth left no record at all, with no error logged - see the storage defect below, which is the only
+   mechanism consistent with it.
 4. **Voice register** - DONE 2026-09-07. `/api/voice` answers with `register="voice"`, which adds one line to the
    system prompt (`voice_text.SPOKEN_REGISTER`), and `spoken_text()` strips markdown before synthesis as the
    guarantee; the transcript keeps the written reply. -> verified: unit tests on the prompt line and the stripper,
@@ -74,6 +87,19 @@ JS/CSS is small (1.5k lines) and every slice below is additive.
    `data/memory_notes/corrections.md` and shows in the next system prompt.
 6. **Phone layout** - one more breakpoint: input bar wraps to two rows, panels go full-width, transcript text
    14-15 px. -> verify: the browser pane at 375 × 812.
+
+## Found while verifying slice 3: memory writes can vanish silently
+
+`ChromaMemoryStore.add()` assigns `ids=[str(self._next_id)]` from a counter seeded with `count()` at
+construction. Chroma **ignores an add whose id already exists** - no exception, no warning, the record is simply
+gone. Reproduced directly: two stores over the same collection, the second write to a taken id disappeared and
+`count()` never moved. This is pre-existing and affects every memory write, not just cancelled turns, and it is
+the only mechanism that fits the one verification turn that streamed to the browser, raised nothing, and left no
+record. Fix belongs in `memory.py` on its own, with its own verification - not folded into this slice.
+
+**Fixed 2026-09-07** ([PR #14](https://github.com/minhducvo04/kyra/pull/14)): `add()` writes `uuid4().hex`, the counter is gone,
+`tests/test_memory.py` pins the two-instance repro (red first), and a real BGE run on a copy of the real store confirmed
+no migration is needed. The real store is already missing ids 30-37; see the CLAUDE.md bullet for what the log shows.
 
 ## Not doing, and why
 - **A framework rewrite (React etc.)** - nothing above needs one; the cache-busting and EventSource plumbing

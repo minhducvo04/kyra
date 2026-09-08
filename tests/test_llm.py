@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from companion.llm import TRUNCATION_MARKER, AnthropicLLM, Message
+from companion.llm import CANCELLED_MARKER, TRUNCATION_MARKER, AnthropicLLM, Message, TurnCancelled
 
 
 class _FakeStreamingClient:
@@ -114,3 +114,55 @@ def test_conversation_only_streams_when_the_backend_can():
     tokens = []
     assert cm.handle_turn("hi", on_token=tokens.append) == "plain reply"
     assert tokens == []  # never passed to a backend that cannot take it
+
+
+class _FakeCancelClient(_FakeStreamingClient):
+    """text_stream that keeps producing until someone stops it, and a
+    get_final_message() that fails the test if respond() waits for the whole
+    reply after being cancelled."""
+
+    def __init__(self, deltas):
+        super().__init__(text="".join(deltas))
+        self._deltas = deltas
+        self.exited = False
+
+    @contextmanager
+    def stream(self, **kwargs):
+        self.stream_kwargs = kwargs
+
+        def boom():
+            raise AssertionError("a cancelled turn must not wait for the final message")
+
+        try:
+            yield SimpleNamespace(text_stream=iter(self._deltas), get_final_message=boom)
+        finally:
+            self.exited = True
+
+
+def test_cancelled_turn_returns_what_was_already_said_with_a_marker():
+    # The callback is the cancellation channel: it already runs per delta, so
+    # raising from it stops generation without new plumbing through respond().
+    client = _FakeCancelClient(["The ", "capital ", "of ", "France ", "is ", "Paris."])
+    seen = []
+
+    def on_token(delta):
+        # Shaped like the real wrapper in webapp.py: check the signal, then
+        # forward. A delta that arrives after the stop was pressed is never
+        # forwarded, so it must not count as something Duc saw either.
+        if len(seen) == 2:
+            raise TurnCancelled()
+        seen.append(delta)
+
+    reply = AnthropicLLM(client).respond("sys", [], "hi", on_token=on_token)
+    assert reply == "The capital " + CANCELLED_MARKER
+    assert seen == ["The ", "capital "]
+    assert client.exited, "the stream context must close, so the API stops generating"
+
+
+def test_cancelling_before_the_first_delta_still_returns_the_marker():
+    client = _FakeCancelClient(["never seen"])
+
+    def on_token(_delta):
+        raise TurnCancelled()
+
+    assert AnthropicLLM(client).respond("sys", [], "hi", on_token=on_token) == CANCELLED_MARKER

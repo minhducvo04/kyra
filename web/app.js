@@ -94,9 +94,42 @@ function addLine(who, text, meta) {
 
 function setThinking(on) {
   setPresence(on ? "thinking" : "idle", on ? undefined : handsFreeActive ? "hands-free — just start talking" : undefined);
-  sendBtn.disabled = on;
-  input.disabled = on;
+  // While a reply streams, SEND becomes STOP and the input stays live: stopping
+  // is core conversation logic, not an edge case (human-interface plan, point 3),
+  // and the natural way to stop is usually to just say the next thing.
+  sendBtn.querySelector("span").textContent = on ? "STOP" : "SEND";
+  sendBtn.classList.toggle("is-stop", on);
+  sendBtn.setAttribute("aria-label", on ? "Stop generating" : "Send");
+  sendBtn.disabled = false;
+  input.disabled = false;
   micBtn.disabled = on;
+}
+
+// --- Cancelling a reply in flight ---------------------------------------------
+// Aborting the fetch only stops the browser *listening*; the turn keeps running
+// on the server, and it would record the whole reply into history and memory -
+// so Kyra would remember saying something Duc never saw. /api/chat/cancel stops
+// the generation itself, and is awaited so the next turn can't race it.
+let inFlight = null; // { controller } while a streamed turn is running
+
+async function cancelTurn() {
+  if (!inFlight) return false;
+  const turn = inFlight;
+  turn.cancelled = true;
+  turn.controller.abort();
+  try {
+    await fetch("/api/chat/cancel", { method: "POST" });
+  } catch (_) {
+    // the browser side is already stopped; a failed stop only costs tokens
+  }
+  return true;
+}
+
+function markInterrupted(line) {
+  const mark = document.createElement("span");
+  mark.className = "line-meta line-interrupted";
+  mark.textContent = "interrupted";
+  line.querySelector(".line-text").appendChild(mark);
 }
 
 function replyMeta(data) {
@@ -108,10 +141,13 @@ function replyMeta(data) {
 // the final ChatOut, or null if nothing at all came back (the caller then falls back
 // to the whole-reply endpoint, so a proxy that buffers SSE can't break chat).
 async function streamTurn(text) {
+  const turn = { controller: new AbortController(), cancelled: false };
+  inFlight = turn;
   const res = await fetch("/api/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message: text }),
+    signal: turn.controller.signal,
   });
   if (!res.ok || !res.body) throw new Error(`server returned ${res.status}`);
   const reader = res.body.getReader();
@@ -147,22 +183,33 @@ async function streamTurn(text) {
       throw new Error(payload);
     }
   };
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let idx;
-    while ((idx = buffer.indexOf("\n\n")) >= 0) {
-      const block = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 2);
-      let event = "message";
-      let data = "";
-      for (const l of block.split("\n")) {
-        if (l.startsWith("event: ")) event = l.slice(7);
-        else if (l.startsWith("data: ")) data += l.slice(6);
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+        const block = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        let event = "message";
+        let data = "";
+        for (const l of block.split("\n")) {
+          if (l.startsWith("event: ")) event = l.slice(7);
+          else if (l.startsWith("data: ")) data += l.slice(6);
+        }
+        if (data) handle(event, JSON.parse(data));
       }
-      if (data) handle(event, JSON.parse(data));
     }
+  } catch (err) {
+    // An abort is the user stopping her, not a failure: keep whatever she had
+    // already said and label it, so the transcript matches what he heard.
+    if (!turn.cancelled) throw err;
+    if (line) markInterrupted(line);
+    else addLine("system", "interrupted");
+    return { cancelled: true };
+  } finally {
+    if (inFlight === turn) inFlight = null;
   }
   return final;
 }
@@ -170,6 +217,7 @@ async function streamTurn(text) {
 async function send() {
   const text = input.value.trim();
   if (!text) return;
+  await cancelTurn(); // saying the next thing stops the current reply
   addLine("user", text);
   input.value = "";
   setThinking(true);
@@ -180,6 +228,12 @@ async function send() {
     } catch (err) {
       if (err.message.startsWith("server returned")) throw err;
       addLine("error", `stream failed — ${err.message}`);
+    }
+    if (data && data.cancelled) {
+      setThinking(false);
+      setPresence("interrupted");
+      input.focus();
+      return;
     }
     if (!data) {
       const res = await fetch("/api/chat", {
@@ -205,7 +259,15 @@ async function send() {
   input.focus();
 }
 
-sendBtn.addEventListener("click", send);
+sendBtn.addEventListener("click", () => {
+  if (inFlight) cancelTurn();
+  else send();
+});
+document.addEventListener("keydown", (e) => {
+  // Escape, not the space bar the plan first sketched: the input stays enabled
+  // while she replies, so a space there is a space.
+  if (e.key === "Escape" && inFlight) cancelTurn();
+});
 input.addEventListener("keydown", (e) => {
   // e.keyCode is deprecated but some automation/IME paths don't populate
   // e.key reliably - check both so a real Enter keypress never gets missed.
@@ -353,6 +415,7 @@ async function sendVoiceBlob(blob) {
     setMicState(handsFreeActive ? "listening" : "idle");
     return;
   }
+  await cancelTurn(); // speaking to her supersedes a text reply still streaming
   setMicState("processing");
   input.disabled = true;
   sendBtn.disabled = true;
