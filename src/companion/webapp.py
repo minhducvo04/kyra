@@ -61,7 +61,7 @@ from companion.reminders import RemindersStore
 from companion.router import TurnRouter, route_and_answer_verbose
 from companion.science import ScienceFactsTool
 from companion.settings import get_settings
-from companion.voice_text import spoken_text
+from companion.voice_text import spoken_text, take_sentences
 
 app = FastAPI(title="Kyra")
 install_error_handlers(app)
@@ -433,6 +433,87 @@ def delete_memory_note(body: MemoryNoteRef) -> dict:
     if not _memory_notes.delete(body.category, body.text):
         raise ApiError(404, "note_not_found", "no note with that text in that category")
     return {"deleted": True}
+
+
+@app.post("/api/voice/stream")
+def voice_stream(audio: UploadFile) -> StreamingResponse:
+    """One utterance in, her reply out sentence by sentence as SSE.
+
+    The point is time-to-first-word. /api/voice waits for the whole reply, then
+    synthesises the whole thing, then sends one WAV - measured at 5.3s of silence
+    on 2026-09-08 (docs/voice-latency.md). The reply is already streamed, and
+    synthesising just the first sentence costs 0.48s against 1.12s for all of it,
+    so speaking each sentence as it finishes puts the first word near 3.6s.
+
+    Events: `transcript` (what she heard, immediately), then one `audio` per
+    sentence, then `done` with the written reply. Each audio chunk is a complete
+    WAV rather than a slice of one stream, so the browser can just play them in
+    order without MediaSource. A turn that cannot stream - a tool turn has no
+    on_token - falls back to synthesising the whole reply at the end, so the
+    audio is never silently dropped.
+    """
+    from companion.voice import decode_uploaded_audio, encode_wav_bytes
+
+    pcm = decode_uploaded_audio(audio.file)
+    transcript = _rt.stt.transcribe(pcm).strip()
+
+    q: queue.Queue = queue.Queue()
+    finished = object()
+
+    def say(sentence: str) -> None:
+        """Synthesise one sentence and hand it to the browser."""
+        speech = spoken_text(sentence)
+        if not speech:
+            return
+        samples, rate = _rt.tts.speak(speech)
+        wav = encode_wav_bytes(samples, rate)
+        q.put(("audio", {"b64": base64.b64encode(wav).decode(), "rate": rate, "text": speech}))
+
+    def run() -> None:
+        try:
+            buffer = ""
+            spoken_any = False
+
+            def on_token(delta: str) -> None:
+                nonlocal buffer, spoken_any
+                buffer += delta
+                sentences, buffer = take_sentences(buffer)
+                for sentence in sentences:
+                    say(sentence)
+                    spoken_any = True
+
+            out = _answer(transcript, on_token=on_token, register="voice")
+            tail, _ = take_sentences(buffer, final=True)
+            for sentence in tail:
+                say(sentence)
+                spoken_any = True
+            if not spoken_any:
+                # Nothing streamed (a tool turn, or the local model): say it all now.
+                say(out.reply)
+            q.put(("done", out.model_dump()))
+        except Exception as e:  # noqa: BLE001 - surfaced as an error event, never swallowed
+            logger.exception("voice stream failed")
+            q.put(("error", f"{type(e).__name__}: {e}"))
+        finally:
+            q.put(finished)
+
+    def events():
+        yield f"event: transcript\ndata: {json.dumps({'transcript': transcript})}\n\n"
+        if not transcript:
+            # Nothing was said; do not spend a turn on silence.
+            yield f"event: done\ndata: {json.dumps(ChatOut(reply='', backend=_current_backend).model_dump())}\n\n"
+            return
+        threading.Thread(target=run, name="kyra-voice-stream", daemon=True).start()
+        while True:
+            item = q.get()
+            if item is finished:
+                return
+            kind, payload = item
+            yield f"event: {kind}\ndata: {json.dumps(payload)}\n\n"
+
+    return StreamingResponse(
+        events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
 
 
 @app.post("/api/voice", response_model=VoiceOut)

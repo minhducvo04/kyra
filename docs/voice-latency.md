@@ -62,11 +62,18 @@ a session.
 
 ## What the numbers say to do next, in order of payoff per hour of work
 
-1. **Speak the first sentence while the rest is still being written.** The reply is streamed already and the
-   first sentence costs 0.48s to synthesise. Starting playback at roughly `STT + route + first sentence
-   streamed + 0.48` puts the first word at about **3.6s instead of 5.3s**, and the perceived wait drops more
-   than that because something is happening. This needs `/api/voice` to stream audio chunks rather than
-   returning one WAV, which is the real work.
+1. **Speak the first sentence while the rest is still being written.** DONE 2026-09-08, and the prediction
+   held: `POST /api/voice/stream` sends `transcript`, then one `audio` event per sentence, then `done`.
+   Measured against the same utterance on the same server, forcing the Claude backend:
+
+   | | first word | all audio ready |
+   |---|---|---|
+   | `/api/voice` (whole reply, one WAV) | 4.45s | 4.45s |
+   | `/api/voice/stream` (per sentence) | **3.61s** | 4.09s |
+
+   The predicted figure was 3.6s. The gap widens with reply length, because the first sentence still lands at
+   ~3.6s however long the rest turns out to be. Each chunk is a complete WAV rather than a slice of one
+   stream, so the browser plays them from a queue with an ordinary `<audio>` element and no MediaSource.
 2. **Transcribe while he is still talking.** STT is 1.56s for 3.0s of speech - about half real time - and all
    of it is spent after he stops. Feeding the recorder's chunks to faster-whisper as they arrive would recover
    most of it. Worth **~1.2s**.
@@ -81,8 +88,12 @@ feeling like a request and starts feeling like a reply.
 
 ## Caveats
 
-- This measures the **text** path. A tool turn does not stream at all (`respond_with_tools` has no `on_token`),
-  so any turn that calls a tool is slower and cannot benefit from item 1 above. The router sent both test
-  utterances to the tool path; the harness called `handle_turn` directly to measure the streamed path.
+- This measures the **text/claude** path, and that caveat turned out to matter more than expected. Verifying
+  the streaming endpoint, the router sent "tell me what you think about spaced repetition" to the **tool** path
+  (32.3s, one chunk at the end - a tool turn has no `on_token`) and "good morning, how are you feeling today?"
+  to **text/local** (8.9s, one chunk - `LocalLLM.supports_streaming` is False). Both fell back correctly to
+  synthesising the whole reply, which is why that fallback exists, but neither got any of the benefit. **Only a
+  streamed Claude text turn speaks sentence by sentence today.** Whatever fraction of real turns that is, is
+  the fraction this improvement applies to.
 - Two turns is not a distribution. The reply length dominates TTS, and reply length varies a lot.
 - No microphone was involved. Real capture adds the recorder's own buffering.

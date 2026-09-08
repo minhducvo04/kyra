@@ -42,3 +42,43 @@ def spoken_text(reply: str) -> str:
     for _ in range(2):  # nested emphasis (***x***)
         text = _EMPHASIS_RE.sub(r"\2", text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+# A sentence ends at . ! or ? followed by whitespace - but not inside a decimal
+# ("3.42") and not after a one-or-two-letter abbreviation ("e.g.", "Dr."), both
+# of which would chop the audio mid-thought. Deliberately simple: this decides
+# where to break audio, not where to break meaning, and the cost of an
+# occasional wrong split is a small extra pause.
+# The trailing class allows markdown to sit between the punctuation and the
+# space ("**Sure.** "): the split happens on the raw streamed text, because
+# stripping markdown first would mangle a link or emphasis still being written.
+# spoken_text() then cleans each whole sentence before it is synthesised.
+_SENTENCE_END = re.compile(r"(?<![0-9])(?<!\b[A-Za-z])(?<!\b[A-Za-z]\.[A-Za-z])[.!?]+[\"')\]*_`]*(?=\s)")
+
+
+def take_sentences(buffer: str, final: bool = False) -> tuple[list[str], str]:
+    """Split streamed reply text into whole sentences plus the unfinished tail.
+
+    Called after each token: whatever comes back in the first element can be
+    synthesised and played now, and the remainder is fed back in with the next
+    token. `final=True` flushes the tail, since a reply often stops without
+    closing punctuation and it still has to be spoken.
+
+    Measured 2026-09-08 (docs/voice-latency.md): the first sentence costs 0.48s
+    to synthesise against 1.12s for a whole reply, so speaking sentence by
+    sentence is most of the difference between a 5.3s wait and a 3.6s one.
+    """
+    sentences: list[str] = []
+    rest = buffer
+    while True:
+        m = _SENTENCE_END.search(rest)
+        if not m:
+            break
+        sentences.append(rest[: m.end()].strip())
+        rest = rest[m.end():].lstrip()
+    if final:
+        tail = rest.strip()
+        if tail:
+            sentences.append(tail)
+        rest = ""
+    return [s for s in sentences if s], rest

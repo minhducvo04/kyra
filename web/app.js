@@ -504,12 +504,102 @@ function playReply(base64) {
   });
 }
 
+/* Her reply arrives one synthesised sentence at a time, so playback is a queue
+   rather than a single clip: the first sentence starts while the rest is still
+   being written and spoken (docs/voice-latency.md - 0.48s to synthesise one
+   sentence against 1.12s for a whole reply). Each chunk is its own complete WAV,
+   which is why this can be an <audio> element and not MediaSource. */
+let audioQueue = [];
+let queuePlaying = false;
+
+function speaking() {
+  return queuePlaying || !replyAudio.paused;
+}
+
+function enqueueAudio(b64) {
+  audioQueue.push(b64);
+  if (!queuePlaying) playQueue();
+}
+
+async function playQueue() {
+  queuePlaying = true;
+  setMicState("speaking");
+  while (audioQueue.length && queuePlaying) {
+    const b64 = audioQueue.shift();
+    await new Promise((resolve) => {
+      replyAudio.src = `data:audio/wav;base64,${b64}`;
+      const done = () => {
+        replyAudio.removeEventListener("ended", done);
+        resolve();
+      };
+      replyAudio.addEventListener("ended", done);
+      replyAudio.play().catch(done);
+    });
+  }
+  queuePlaying = false;
+}
+
 function interruptPlayback() {
-  if (!replyAudio.paused) {
-    replyAudio.pause();
-    replyAudio.currentTime = 0;
-    addLine("system", "interrupted");
-    setPresence("interrupted");
+  if (!speaking()) return;
+  // Drop what has not been said yet as well as what is playing, or she would
+  // carry on with the next sentence a moment after being cut off.
+  queuePlaying = false;
+  audioQueue = [];
+  replyAudio.pause();
+  replyAudio.currentTime = 0;
+  addLine("system", "interrupted");
+  setPresence("interrupted");
+}
+
+/* Reads /api/voice/stream: the transcript first (so he sees what she heard
+   before she has said anything), then one audio chunk per sentence, then the
+   written reply. Returns "no-speech" when nothing was said, false when the
+   stream could not be used at all so the caller can fall back. */
+async function streamVoiceTurn(form) {
+  let sawAudio = false;
+  try {
+    const res = await fetch("/api/voice/stream", { method: "POST", body: form });
+    if (!res.ok || !res.body) return false;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let heard = null;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+        const block = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        let event = "message";
+        let data = "";
+        for (const l of block.split("\n")) {
+          if (l.startsWith("event: ")) event = l.slice(7);
+          else if (l.startsWith("data: ")) data += l.slice(6);
+        }
+        if (!data) continue;
+        const payload = JSON.parse(data);
+        if (event === "transcript") {
+          heard = payload.transcript;
+          if (heard) addLine("user", heard);
+        } else if (event === "audio") {
+          sawAudio = true;
+          enqueueAudio(payload.b64);
+        } else if (event === "done") {
+          if (!heard) return "no-speech";
+          if (payload.reply) addLine("kyra", payload.reply, replyMeta(payload));
+        } else if (event === "error") {
+          throw new Error(payload);
+        }
+      }
+    }
+    // Let her finish saying it before the mic goes live again.
+    while (speaking()) await new Promise((r) => setTimeout(r, 120));
+    return true;
+  } catch (err) {
+    if (sawAudio) throw err; // already speaking - a retry would talk over her
+    return false;
   }
 }
 
@@ -525,17 +615,24 @@ async function sendVoiceBlob(blob) {
   try {
     const form = new FormData();
     form.append("audio", blob, "utterance.webm");
-    const res = await fetch("/api/voice", { method: "POST", body: form });
-    if (!res.ok) throw new Error(`server returned ${res.status}`);
-    const data = await res.json();
-    if (!data.transcript) {
+    const streamed = await streamVoiceTurn(form);
+    if (streamed === "no-speech") {
       coreSub.textContent = "didn't catch that";
       return;
     }
-    addLine("user", data.transcript);
-    const meta = data.actual_backend ? `${data.actual_backend}${data.path === "tool" ? " · tool" : ""}` : "";
-    addLine("kyra", data.reply, meta);
-    if (data.reply_audio_b64) await playReply(data.reply_audio_b64);
+    if (streamed === false) {
+      // A proxy that buffers SSE, or an older server: take the whole-reply path.
+      const res = await fetch("/api/voice", { method: "POST", body: form });
+      if (!res.ok) throw new Error(`server returned ${res.status}`);
+      const data = await res.json();
+      if (!data.transcript) {
+        coreSub.textContent = "didn't catch that";
+        return;
+      }
+      addLine("user", data.transcript);
+      addLine("kyra", data.reply, replyMeta(data));
+      if (data.reply_audio_b64) await playReply(data.reply_audio_b64);
+    }
   } catch (err) {
     addLine("error", `voice turn failed — ${err.message}`);
     setPresence("failed");
@@ -581,7 +678,7 @@ function vadLoop() {
   if (!handsFreeActive) return;
   // Inert while she's speaking or a turn is being processed - the same
   // sequential discipline voice_chat.py uses, so the mic never hears her.
-  if (!replyAudio.paused || micBtn.dataset.state === "processing") {
+  if (speaking() || micBtn.dataset.state === "processing") {
     vadRAF = requestAnimationFrame(vadLoop);
     return;
   }
@@ -650,7 +747,7 @@ function stopHandsFree() {
 }
 
 micBtn.addEventListener("click", async () => {
-  if (!replyAudio.paused) {
+  if (speaking()) {
     interruptPlayback();
     return;
   }
