@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from companion.paths import DATA_DIR
+from companion.paths import DATA_DIR, write_json
 
 logger = logging.getLogger(__name__)
 
@@ -186,8 +186,7 @@ def load_watchlist(path: Path = WATCHLIST_PATH) -> list[WatchEntry]:
 
 
 def save_watchlist(entries: list[WatchEntry], path: Path = WATCHLIST_PATH) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps([asdict(e) for e in entries], indent=2), encoding="utf-8")
+    write_json(path, [asdict(e) for e in entries])
 
 
 def _matches(posting: Posting, keywords: list[str]) -> bool:
@@ -247,8 +246,7 @@ def check_boards(
                 if prior and prior != p.key:
                     reposted.add(p.key)
             seen[p.key] = {**asdict(p), "first_seen": seen.get(p.key, {}).get("first_seen", now), "last_seen": now}
-    seen_path.parent.mkdir(parents=True, exist_ok=True)
-    seen_path.write_text(json.dumps(seen, indent=2), encoding="utf-8")
+    write_json(seen_path, seen)
     logger.info("board watch: %d watched, %d matching open, %d new, %d errors", len(entries), still_open, len(new), len(errors))
     return WatchReport(checked_at=now, new=new, still_open=still_open, errors=errors, reposted=reposted)
 
