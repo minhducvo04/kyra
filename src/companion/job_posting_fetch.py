@@ -11,14 +11,17 @@ after he has found something.
 from __future__ import annotations
 
 import html
+import logging
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
 from companion.job_applications import JobApplicationStore
-from companion.job_boards import _get_json
+from companion.job_boards import _get_json, find_posting
 from companion.posting_signals import analyze_posting, render_signals
 from companion.tools import Tool
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -110,7 +113,9 @@ def _key(text: str | None) -> str:
 
 class TargetPostingTool(Tool):
     name = "target_job_posting"
-    description = 'Start on a posting Duc found: fetch its text (Greenhouse/Lever/Ashby URL, else pasted text), read the signals, log it in the tracker as targeting. Never applies.'
+    description = ('Start on a posting Duc found: fetch its text, read the signals, log it in the tracker as "targeting". '
+                   'Takes a Greenhouse/Lever/Ashby URL, or a LinkedIn/careers-page URL with the company and role - then it '
+                   'looks the posting up on that company\'s own job board. Never applies.')
     input_schema = {
         "type": "object",
         "properties": {
@@ -123,11 +128,37 @@ class TargetPostingTool(Tool):
         "required": ["url"],
     }
 
-    def __init__(self, store: JobApplicationStore, fetch=fetch_posting):
-        self._store, self._fetch = store, fetch
+    def __init__(self, store: JobApplicationStore, fetch=fetch_posting, resolve=find_posting):
+        self._store, self._fetch, self._resolve = store, fetch, resolve
+
+    def _resolve_url(self, url: str, company: str, role: str) -> str | None:
+        """The company's own posting for this row, or None to fall through to the
+        existing "paste the text" path. Never raises: a failed lookup must leave
+        targeting exactly as it behaved before."""
+        if not (company.strip() and role.strip()):
+            tracked = next((a for a in self._store.list() if a.link == url), None)
+            if tracked:
+                company, role = company.strip() or tracked.company, role.strip() or tracked.role
+        if not (company.strip() and role.strip()):
+            return None
+        try:
+            match = self._resolve(company, role)
+        except Exception as e:  # noqa: BLE001 - a board lookup must never break targeting
+            logger.warning("board lookup for %r/%r failed: %s", company, role, e)
+            return None
+        return match.posting.url if match else None
 
     def run(self, url: str, posting_text: str = "", company: str = "", role: str = "", reposted: bool | None = None) -> dict:
         fetched: FetchedPosting | None = None
+        # A LinkedIn or careers-page URL cannot be fetched (their terms, and there is no
+        # personal API), but the company almost always hosts the req on a board whose
+        # public API the watch already polls - so look it up there rather than reading
+        # the page. Only when Duc has not pasted the text himself; the apply pipeline
+        # does the same thing one layer up, for the same reason.
+        if not parse_posting_url(url) and not posting_text.strip():
+            resolved = self._resolve_url(url, company, role)
+            if resolved:
+                url = resolved
         if parse_posting_url(url):
             try:
                 fetched = self._fetch(url)

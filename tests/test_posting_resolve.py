@@ -296,3 +296,58 @@ class TestGenericTitlesAreRefused:
         save_watchlist([WatchEntry("Acme", "greenhouse", "acme", [])], path)
         match = find_posting("Acme", "AI Engineer, GTM Claudification", sources=self._sources(), watchlist_path=path)
         assert match is not None and match.posting.id == "2"
+
+
+class TestChatPathResolves:
+    """The same hand-off from the chat/voice front door, so asking Kyra to
+    target a LinkedIn posting works the way pasting it into APPLY does - the
+    three front doors are not allowed to drift on this."""
+
+    def _tool(self, store, resolve):
+        from companion.job_posting_fetch import TargetPostingTool, fetch_posting
+
+        return TargetPostingTool(store, fetch=lambda u: fetch_posting(u, _fake), resolve=resolve)
+
+    def test_a_linkedin_url_with_company_and_role_is_looked_up(self, tmp_path):
+        store = JobApplicationStore(tmp_path / "j.db")
+        out = self._tool(store, lambda *a, **k: _match()).run(
+            url=LINKEDIN, company="Meridian", role="Software Engineer, New Grad"
+        )
+        assert "error" not in out
+        assert out["application"]["link"] == RESOLVED and out["application"]["status"] == "targeting"
+
+    def test_company_and_role_come_from_an_existing_row(self, tmp_path):
+        store = JobApplicationStore(tmp_path / "j.db")
+        store.add("Meridian", "Software Engineer, New Grad", link=LINKEDIN, status="targeting")
+        seen = {}
+
+        def _resolve(company, role, **k):
+            seen.update(company=company, role=role)
+            return _match()
+
+        out = self._tool(store, _resolve).run(url=LINKEDIN)
+        assert "error" not in out and seen["company"] == "Meridian"
+        assert len(store.list()) == 1  # the same row, not a second one
+
+    def test_an_unresolvable_url_falls_back_to_the_old_message(self, tmp_path):
+        store = JobApplicationStore(tmp_path / "j.db")
+        out = self._tool(store, lambda *a, **k: None).run(url=LINKEDIN, company="Nuvo", role="AI Engineer")
+        assert "paste the posting text" in out["error"]
+
+    def test_a_lookup_that_raises_never_breaks_targeting(self, tmp_path):
+        def _boom(*a, **k):
+            raise OSError("network down")
+
+        store = JobApplicationStore(tmp_path / "j.db")
+        out = self._tool(store, _boom).run(url=LINKEDIN, company="Meridian", role="SWE")
+        assert "paste the posting text" in out["error"]
+
+    def test_pasted_text_still_skips_the_lookup(self, tmp_path):
+        def _never(*a, **k):
+            raise AssertionError("pasted text must not trigger a lookup")
+
+        store = JobApplicationStore(tmp_path / "j.db")
+        out = self._tool(store, _never).run(
+            url=LINKEDIN, posting_text="Join the team. Python.", company="Netic", role="SWE"
+        )
+        assert "error" not in out and out["application"]["link"] == LINKEDIN
