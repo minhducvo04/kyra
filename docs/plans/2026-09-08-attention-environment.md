@@ -290,5 +290,9 @@ What the real runs changed, which is the part worth keeping:
   matched the stored value to 0.1 ms. The probe now refuses to run in a hidden tab and says so.
 - **A tool promised a break cue that would never fire** on a 25-minute block. It reports the actual offsets now.
 - **The router needed no retraining**: 13/14 (9/9 on the tool phrasings) for an adapter that has never seen them.
+- **The two front doors disagreed.** A block started by voice or chat left the browser idle - no sound, no clock,
+  no break cue - and vice versa. `focusSync()` after every turn closes it; verified with a real typed turn that
+  routed to the tool path and started the audio with nothing touched in the browser.
+- **The break cue now also fires as a notification**, because a cue in a tab Duc is not looking at is not a cue.
 
 Still open and unchanged: the daytime-light half needs a bulb (section 6, item 1), and slices 5-7 are unbuilt.

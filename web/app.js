@@ -426,6 +426,7 @@ async function send() {
   }
   setThinking(false);
   saveTranscript();
+  focusSync();
   input.focus();
 }
 
@@ -712,6 +713,7 @@ async function sendVoiceBlob(blob) {
     input.disabled = false;
     sendBtn.disabled = false;
     setMicState(handsFreeActive ? "listening" : "idle");
+    focusSync();
   }
 }
 
@@ -2854,6 +2856,13 @@ function focusScheduleBreaks() {
       earcon("listening");
       setPresence(presence, "break cue — look 20 feet away for 20 seconds");
       addLine("system", `Break cue at ${at} minutes. Look away for 20 seconds.`);
+      // The break is the best-supported intervention on the whole page, and a cue
+      // Duc cannot see because he is in another tab is not a cue. Notifications are
+      // only requested once he has actually started a block, never on page load.
+      if (window.Notification && Notification.permission === "granted") {
+        try { new Notification("Look away for 20 seconds", { body: `${at} minutes in.`, tag: "kyra-break" }); }
+        catch (_) { /* some browsers require a service worker; the in-page cue stands */ }
+      }
     }, inMs));
   }
 }
@@ -2909,6 +2918,11 @@ async function focusStart() {
   const startBtn = document.getElementById("focus-start");
   startBtn.disabled = true;
   focusResultBox.hidden = true;
+  // Asked here rather than on load: a permission prompt makes sense the moment
+  // Duc opts into being interrupted, and nowhere else.
+  if (window.Notification && Notification.permission === "default") {
+    Notification.requestPermission().catch(() => {});
+  }
   try {
     const payload = await readJson(await fetch("/api/focus/start", {
       method: "POST",
@@ -3060,6 +3074,30 @@ document.querySelectorAll(".focus-rate-btn").forEach((b) => {
     document.querySelectorAll(".focus-rate-btn").forEach((o) => o.classList.toggle("is-active", o === b));
   });
 });
+
+// A block can also be started or ended by talking to Kyra - "start a 50 minute
+// block" goes through start_focus_block on the tool path, which the browser has
+// no other way to learn about. Without this the two front doors disagree: the
+// server has Duc in a block while the HUD sits idle with no sound, no clock and
+// no break cue. One cheap GET after each turn, and the server stays the source
+// of truth about whether he is working.
+async function focusSync() {
+  try {
+    const data = await readJson(await fetch("/api/focus/active"));
+    focusApplyEvening(data.evening ?? data.plan?.evening);
+    const runningHere = focusState !== null;
+    if (data.running && !runningHere) {
+      focusShowRunning(data);
+      // The turn itself was the user gesture, so starting audio here is allowed.
+      await focusAudio.start(data.plan);
+    } else if (!data.running && runningHere) {
+      focusAudio.stop(3);
+      focusShowIdle(data.completed_blocks);
+    }
+  } catch (_) {
+    // server unreachable - leave the browser as it is rather than guessing
+  }
+}
 
 // Resume after a reload: the block is on the server, so the tab is not the
 // source of truth about whether Duc is working. Audio does not restart on its
