@@ -500,7 +500,12 @@ def search_endpoint(body: SearchIn) -> dict:
         query, k=max(1, min(body.k, 50)), kinds=body.kinds or None,
         include_sensitive=body.include_sensitive, mode=body.mode,
     )
+    # When the index was last built. Searching never refreshes it (only an
+    # explicit reindex and the 05:00 digest do), so results can silently predate
+    # this morning's edits - the panel says so rather than letting an old answer
+    # look current. The chat tool carries the same date for the same reason.
     return {"query": query, "count": len(hits), "include_sensitive": body.include_sensitive,
+            "indexed_at": _rt.search_index.last_indexed(),
             "hits": [_hit_out(h) for h in hits]}
 
 

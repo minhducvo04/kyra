@@ -2229,6 +2229,17 @@ function renderHits(hits) {
   }
 }
 
+/* Searching never refreshes the index - only REINDEX here and the 05:00 digest
+   do - so results can quietly predate this morning's edits. Say how old it is
+   rather than letting a stale answer look current. */
+function indexAge(indexedAt) {
+  if (!indexedAt) return "index never built — press REINDEX";
+  const hours = (Date.now() / 1000 - indexedAt) / 3600;
+  if (hours < 1) return "index current";
+  if (hours < 24) return `index ${Math.round(hours)}h old`;
+  return `index ${Math.round(hours / 24)}d old — press REINDEX`;
+}
+
 async function runSearch() {
   const body = searchBody();
   if (!body.query) return;
@@ -2241,7 +2252,9 @@ async function runSearch() {
     const data = await readJson(res);
     renderHits(data.hits);
     setSearchStatus(
-      `${data.count} result${data.count === 1 ? "" : "s"}${data.include_sensitive ? " · private docs included" : ""}`
+      `${data.count} result${data.count === 1 ? "" : "s"}`
+      + `${data.include_sensitive ? " · private docs included" : ""}`
+      + ` · ${indexAge(data.indexed_at)}`
     );
   } catch (err) {
     searchResults.replaceChildren();

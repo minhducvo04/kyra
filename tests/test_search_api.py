@@ -33,6 +33,9 @@ class FakeIndex:
         self.indexed += 1
         return IndexStats(added=2, updated=1, unchanged=7, deleted=0, chunks=42)
 
+    def last_indexed(self):
+        return None  # tests that care override this
+
 
 @pytest.fixture
 def client():
@@ -160,3 +163,22 @@ def test_reindex_reports_what_changed(client, index):
     body = res.json()
     assert body["added"] == 2 and body["updated"] == 1 and body["chunks"] == 42
     assert "2 added" in body["summary"]
+
+
+def test_search_reports_how_old_the_index_is(client, monkeypatch):
+    """The index only refreshes on an explicit reindex (and in the 05:00
+    digest), so a search right after an edit answers from the previous index.
+    The chat tool already says when it was built; the panel is where Duc
+    actually searches, so it has to say so too."""
+    index = FakeIndex()
+    index.last_indexed = lambda: 1_757_000_000.0
+    monkeypatch.setattr(type(webapp._rt), "search_index", property(lambda self: index))
+    body = client.post("/api/search", json={"query": "router"}).json()
+    assert body["indexed_at"] == 1_757_000_000.0
+
+
+def test_a_never_built_index_reports_null_rather_than_a_fake_date(client, monkeypatch):
+    index = FakeIndex()
+    index.last_indexed = lambda: None
+    monkeypatch.setattr(type(webapp._rt), "search_index", property(lambda self: index))
+    assert client.post("/api/search", json={"query": "router"}).json()["indexed_at"] is None
