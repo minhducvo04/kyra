@@ -121,7 +121,7 @@ CATEGORIES: dict[str, tuple[str, str, str, list[str]]] = {
     # range for a new grad SWE in NYC?" to the tool path.
     "add_outreach_contact": ("tool", "claude", "asking to record a person (often an alum or recruiter) at a company as an outreach contact, "
                              "with a name, company, LinkedIn URL or how they are connected",
-                             ["add Alex Rivera at Northwind as an outreach contact, he's a Berkeley alum", "track this recruiter: linkedin.com/in/jane-doe, Stripe"]),
+                             ["add Alex Rivera at Northwind as an outreach contact, a Berkeley alum", "track this recruiter: linkedin.com/in/jane-doe, Stripe"]),
     "draft_outreach_note": ("tool", "claude", "asking to draft the LinkedIn connection note or follow-up message for a specific saved contact",
                             ["draft a connection note for Alex", "write the follow-up for my Stripe contact"]),
     "copy_outreach_note": ("tool", "claude", "asking to copy a contact's drafted note/follow-up to the clipboard or open their profile so the user can send it",
