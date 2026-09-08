@@ -46,6 +46,12 @@ def parse_posting_url(url: str) -> tuple[str, str, str] | None:
     m = re.search(r"(?:boards|job-boards)\.greenhouse\.io/([A-Za-z0-9_-]+)/jobs/(\d+)", url)
     if m:
         return "greenhouse", m.group(1), m.group(2)
+    # The embed form a company careers page hosts - where LinkedIn's "Apply on
+    # company website" link usually lands. Both query params, in either order.
+    if re.search(r"greenhouse\.io/embed/job_app\?", url):
+        board, job = re.search(r"[?&]for=([A-Za-z0-9_-]+)", url), re.search(r"[?&]token=(\d+)", url)
+        if board and job:
+            return "greenhouse", board.group(1), job.group(1)
     m = re.search(r"jobs\.lever\.co/([A-Za-z0-9_-]+)/([0-9a-f-]{36})", url)
     if m:
         return "lever", m.group(1), m.group(2)
@@ -53,6 +59,10 @@ def parse_posting_url(url: str) -> tuple[str, str, str] | None:
     if m:
         return "ashby", m.group(1), m.group(2)
     return None
+
+
+def is_linkedin_url(url: str) -> bool:
+    return bool(re.search(r"^(https?://)?([a-z]+\.)?linkedin\.com/", url.strip(), re.I))
 
 
 def _html_to_text(raw: str) -> str:
@@ -119,6 +129,7 @@ class TargetPostingTool(Tool):
             "company": {"type": "string"},
             "role": {"type": "string"},
             "reposted": {"type": "boolean", "description": "seen this role posted before"},
+            "source_url": {"type": "string", "description": "where Duc found it (the LinkedIn listing) when url is the company's own apply link"},
         },
         "required": ["url"],
     }
@@ -126,8 +137,10 @@ class TargetPostingTool(Tool):
     def __init__(self, store: JobApplicationStore, fetch=fetch_posting):
         self._store, self._fetch = store, fetch
 
-    def run(self, url: str, posting_text: str = "", company: str = "", role: str = "", reposted: bool | None = None) -> dict:
+    def run(self, url: str, posting_text: str = "", company: str = "", role: str = "", reposted: bool | None = None,
+            source_url: str = "") -> dict:
         fetched: FetchedPosting | None = None
+        source_url = source_url.strip()
         if parse_posting_url(url):
             try:
                 fetched = self._fetch(url)
@@ -136,6 +149,8 @@ class TargetPostingTool(Tool):
                     return {"error": f"could not fetch the posting ({type(e).__name__}: {e}) - paste its text and try again"}
         text = posting_text.strip() or (fetched.text if fetched else "")
         if not text:
+            if is_linkedin_url(url):
+                return {"error": "LinkedIn is never read: paste the posting text as posting_text, or pass the 'Apply on company website' link as url and this LinkedIn link as source_url"}
             return {"error": "no posting text: that URL is not a Greenhouse/Lever/Ashby job, so paste the posting text as posting_text"}
         company = company.strip() or (fetched.company if fetched else "")
         role = role.strip() or (fetched.title if fetched else "")
@@ -149,9 +164,14 @@ class TargetPostingTool(Tool):
         # second row each time: the real tracker grew four duplicate pairs that
         # way, and the row Duc had been curating was not the one autofill could
         # act on. Same company and same role is the same job.
+        # The source URL is the exact key when Duc found the job on LinkedIn and
+        # is applying through the company's own link: the row he made while
+        # browsing carries the LinkedIn link, and LinkedIn's title need not
+        # match the ATS's.
+        links = {url, source_url} - {""}
         existing = next(
             (a for a in self._store.list()
-             if a.link == url or (_key(a.company) == _key(company) and _key(a.role) == _key(role))),
+             if a.link in links or (_key(a.company) == _key(company) and _key(a.role) == _key(role))),
             None,
         )
         if existing:
@@ -164,6 +184,10 @@ class TargetPostingTool(Tool):
         else:
             app = self._store.add(company, role, link=url, notes=f"[signals] {summary}", status="targeting")
             created = True
+        # "Where did I find this" is part of the record; written once, not once per run.
+        found_via = f"[found via] {source_url}" if source_url and source_url != url else ""
+        if found_via and found_via not in (app.notes or ""):
+            app = self._store.update_status(app.id, app.status, notes=f"{app.notes}\n{found_via}" if app.notes else found_via) or app
         return {
             "application": asdict(app), "created": created, "signals": summary, "posting_chars": len(text),
             "posted_at": fetched.posted_at if fetched else None, "location": fetched.location if fetched else None,

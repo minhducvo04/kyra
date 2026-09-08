@@ -23,8 +23,22 @@ discovery stays his, delivery stays his click.
 ## Slice 2 - Ashby and Lever autofill engines (next)
 Same `AutofillEngine` interface; the pipeline already routes by ATS and reports "no engine" as attention.
 
-## Slice 3 - LinkedIn posting -> company site
-Paste a LinkedIn job URL; Kyra takes the "Apply on company website" link Duc pastes with it, no LinkedIn reads.
+## Slice 3 - LinkedIn posting -> company site - DONE 2026-09-08
+Duc pastes the "Apply on company website" link as the URL and the LinkedIn listing as `source_url`; the listing is
+recorded on the tracker row as where the job was found and is never fetched. A LinkedIn URL with no pasted text now
+says exactly that instead of the generic "not a board URL" message. Greenhouse's **embed** URL is recognized too,
+because that is where the company-site link usually lands: `boards.greenhouse.io/embed/job_app?for=<co>&token=<id>`,
+verified against a real live Anthropic form whose labels and single file input are the standard Greenhouse shape the
+engine already fills.
+-> verified: the real Greenhouse API through an embed URL (7,736 chars fetched), the LinkedIn row reused rather than
+duplicated, "found via" written once across two runs, and the browser click-through queueing a job whose payload
+carries the trimmed source URL.
+
+**Found while verifying it**: accepting embed URLs broke resume attachment, because `_normalize_url` strips the query
+and an embed URL keeps the company and job id *only* there. Two tracked embed applications collapsed onto one key, no
+single URL matched, and the company check could not see the slug either - so autofill would have quietly attached the
+general resume to a form an employer reads. `_normalize_url` now keys on the posting's identity `(board, token, job
+id)` via `parse_posting_url`, which also makes the boards/job-boards/embed spellings of one job match each other.
 
 ## Not in scope
 Clicking Submit. Easy Apply. Anything that logs into LinkedIn.

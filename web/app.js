@@ -1272,6 +1272,7 @@ fitCopy.addEventListener("click", async () => {
 
 const applyUrls = document.getElementById("apply-urls");
 const applyCoverLetter = document.getElementById("apply-cover-letter");
+const applySourceUrl = document.getElementById("apply-source-url");
 const applyRunBtn = document.getElementById("apply-run");
 const applyJobs = document.getElementById("apply-jobs");
 
@@ -1359,10 +1360,11 @@ applyRunBtn.addEventListener("click", async () => {
   try {
     const data = await readJson(await fetch("/api/jobs/apply", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls, cover_letter: applyCoverLetter.value }),
+      body: JSON.stringify({ urls, cover_letter: applyCoverLetter.value, source_url: applySourceUrl.value.trim() }),
     }));
     data.jobs.forEach(applyCard);
     applyUrls.value = "";
+    applySourceUrl.value = "";
   } catch (err) {
     const p = document.createElement("p"); p.className = "jobs-warnings"; p.textContent = `couldn't queue — ${err.message}`;
     applyJobs.prepend(p);

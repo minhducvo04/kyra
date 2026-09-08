@@ -297,9 +297,28 @@ _MIN_COMPANY_SLUG = 4
 
 
 def _normalize_url(url: str) -> str:
-    """Host + path, lowercased, no scheme/query/fragment/trailing slash - so a
-    tracked link and the URL Duc pastes match even when one carries a
-    `?gh_src=` tracking parameter."""
+    """A key that is the same for every URL naming the same posting.
+
+    A board posting is identified by (board, company token, job id), and one
+    job wears several URLs: boards. and job-boards.greenhouse.io, and the
+    embed form a company careers page hosts. Keying on the identity rather
+    than the spelling means the resume Duc tailored is attached whichever
+    link he pastes.
+
+    It also has to be, because the embed URL keeps the company and the job id
+    ONLY in its query string: host+path alone collapsed every embed posting
+    onto one key, so a second one silently fell back to the general resume.
+
+    Anything else falls back to host + path, lowercased, without
+    scheme/query/fragment/trailing slash - so a tracked link still matches a
+    pasted one carrying a `?gh_src=` tracking parameter.
+    """
+    from companion.job_posting_fetch import parse_posting_url
+
+    parsed = parse_posting_url(url)
+    if parsed:
+        source, token, job_id = parsed
+        return f"{source}:{token.lower()}:{job_id}"
     u = urlparse(url.strip())
     host = (u.netloc or "").lower().removeprefix("www.")
     return f"{host}{(u.path or '').rstrip('/').lower()}"
@@ -326,7 +345,9 @@ def resume_for_url(url: str, applications: list) -> tuple[str | None, str]:
             return app.resume_path, f"tracked application #{app.id} ({app.company}) matched this URL"
         return None, f"tracked application #{app.id} ({app.company}) has no resume set - using the profile default"
 
-    slug = re.sub(r"[^a-z0-9]+", "", target)
+    # The raw URL, not the key: the key is now an identity triple for board
+    # postings, and the company slug lives in the URL itself.
+    slug = re.sub(r"[^a-z0-9]+", "", url.lower())
     by_company = []
     for a in applications:
         if not (a.resume_path and a.company):

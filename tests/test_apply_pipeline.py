@@ -129,3 +129,13 @@ def test_unfetchable_url_without_text_raises(tmp_path):
     with pytest.raises(ApplyError, match="paste the posting text"):
         _run(tmp_path, store, url="https://www.linkedin.com/jobs/view/1/", resume_outputs=["x"])
     assert store.list() == []
+
+
+@requires_latex
+def test_source_url_is_kept_on_the_tracker_row(tmp_path):
+    """Found on LinkedIn, applied through the company's Greenhouse page: the
+    pipeline runs against the company link and the row says where it came from."""
+    store = JobApplicationStore(tmp_path / "j.db")
+    r = _run(tmp_path, store, engine=RecordingEngine(), source_url="https://www.linkedin.com/jobs/view/7/")
+    assert r.status == "ready_to_submit"
+    assert "[found via] https://www.linkedin.com/jobs/view/7/" in store.list()[0].notes

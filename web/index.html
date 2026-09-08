@@ -262,8 +262,12 @@
           <option value="never">Never</option>
         </select>
       </label>
+      <label class="jobs-field">
+        <span>Found it on LinkedIn? Paste the listing here (one posting only)</span>
+        <input id="apply-source-url" type="text" placeholder="https://www.linkedin.com/jobs/view/...">
+      </label>
       <button class="jobs-btn" id="apply-run" type="button">Apply to all</button>
-      <p class="jobs-hint">For each URL: tracker entry, resume tailored from your base .tex to one page and saved under data/resumes/, cover letter if asked, then the form filled in a browser window (Greenhouse only for now). Nothing gets submitted: ready_to_submit means review and click, needs_attention means read the list first.</p>
+      <p class="jobs-hint">For each URL: tracker entry, resume tailored from your base .tex to one page and saved under data/resumes/, cover letter if asked, then the form filled in a browser window (Greenhouse, Ashby and Lever). Nothing gets submitted: ready_to_submit means review and click, needs_attention means read the list first. LinkedIn is never opened or read: paste the posting&rsquo;s &ldquo;Apply on company website&rdquo; link above and the listing goes on the tracker row as where you found it.</p>
       <div id="apply-jobs"></div>
     </section>
   </aside>

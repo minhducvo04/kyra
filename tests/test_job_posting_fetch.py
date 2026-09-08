@@ -107,3 +107,48 @@ def test_a_different_role_at_the_same_company_is_still_its_own_row(tmp_path):
     tool.run(url="https://www.linkedin.com/jobs/view/2/", posting_text="text",
              company="Netic", role="Product Designer")
     assert len(store.list()) == 2
+
+
+def test_greenhouse_embed_urls_are_recognized():
+    """A company careers page usually hosts Greenhouse's embed form, and the
+    'Apply on company website' link LinkedIn hands out lands there - so the
+    URL Duc pastes is the embed one, not boards.greenhouse.io/<co>/jobs/<id>."""
+    from companion.job_posting_fetch import parse_posting_url
+
+    assert parse_posting_url("https://boards.greenhouse.io/embed/job_app?for=janestreet&token=1") == ("greenhouse", "janestreet", "1")
+    assert parse_posting_url("https://job-boards.greenhouse.io/embed/job_app?token=1&for=janestreet&b=x") == ("greenhouse", "janestreet", "1")
+    assert parse_posting_url("https://boards.greenhouse.io/embed/job_board?for=janestreet") is None
+
+
+def test_source_url_ties_the_linkedin_row_to_the_posting_it_was_found_on(tmp_path):
+    """Slice 3 of mass apply: Duc finds a job on LinkedIn, and pastes the
+    'Apply on company website' link with it. The LinkedIn row he made while
+    browsing may not match by title (LinkedIn's title and the ATS's differ), so
+    the source URL is the exact key - and it is kept on the row, because 'where
+    did I find this' is part of the record. LinkedIn itself is never read."""
+    store = JobApplicationStore(tmp_path / "j.db")
+    tool = TargetPostingTool(store, fetch=lambda url: fetch_posting(url, _fake))
+    linkedin = "https://www.linkedin.com/jobs/view/4438446984/"
+    first = tool.run(url=linkedin, posting_text="Trading systems in C++.", company="Meridian", role="Quant Dev")
+    assert first["created"]
+
+    gh = "https://job-boards.greenhouse.io/janestreet/jobs/1"
+    again = tool.run(url=gh, source_url=linkedin)
+    assert not again["created"] and again["application"]["id"] == first["application"]["id"]
+    row = store.list()[0]
+    assert row.link == gh, "the row keeps the URL an engine can fill"
+    assert row.notes.count(f"[found via] {linkedin}") == 1
+    tool.run(url=gh, source_url=linkedin)
+    assert store.list()[0].notes.count("[found via]") == 1, "recorded once, not once per run"
+
+    # A source URL on a job never seen before is simply recorded.
+    fresh = tool.run(url="https://jobs.ashbyhq.com/netic/d9bcb6a2-0e54-4cb3-baec-43f2d74db18f",
+                     source_url="https://www.linkedin.com/jobs/view/1/")
+    assert fresh["created"] and "[found via] https://www.linkedin.com/jobs/view/1/" in fresh["application"]["notes"]
+
+
+def test_a_linkedin_url_with_no_text_says_how_to_hand_over_the_company_link(tmp_path):
+    store = JobApplicationStore(tmp_path / "j.db")
+    out = TargetPostingTool(store).run(url="https://www.linkedin.com/jobs/view/4438446984/")
+    assert "error" in out and "never read" in out["error"] and "source_url" in out["error"]
+    assert store.list() == []

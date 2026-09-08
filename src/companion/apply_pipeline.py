@@ -12,7 +12,9 @@ Boundaries that do not move here:
   filled in an open browser window) or `needs_attention` (something for Duc to
   fix or fill by hand). `applied` is set by Duc after he clicks.
 - LinkedIn is never read or driven. A LinkedIn URL needs the posting text
-  pasted, same as target_job_posting.
+  pasted, same as target_job_posting - or, since slice 3, Duc pastes the
+  "Apply on company website" link as `url` and the listing as `source_url`,
+  which is recorded on the tracker row and nothing more.
 - One resume per company: the tailored PDF is saved under data/resumes/ and set
   on the tracked application, and that is the file autofill attaches.
 - Every fact check the fit loop already runs (guard, invented numbers, tailoring
@@ -122,6 +124,7 @@ def run_apply_pipeline(
     posting_text: str = "",
     company: str = "",
     role: str = "",
+    source_url: str = "",
     cover_letter: str = "auto",
     fetch: Callable = fetch_posting,
     resumes_dir: Path = RESUMES_DIR,
@@ -136,7 +139,10 @@ def run_apply_pipeline(
             on_progress(line)
 
     # 1. Target: posting text + tracker entry (fetch for the three boards, pasted text otherwise).
-    target = TargetPostingTool(store, fetch=fetch).run(url=url, posting_text=posting_text, company=company, role=role)
+    # `url` is the link the pipeline acts on; `source_url` is where Duc found it (a
+    # LinkedIn listing, never read) and only goes on the tracker row.
+    target = TargetPostingTool(store, fetch=fetch).run(
+        url=url, posting_text=posting_text, company=company, role=role, source_url=source_url)
     if "error" in target:
         raise ApplyError(target["error"])
     app = JobApplication(**target["application"])
