@@ -195,3 +195,48 @@ def test_a_resume_path_whose_file_is_gone_is_rebuilt(tmp_path):
     pdf.unlink()
     r = _run(tmp_path, store, engine=RecordingEngine())
     assert r.resume_fit is True and r.resume_pdf_path
+
+
+def test_a_reused_resume_is_renamed_to_the_current_convention(tmp_path):
+    """The file an employer receives must carry the name Duc chose. Eight real
+    files predate the Duc_Vo_ decision (2026-09-08), and four of them sit on the
+    rows he is about to re-run - so reuse renames rather than quietly sending the
+    old name."""
+    store = JobApplicationStore(tmp_path / "j.db")
+    resumes = tmp_path / "resumes"
+    resumes.mkdir()
+    old_pdf = resumes / "Minh_Duc_Vo_Resume_Meridian_Software_Engineer_New_Grad.pdf"
+    old_tex = old_pdf.with_suffix(".tex")
+    old_pdf.write_bytes(b"%PDF-1.4 tailored")
+    old_tex.write_text("\\documentclass{article}", encoding="utf-8")
+    app = store.add("Meridian", "Software Engineer, New Grad", link=GH_URL,
+                    status="needs_attention", resume_path=str(old_pdf))
+    engine = RecordingEngine()
+
+    r = _run(tmp_path, store, engine=engine, resume_llm=_ExplodingLLM())
+
+    want = resumes / "Duc_Vo_Resume_Meridian_Software_Engineer_New_Grad.pdf"
+    assert r.resume_pdf_path == str(want) and want.is_file() and not old_pdf.exists()
+    assert want.with_suffix(".tex").is_file() and not old_tex.exists()
+    assert want.read_bytes() == b"%PDF-1.4 tailored"  # same file, new name
+    assert engine.calls == [(GH_URL, str(want))]
+    assert store.list()[0].resume_path == str(want) and store.list()[0].id == app.id
+
+
+def test_renaming_never_clobbers_a_correctly_named_file(tmp_path):
+    """If both names exist, the current-convention file is the real one - the old
+    one is a leftover and must not overwrite it."""
+    store = JobApplicationStore(tmp_path / "j.db")
+    resumes = tmp_path / "resumes"
+    resumes.mkdir()
+    old_pdf = resumes / "Minh_Duc_Vo_Resume_Meridian_Software_Engineer_New_Grad.pdf"
+    new_pdf = resumes / "Duc_Vo_Resume_Meridian_Software_Engineer_New_Grad.pdf"
+    old_pdf.write_bytes(b"stale")
+    new_pdf.write_bytes(b"current")
+    store.add("Meridian", "Software Engineer, New Grad", link=GH_URL,
+              status="needs_attention", resume_path=str(old_pdf))
+
+    r = _run(tmp_path, store, engine=RecordingEngine(), resume_llm=_ExplodingLLM())
+
+    assert r.resume_pdf_path == str(new_pdf) and new_pdf.read_bytes() == b"current"
+    assert old_pdf.exists()  # left alone rather than deleted

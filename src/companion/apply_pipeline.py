@@ -160,6 +160,28 @@ def resolve_apply_url(
     return match.posting.url, match.reason
 
 
+def _rename_to_convention(existing: Path, wanted: Path, note: Callable[[str], None]) -> Path:
+    """The resume file an employer receives must carry the name Duc chose.
+
+    Files tailored before the Duc_Vo_ decision (2026-09-08) are still on tracked
+    rows, so reusing one as-is would hand an employer the very prefix that decision
+    removed. Renaming here rather than in a one-off cleanup keeps it true whenever
+    the convention changes again. If the correctly-named file already exists it is
+    the real one: the stale copy is left on disk untouched rather than overwriting it.
+    """
+    if existing == wanted:
+        return existing
+    if wanted.is_file():
+        note(f"using {wanted.name} rather than the older {existing.name}")
+        return wanted
+    existing.rename(wanted)
+    tex = existing.with_suffix(".tex")
+    if tex.is_file():
+        tex.rename(wanted.with_suffix(".tex"))
+    note(f"renamed {existing.name} to {wanted.name} (the name an employer should see)")
+    return wanted
+
+
 def _tailor_resume(
     result: ApplyResult, note: Callable[[str], None], *, store: JobApplicationStore, app: JobApplication,
     base_latex: str, text: str, extra_facts: str, profile: ApplicantProfile, resume_llm: LLMBackend,
@@ -256,7 +278,9 @@ def run_apply_pipeline(
     stem = resume_stem(profile, app.company, app.role)
     existing = Path(app.resume_path) if app.resume_path else None
     if not retailor and existing and existing.is_file():
+        existing = _rename_to_convention(existing, resumes_dir / f"{stem}.pdf", note)
         result.resume_pdf_path = str(existing)
+        store.set_resume(app.id, str(existing))
         tex = existing.with_suffix(".tex")
         result.resume_tex_path = str(tex) if tex.is_file() else None
         result.change_summary = "reused the resume already tailored for this application"
