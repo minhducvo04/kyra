@@ -36,10 +36,11 @@ class RecordingEngine(AutofillEngine):
         return FillReport(url=url, filled=[FilledField("Email", profile.email)], skipped=self._skipped, summary_path="/tmp/report.md")
 
 
-def _run(tmp_path, store, url=GH_URL, engine=None, resume_outputs=None, cover_letter="auto", draft_outputs=(), **kw):
+def _run(tmp_path, store, url=GH_URL, engine=None, resume_outputs=None, cover_letter="auto", draft_outputs=(),
+         resume_llm=None, **kw):
     engines = {"greenhouse": engine} if engine is not None else {}
     return run_apply_pipeline(
-        url, store=store, resume_llm=ScriptedLLM(resume_outputs or [TAILORED, "BULLET: b | ASK: how many?"]),
+        url, store=store, resume_llm=resume_llm or ScriptedLLM(resume_outputs or [TAILORED, "BULLET: b | ASK: how many?"]),
         draft_llm=ScriptedLLM(list(draft_outputs)), base_latex=ONE_PAGE, profile=PROFILE, engines=engines,
         fetch=lambda u: fetch_posting(u, _fake), resumes_dir=tmp_path / "resumes", cover_letters_dir=tmp_path / "letters",
         cover_letter=cover_letter, **kw,
@@ -129,3 +130,68 @@ def test_unfetchable_url_without_text_raises(tmp_path):
     with pytest.raises(ApplyError, match="paste the posting text"):
         _run(tmp_path, store, url="https://www.linkedin.com/jobs/view/1/", resume_outputs=["x"])
     assert store.list() == []
+
+
+# --- Reusing the resume already tailored for an application ------------------
+# Duc's rule is one resume per company, and a tracked row is one company+role, so
+# the file on that row is already the right resume for this posting. Re-running
+# is a normal thing to do (the four Ashby rows sat at needs_attention only
+# because no engine existed yet), and re-tailoring costs a full multi-minute
+# Claude loop each time. What must not happen is a reused file reporting itself
+# as freshly checked.
+
+class _ExplodingLLM:
+    """Any call is a failure: these tests assert the loop is not entered."""
+
+    supports_streaming = False
+
+    def respond(self, *a, **k):
+        raise AssertionError("the resume loop must not run when a tailored resume already exists")
+
+
+def _existing_resume(tmp_path, store, name="Duc_Vo_Resume_Meridian_Software_Engineer_New_Grad"):
+    resumes = tmp_path / "resumes"
+    resumes.mkdir(parents=True, exist_ok=True)
+    pdf = resumes / f"{name}.pdf"
+    pdf.write_bytes(b"%PDF-1.4 already tailored")
+    app = store.add("Meridian", "Software Engineer, New Grad", link=GH_URL,
+                    status="needs_attention", resume_path=str(pdf))
+    return app, pdf
+
+
+def test_an_existing_tailored_resume_is_reused_instead_of_rebuilt(tmp_path):
+    store = JobApplicationStore(tmp_path / "j.db")
+    app, pdf = _existing_resume(tmp_path, store)
+    engine = RecordingEngine()
+    r = _run(tmp_path, store, engine=engine, resume_llm=_ExplodingLLM())
+    assert r.status == "ready_to_submit" and r.attention == []
+    assert r.resume_pdf_path == str(pdf)
+    assert engine.calls == [(GH_URL, str(pdf))]
+    assert store.list()[0].id == app.id
+
+
+def test_a_reused_resume_does_not_claim_a_fresh_verdict(tmp_path):
+    """It was not compiled or guard-checked on this run, so it must not report
+    a one-page verdict as if it had been."""
+    store = JobApplicationStore(tmp_path / "j.db")
+    _existing_resume(tmp_path, store)
+    r = _run(tmp_path, store, engine=RecordingEngine(), resume_llm=_ExplodingLLM())
+    assert r.resume_fit is None and r.page_count is None and r.guard_warnings == []
+    assert "reused" in r.change_summary
+    assert any("reus" in line for line in r.steps)
+
+
+def test_retailor_forces_a_fresh_resume(tmp_path):
+    store = JobApplicationStore(tmp_path / "j.db")
+    _existing_resume(tmp_path, store)
+    r = _run(tmp_path, store, engine=RecordingEngine(), retailor=True)
+    assert r.resume_fit is True and r.resume_pdf_path.endswith(".pdf")
+    assert r.resume_pdf_path != str(tmp_path / "resumes" / "old.pdf")
+
+
+def test_a_resume_path_whose_file_is_gone_is_rebuilt(tmp_path):
+    store = JobApplicationStore(tmp_path / "j.db")
+    _, pdf = _existing_resume(tmp_path, store)
+    pdf.unlink()
+    r = _run(tmp_path, store, engine=RecordingEngine())
+    assert r.resume_fit is True and r.resume_pdf_path

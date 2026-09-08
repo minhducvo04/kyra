@@ -160,6 +160,40 @@ def resolve_apply_url(
     return match.posting.url, match.reason
 
 
+def _tailor_resume(
+    result: ApplyResult, note: Callable[[str], None], *, store: JobApplicationStore, app: JobApplication,
+    base_latex: str, text: str, extra_facts: str, profile: ApplicantProfile, resume_llm: LLMBackend,
+    resumes_dir: Path, on_progress: Callable[[str], None] | None,
+) -> str:
+    """Run the one-page loop, save the pair next to Duc's own files, and point the
+    tracked application at the PDF so autofill attaches it. Returns the LaTeX, which
+    is also what a cover letter draws on. Every failed post-condition the loop reports
+    (not one page, a guard warning, no compile) becomes an attention reason - a check
+    nobody reads is not a check."""
+    note("tailoring the resume to this posting")
+    fit = optimize_latex_resume_one_page(resume_llm, base_latex, text, extra_facts, on_progress=on_progress)
+    result.resume_fit, result.page_count = fit.fit, fit.page_count
+    result.guard_warnings, result.change_summary, result.questions = fit.guard_warnings, fit.change_summary, fit.questions
+    stem = resume_stem(profile, app.company, app.role)
+    resumes_dir.mkdir(parents=True, exist_ok=True)
+    tex_path = resumes_dir / f"{stem}.tex"
+    tex_path.write_text(fit.latex, encoding="utf-8")
+    result.resume_tex_path = str(tex_path)
+    if fit.pdf_bytes:
+        pdf_path = resumes_dir / f"{stem}.pdf"
+        pdf_path.write_bytes(fit.pdf_bytes)
+        result.resume_pdf_path = str(pdf_path)
+        store.set_resume(app.id, str(pdf_path))
+        note(f"saved {pdf_path.name} ({fit.page_count} page{'s' if fit.page_count != 1 else ''}) and set it on tracker #{app.id}")
+    else:
+        result.attention.append("the tailored resume never compiled - no PDF to attach")
+    if not fit.fit:
+        result.attention.append(f"resume is not one page ({fit.page_count} pages) - use Detailed mode to pick cuts")
+    for w in fit.guard_warnings:
+        result.attention.append(f"resume check: {w}")
+    return fit.latex
+
+
 def run_apply_pipeline(
     url: str,
     *,
@@ -174,6 +208,7 @@ def run_apply_pipeline(
     company: str = "",
     role: str = "",
     cover_letter: str = "auto",
+    retailor: bool = False,
     fetch: Callable = fetch_posting,
     resolve: Callable = find_posting,
     resumes_dir: Path = RESUMES_DIR,
@@ -212,35 +247,32 @@ def run_apply_pipeline(
         return result
 
     # 3. Resume: the one-page tailoring loop from the base .tex, saved next to Duc's own files.
-    if not base_latex.strip():
-        raise ApplyError("no base resume LaTeX to tailor from")
-    note("tailoring the resume to this posting")
-    fit = optimize_latex_resume_one_page(resume_llm, base_latex, text, extra_facts, on_progress=on_progress)
-    result.resume_fit, result.page_count = fit.fit, fit.page_count
-    result.guard_warnings, result.change_summary, result.questions = fit.guard_warnings, fit.change_summary, fit.questions
+    # Unless this application already has one. A tracked row is one company and one role,
+    # and Duc's rule is one resume per company, so the file on the row IS this posting's
+    # resume - and re-running a posting is normal (the Ashby rows sat at needs_attention
+    # only because no engine existed yet), while re-tailoring costs a multi-minute loop
+    # and a real bill every time. It is reported as reused and carries no fit verdict,
+    # because nothing was compiled or guard-checked on this run.
     stem = resume_stem(profile, app.company, app.role)
-    resumes_dir.mkdir(parents=True, exist_ok=True)
-    tex_path = resumes_dir / f"{stem}.tex"
-    tex_path.write_text(fit.latex, encoding="utf-8")
-    result.resume_tex_path = str(tex_path)
-    if fit.pdf_bytes:
-        pdf_path = resumes_dir / f"{stem}.pdf"
-        pdf_path.write_bytes(fit.pdf_bytes)
-        result.resume_pdf_path = str(pdf_path)
-        store.set_resume(app.id, str(pdf_path))
-        note(f"saved {pdf_path.name} ({fit.page_count} page{'s' if fit.page_count != 1 else ''}) and set it on tracker #{app.id}")
+    existing = Path(app.resume_path) if app.resume_path else None
+    if not retailor and existing and existing.is_file():
+        result.resume_pdf_path = str(existing)
+        tex = existing.with_suffix(".tex")
+        result.resume_tex_path = str(tex) if tex.is_file() else None
+        result.change_summary = "reused the resume already tailored for this application"
+        note(f"reusing {existing.name} - already tailored for this application (pass retailor to redo it)")
+        resume_latex = tex.read_text(encoding="utf-8") if tex.is_file() else base_latex
     else:
-        result.attention.append("the tailored resume never compiled - no PDF to attach")
-    if not fit.fit:
-        result.attention.append(f"resume is not one page ({fit.page_count} pages) - use Detailed mode to pick cuts")
-    for w in fit.guard_warnings:
-        result.attention.append(f"resume check: {w}")
+        resume_latex = _tailor_resume(
+            result, note, store=store, app=app, base_latex=base_latex, text=text, extra_facts=extra_facts,
+            profile=profile, resume_llm=resume_llm, resumes_dir=resumes_dir, on_progress=on_progress,
+        )
 
     # 4. Cover letter, only when the posting asks for one (or Duc says always).
     if wants_cover_letter(cover_letter, text):
         note("drafting a cover letter (the posting mentions one)" if cover_letter == "auto" else "drafting a cover letter")
         try:
-            letter = draft_application_material(draft_llm, "cover_letter", text, f"{fit.latex}\n\n{extra_facts}".strip())
+            letter = draft_application_material(draft_llm, "cover_letter", text, f"{resume_latex}\n\n{extra_facts}".strip())
             cover_letters_dir.mkdir(parents=True, exist_ok=True)
             letter_path = cover_letters_dir / f"{stem}_Cover_Letter.txt"
             letter_path.write_text(letter, encoding="utf-8")
