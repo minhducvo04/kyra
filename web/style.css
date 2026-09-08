@@ -446,6 +446,15 @@ body {
 #send:active { background: rgba(41, 216, 255, 0.16); }
 #send:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
 
+/* SEND becomes STOP while a reply is streaming - the same "this is live, press
+   to stop it" language the mic already uses when it is recording. */
+#send.is-stop { color: var(--danger); border-color: var(--danger); }
+#send.is-stop:hover { background: rgba(255, 84, 112, 0.12); box-shadow: 0 0 14px rgba(255, 84, 112, 0.35); }
+
+/* A stopped reply keeps its partial text; this labels it so the transcript
+   never reads as something Kyra finished saying. */
+.line-interrupted { color: var(--text-faint); border-color: var(--grid); background: transparent; margin-right: 0; margin-left: 0.5em; }
+
 /* ---------- voice input ---------- */
 
 .voice-mode-toggle {
