@@ -1370,3 +1370,7 @@ body[data-focus-evening="true"] {
   --accent-glow: rgba(224, 138, 60, 0.28);
 }
 body[data-focus-evening="true"] .hud-stage { filter: brightness(0.82); }
+
+/* A checkbox that reads as one line beside its label, unlike .jobs-field's stacked layout. */
+.jobs-check { display:flex; align-items:center; gap:0.5rem; margin:0.7rem; font-size:0.8rem; color:var(--text-dim); }
+.jobs-check input { margin:0; flex-shrink:0; }

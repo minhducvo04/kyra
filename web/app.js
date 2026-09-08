@@ -1275,6 +1275,7 @@ fitCopy.addEventListener("click", async () => {
 const applyUrls = document.getElementById("apply-urls");
 const applyCoverLetter = document.getElementById("apply-cover-letter");
 const applySourceUrl = document.getElementById("apply-source-url");
+const applyRetailor = document.getElementById("apply-retailor");
 const applyRunBtn = document.getElementById("apply-run");
 const applyJobs = document.getElementById("apply-jobs");
 
@@ -1362,7 +1363,10 @@ applyRunBtn.addEventListener("click", async () => {
   try {
     const data = await readJson(await fetch("/api/jobs/apply", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls, cover_letter: applyCoverLetter.value, source_url: applySourceUrl.value.trim() }),
+      body: JSON.stringify({
+        urls, cover_letter: applyCoverLetter.value, source_url: applySourceUrl.value.trim(),
+        retailor: applyRetailor.checked,
+      }),
     }));
     data.jobs.forEach(applyCard);
     applyUrls.value = "";
