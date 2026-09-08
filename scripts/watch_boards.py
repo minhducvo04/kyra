@@ -3,6 +3,7 @@
 Usage:
     python3 scripts/watch_boards.py                      # check all, print new
     python3 scripts/watch_boards.py add "Anthropic" https://job-boards.greenhouse.io/anthropic "research engineer,software engineer"
+    python3 scripts/watch_boards.py add "Nvidia" https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite "grad,intern"
     python3 scripts/watch_boards.py list
 
 Watchlist: data/job_boards/watchlist.json. Seen postings: data/job_boards/seen.json.
@@ -14,7 +15,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from companion.job_boards import WatchEntry, check_boards, load_watchlist, render_report, save_watchlist, slug_from_url
+from companion.job_boards import (
+    SOURCES,
+    WatchEntry,
+    check_boards,
+    load_watchlist,
+    render_report,
+    save_watchlist,
+    slug_from_url,
+)
 from companion.logging_setup import configure_logging
 
 
@@ -23,7 +32,7 @@ def main() -> None:
     sub = parser.add_subparsers(dest="cmd")
     add = sub.add_parser("add", help="add a company board to the watchlist")
     add.add_argument("company")
-    add.add_argument("url", help="a Greenhouse or Lever board/posting URL")
+    add.add_argument("url", help="a Greenhouse, Lever, Ashby or Workday board/posting URL")
     add.add_argument("keywords", nargs="?", default="", help="comma-separated title keywords (empty = all postings)")
     sub.add_parser("list")
     args = parser.parse_args()
@@ -33,9 +42,16 @@ def main() -> None:
     if args.cmd == "add":
         parsed = slug_from_url(args.url)
         if not parsed:
-            sys.exit("couldn't recognise a Greenhouse or Lever board in that URL")
+            sys.exit("couldn't recognise a Greenhouse, Lever, Ashby or Workday board in that URL")
         source, token = parsed
         kws = [k.strip() for k in args.keywords.split(",") if k.strip()]
+        if not kws and SOURCES[source].requires_keywords:
+            sys.exit(
+                f"a {source} board has thousands of postings and pages 20 at a time, so it has to be searched "
+                "rather than listed: give keywords, e.g. \"grad,intern\".\n"
+                "Keyword them the way the titles read - NVIDIA says \"New College Grad\", and matching is a "
+                "substring test, so \"grad\" finds it and \"new grad\" does not."
+            )
         entries = [e for e in entries if not (e.source == source and e.token == token)]
         entries.append(WatchEntry(company=args.company, source=source, token=token, title_keywords=kws))
         save_watchlist(entries)

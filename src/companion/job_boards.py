@@ -101,6 +101,10 @@ def _get_json(url: str, timeout: int = 20):
 
 class JobBoardSource(ABC):
     name: str
+    # A board too large to enumerate cannot be watched without a filter to search
+    # by. Declared here so the CLI can refuse at add time, where Duc can fix it,
+    # rather than every daily run reporting the same error.
+    requires_keywords: bool = False
 
     @abstractmethod
     def fetch(self, company: str, token: str) -> list[Posting]:
@@ -192,6 +196,7 @@ class WorkdayBoard(JobBoardSource):
     """
 
     name = "workday"
+    requires_keywords = True
     PAGE = 20  # the board's own cap; a larger limit returns an empty response
     MAX_PAGES = 5  # 100 postings per keyword is plenty for a daily "what is new" check
 

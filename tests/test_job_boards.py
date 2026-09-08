@@ -189,3 +189,12 @@ def test_a_workday_keyword_is_matched_the_same_way_as_every_other_board(tmp_path
     report = check_boards([WatchEntry("Nvidia", "workday", "nvidia.wd5/NVIDIAExternalCareerSite", ["new grad"])],
                           seen_path=tmp_path / "seen.json", sources={"workday": board})
     assert report.new == [], "and the substring filter drops it - use 'grad', not 'new grad'"
+
+
+def test_a_board_that_must_be_searched_says_so_before_it_is_added():
+    """The CLI reads this to refuse a keywordless Workday entry at add time,
+    where Duc can fix it, instead of every daily run reporting the same error."""
+    from companion.job_boards import SOURCES
+
+    assert SOURCES["workday"].requires_keywords is True
+    assert [n for n, c in SOURCES.items() if c.requires_keywords] == ["workday"]
