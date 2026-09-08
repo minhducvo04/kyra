@@ -21,8 +21,10 @@ from companion.profile import ApplicantProfile
 class FakeLocator:
     """Enough of a Playwright locator for the label walk and the fills."""
 
-    def __init__(self, tag="input", input_type="text", label="", value_sink=None, present=True, count_override=None):
+    def __init__(self, tag="input", input_type="text", label="", value_sink=None, present=True, count_override=None,
+                 required=False, aria_required=None):
         self.tag, self.input_type, self.label = tag, input_type, label
+        self.required, self.aria_required = required, aria_required
         self.filled = None
         self.files = None
         self._present = present
@@ -38,9 +40,12 @@ class FakeLocator:
         return self.label
 
     def get_attribute(self, name):
-        return {"for": self.label, "type": self.input_type}.get(name)
+        return {"for": self.label, "type": self.input_type, "aria-required": self.aria_required}.get(name)
 
-    def evaluate(self, _js):
+    def evaluate(self, js):
+        # the engine asks for the tag name, and separately for required-ness
+        if "required" in js:
+            return bool(self.required)
         return self.tag
 
     def fill(self, value):
@@ -296,3 +301,47 @@ def test_missing_browser_says_what_to_do(monkeypatch, tmp_path):
         engine.fill("https://boards.greenhouse.io/x/jobs/1", profile)
     assert "playwright install chromium" in str(exc.value)
     assert stopped, "the playwright process was leaked instead of stopped"
+
+
+def test_required_fields_are_recognised_the_way_each_board_marks_them():
+    """Checked on the real live forms (2026-09-08), and no two agree:
+
+    - **Ashby** sets the DOM `required` property and puts no marker in the label.
+    - **Greenhouse** leaves `required` FALSE, and marks it with `aria-required="true"`
+      plus an asterisk in the label text.
+
+    So required-ness is the union of the three signals; reading only one would
+    call every Greenhouse field optional or every Ashby one."""
+    engine = GreenhouseAutofillEngine()
+    assert engine._is_required(FakeLocator(required=True), "Name") is True                      # Ashby
+    assert engine._is_required(FakeLocator(aria_required="true"), "First Name*") is True        # Greenhouse
+    assert engine._is_required(FakeLocator(aria_required="false"), "LinkedIn Profile") is False
+    assert engine._is_required(FakeLocator(), "Location") is False
+
+
+def test_an_optional_empty_field_is_reported_but_is_not_a_reason_to_stop():
+    """Duc has no portfolio site, so every form offering a Portfolio box used to
+    turn a perfect application into needs_attention. A status that says "look at
+    this" when there is nothing to look at is a status he stops trusting."""
+    engine, report = GreenhouseAutofillEngine(), FillReport(url="u")
+    engine._fill_one(FakeLocator(label="Portfolio"), "Portfolio", _profile(), report)
+    skipped = report.skipped[0]
+    assert skipped.reason == "profile.portfolio_url is empty" and skipped.required is False
+
+    required_report = FillReport(url="u")
+    engine._fill_one(FakeLocator(label="Portfolio*", required=True), "Portfolio*", _profile(), required_report)
+    assert required_report.skipped[0].required is True
+
+
+def test_a_required_custom_question_is_the_one_that_must_be_flagged():
+    """The Netic form's "How many years of industry experience" is required and
+    has no profile field to answer it from. Treating every custom question as
+    routine hid exactly the case that stops a submission."""
+    engine = GreenhouseAutofillEngine()
+    report = FillReport(url="u")
+    engine._fill_one(FakeLocator(label="Years of experience", required=True), "Years of experience", _profile(), report)
+    assert report.skipped[0].required is True and "custom question" in report.skipped[0].reason
+
+    optional = FillReport(url="u")
+    engine._fill_one(FakeLocator(label="Anything else?"), "Anything else?", _profile(), optional)
+    assert optional.skipped[0].required is False

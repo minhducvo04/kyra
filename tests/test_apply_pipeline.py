@@ -98,14 +98,31 @@ def test_no_engine_for_ashby_needs_attention_but_still_tailors(tmp_path):
 @requires_latex
 def test_attention_reasons_accumulate(tmp_path):
     store = JobApplicationStore(tmp_path / "j.db")
-    # unchanged pass-through -> tailoring check; an empty profile field -> autofill attention; letter requested
-    engine = RecordingEngine(skipped=[SkippedField("LinkedIn Profile", "profile.linkedin_url is empty")])
+    # unchanged pass-through -> tailoring check; a REQUIRED field the profile cannot
+    # answer -> autofill attention; letter requested
+    engine = RecordingEngine(skipped=[SkippedField("LinkedIn Profile", "profile.linkedin_url is empty", required=True)])
     r = _run(tmp_path, store, engine=engine, resume_outputs=[ONE_PAGE], cover_letter="always", draft_outputs=["draft", "final letter"])
     assert r.status == "needs_attention"
     assert any("without content changes" in a for a in r.attention)
     assert any("could not fill 'LinkedIn Profile'" in a for a in r.attention)
     assert r.cover_letter == "final letter" and (tmp_path / "letters" / "Duc_Vo_Resume_Meridian_Software_Engineer_New_Grad_Cover_Letter.txt").exists()
     assert "attention:" in store.list()[0].notes
+
+
+@requires_latex
+def test_an_optional_field_the_profile_cannot_answer_does_not_stop_an_application(tmp_path):
+    """Duc has no portfolio site and no Twitter, so an optional box for either used
+    to turn a finished application into needs_attention. The form's own required
+    marking decides now: the skip is still listed in the summary he reads, it just
+    is not a reason to stop."""
+    store = JobApplicationStore(tmp_path / "j.db")
+    engine = RecordingEngine(skipped=[
+        SkippedField("Portfolio", "profile.portfolio_url is empty", required=False),
+        SkippedField("Anything else?", "no matching profile field - custom question", required=False),
+    ])
+    r = _run(tmp_path, store, engine=engine)
+    assert r.status == "ready_to_submit", r.attention
+    assert r.autofill_skipped == ["Portfolio", "Anything else?"], "still reported, just not blocking"
 
 
 @requires_latex

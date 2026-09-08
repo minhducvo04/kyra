@@ -229,9 +229,14 @@ def run_apply_pipeline(
                 result.autofill_summary_path = report.summary_path
                 result.autofill_filled = len(report.filled)
                 result.autofill_skipped = [s.label for s in report.skipped]
-                # A custom question with no profile data is expected on nearly every form and Duc
-                # reviews the window anyway; an empty profile field or a fill error is not.
-                hard = [s for s in report.skipped if "custom question" not in s.reason]
+                # What the FORM says is required decides this, not what kind of field it
+                # was. Duc has no portfolio site, so an optional Portfolio box used to turn
+                # a perfect application into needs_attention - a status that cries wolf is
+                # one he stops reading. And the reverse mattered more: a *required* custom
+                # question ("years of industry experience", required on the real Netic
+                # form) was filed under "expected" and never surfaced, so he would open a
+                # ready_to_submit form and find an empty required box.
+                hard = [s for s in report.skipped if s.required]
                 for s in hard:
                     result.attention.append(f"autofill could not fill '{s.label}': {s.reason}")
                 note(f"filled {len(report.filled)} field(s), {len(report.skipped)} left for you")

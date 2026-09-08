@@ -92,6 +92,10 @@ class FilledField:
 class SkippedField:
     label: str
     reason: str
+    # Whether the FORM says this field must be answered. A skipped optional field
+    # is information; a skipped required one is what stops a submission, and only
+    # that should turn an application into needs_attention.
+    required: bool = False
 
 
 @dataclass
@@ -238,22 +242,43 @@ class LabeledFormEngine(AutofillEngine):
             if tag == "textarea" or (tag == "input" and input_type in ("text", "tel", "email", "number", "url", "")):
                 yield target, text
 
+    @staticmethod
+    def _is_required(locator, label_text: str) -> bool:
+        """Whether the form marks this field as required.
+
+        No two boards agree, checked on real live forms (2026-09-08): **Ashby**
+        sets the DOM `required` property and puts no marker in the label, while
+        **Greenhouse** leaves `required` false and marks it with
+        `aria-required="true"` and an asterisk in the label. So this is the union
+        of the three - reading any one alone would call every field on one board
+        optional.
+        """
+        try:
+            if locator.evaluate("el => !!el.required"):
+                return True
+            if (locator.get_attribute("aria-required") or "").lower() == "true":
+                return True
+        except Exception:  # noqa: BLE001 - an unreadable field is not a required one
+            pass
+        return "*" in (label_text or "")
+
     def _fill_one(self, locator, label_text, profile: ApplicantProfile, report: FillReport) -> None:
         key = label_text.lower()
+        required = self._is_required(locator, label_text)
         if key.strip() in self.single_name_labels:
             full = f"{profile.first_name} {profile.last_name}".strip()
             if not full:
-                report.skipped.append(SkippedField(label=label_text, reason="profile has no name"))
+                report.skipped.append(SkippedField(label=label_text, reason="profile has no name", required=required))
                 return
             self._set(locator, label_text, full, report)
             return
         attr = next((a for m in self.field_maps if (a := self._match(key, m))), None)
         if attr is None:
-            report.skipped.append(SkippedField(label=label_text, reason="no matching profile field - custom question"))
+            report.skipped.append(SkippedField(label=label_text, reason="no matching profile field - custom question", required=required))
             return
         value = getattr(profile, attr, "")
         if not value:
-            report.skipped.append(SkippedField(label=label_text, reason=f"profile.{attr} is empty"))
+            report.skipped.append(SkippedField(label=label_text, reason=f"profile.{attr} is empty", required=required))
             return
         self._set(locator, label_text, value, report)
 
@@ -456,8 +481,12 @@ class LeverAutofillEngine(LabeledFormEngine):
         # Duc to notice an empty required box after he has stopped reading.
         cards = page.locator('[name^="cards["]').count()
         if cards:
+            # Lever's cards are a group and at least one is routinely required (the
+            # Palantir form has 60, including required ones), so the group is treated
+            # as required rather than letting a whole form's questions go unflagged.
             report.skipped.append(SkippedField(
-                label=f"{cards} custom question field(s)", reason="Lever custom questions - answer these yourself"))
+                label=f"{cards} custom question field(s)", reason="Lever custom questions - answer these yourself",
+                required=True))
 
 
 ENGINES_BY_SOURCE: dict[str, type[LabeledFormEngine]] = {
