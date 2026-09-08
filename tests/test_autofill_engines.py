@@ -143,9 +143,17 @@ def test_engines_are_keyed_the_way_posting_urls_parse():
         assert isinstance(engine, expected), (url, ats)
     assert isinstance(engine_for_url("https://jobs.lever.co/acme/d9bcb6a2-0e54-4cb3-baec-43f2d74db18f", engines)[0],
                       LeverAutofillEngine)
-    # an ATS with no engine yet (Workday, iCIMS) must resolve to None, not blow up
-    engine, ats = engine_for_url("https://acme.wd1.myworkdayjobs.com/careers/job/123", engines)
-    assert engine is None and ats == "unknown"
+    # An ATS with no engine must resolve to None rather than blow up. Workday is
+    # recognized (it is fetched and tailored for) but will never have an engine:
+    # its apply flow starts at Sign In, and Kyra never signs in or makes an
+    # account - so the pipeline names it and explains, rather than saying "yet".
+    from companion.apply_pipeline import CANNOT_FILL
+
+    engine, ats = engine_for_url("https://acme.wd1.myworkdayjobs.com/careers/job/US-CA/Role_JR1", engines)
+    assert engine is None and ats == "workday" and ats in CANNOT_FILL
+    # a genuinely unknown site is still unknown
+    engine, ats = engine_for_url("https://careers.example.com/job/1", engines)
+    assert engine is None and ats == "unknown" and ats not in CANNOT_FILL
 
 
 def test_greenhouse_behaviour_is_unchanged_by_the_shared_base():

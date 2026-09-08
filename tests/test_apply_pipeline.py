@@ -139,3 +139,22 @@ def test_source_url_is_kept_on_the_tracker_row(tmp_path):
     r = _run(tmp_path, store, engine=RecordingEngine(), source_url="https://www.linkedin.com/jobs/view/7/")
     assert r.status == "ready_to_submit"
     assert "[found via] https://www.linkedin.com/jobs/view/7/" in store.list()[0].notes
+
+
+@requires_latex
+def test_workday_tailors_the_resume_and_says_why_it_cannot_fill(tmp_path):
+    """Workday's manual apply is a seven-step wizard whose first step is Sign In
+    (checked on a real NVIDIA posting, 2026-09-08). Kyra cannot sign in or make
+    an account, so there will never be an engine - and the pipeline has to say
+    that, not "no engine yet", which reads as "coming soon". Everything before
+    the form still runs: tracker entry, tailored one-page resume, cover letter."""
+    from tests.test_job_posting_fetch import WD_URL
+
+    store = JobApplicationStore(tmp_path / "j.db")
+    r = _run(tmp_path, store, url=WD_URL, engine=RecordingEngine())
+    assert r.company == "Nvidia" and r.resume_pdf_path and r.resume_fit
+    assert r.status == "needs_attention"
+    reason = " ".join(r.attention)
+    assert "account" in reason and "sign in" in reason.lower()
+    assert "yet" not in reason, "this is not a gap waiting to be filled"
+    assert WD_URL in reason, "hand him the link he has to open himself"

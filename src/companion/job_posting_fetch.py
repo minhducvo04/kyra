@@ -1,9 +1,9 @@
 """Turn a job-posting URL into text Kyra can work with, and the "target this
 posting" step that starts everything else (tracker entry, signals).
 
-Only the three public board APIs the watch already uses are fetched
-(Greenhouse, Lever, Ashby) - the same "official API, not scraping" line
-as job_boards.py. A LinkedIn or custom-site URL cannot be fetched here;
+Only public board APIs are fetched (Greenhouse, Lever, Ashby, Workday) -
+the same "official API, not scraping" line as job_boards.py: each is the
+unauthenticated JSON endpoint the board's own front end calls. A LinkedIn or custom-site URL cannot be fetched here;
 the caller pastes the posting text instead and the URL is kept as the
 link. Discovery stays with Duc (LinkedIn terms); this is what happens
 after he has found something.
@@ -58,6 +58,16 @@ def parse_posting_url(url: str) -> tuple[str, str, str] | None:
     m = re.search(r"jobs\.ashbyhq\.com/([A-Za-z0-9_-]+)/([0-9a-f-]{36})", url)
     if m:
         return "ashby", m.group(1), m.group(2)
+    # Workday: the tenant is the subdomain, then an optional locale, the site,
+    # and the posting's own path. Duc pastes these having clicked Apply, so the
+    # wizard's suffixes come off; the job id here is "<site>/<path>", which is
+    # what identifies the posting within the tenant.
+    m = re.search(
+        r"([A-Za-z0-9-]+)\.wd\d+\.myworkdayjobs\.com/(?:[a-z]{2}-[A-Z]{2}/)?([A-Za-z0-9_-]+)/job/([^?#]+)", url)
+    if m:
+        path = re.sub(r"/(?:apply|application)(?:/.*)?$", "", m.group(3)).strip("/")
+        if path:
+            return "workday", m.group(1), f"{m.group(2)}/{path}"
     return None
 
 
@@ -77,7 +87,7 @@ def _html_to_text(raw: str) -> str:
 def fetch_posting(url: str, fetch_json=_get_json) -> FetchedPosting:
     parsed = parse_posting_url(url)
     if parsed is None:
-        raise ValueError("not a Greenhouse, Lever, or Ashby posting URL - paste the posting text instead")
+        raise ValueError("not a Greenhouse, Lever, Ashby or Workday posting URL - paste the posting text instead")
     source, token, job_id = parsed
     if source == "greenhouse":
         j = fetch_json(f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs/{job_id}")
@@ -99,6 +109,23 @@ def fetch_posting(url: str, fetch_json=_get_json) -> FetchedPosting:
             url=j.get("hostedUrl") or url,
             posted_at=datetime.fromtimestamp(ts / 1000).astimezone().isoformat() if ts else "",
             location=(j.get("categories") or {}).get("location", ""),
+        )
+    if source == "workday":
+        # The site's own unauthenticated endpoint: /wday/cxs/<tenant>/<site>/job/<path>.
+        host = re.search(r"([A-Za-z0-9-]+\.wd\d+\.myworkdayjobs\.com)", url).group(1)
+        site, _, path = job_id.partition("/")
+        j = fetch_json(f"https://{host}/wday/cxs/{token}/{site}/job/{path}") or {}
+        info = j.get("jobPostingInfo") or {}
+        if not info:
+            raise ValueError(f"that Workday posting is not open any more (closed?): {url}")
+        return FetchedPosting(
+            source=source,
+            # NOT hiringOrganization: Workday returns the legal entity ("2100 NVIDIA
+            # USA"), and this string becomes the tracker's company and the tailored
+            # resume's filename an employer reads.
+            company=_company_name(source, token), title=(info.get("title") or "").strip(),
+            text=_html_to_text(info.get("jobDescription", "")), url=info.get("externalUrl") or url,
+            posted_at=info.get("startDate") or "", location=info.get("location") or "",
         )
     data = fetch_json(f"https://api.ashbyhq.com/posting-api/job-board/{token}")
     for j in data.get("jobs", []):
@@ -151,7 +178,7 @@ class TargetPostingTool(Tool):
         if not text:
             if is_linkedin_url(url):
                 return {"error": "LinkedIn is never read: paste the posting text as posting_text, or pass the 'Apply on company website' link as url and this LinkedIn link as source_url"}
-            return {"error": "no posting text: that URL is not a Greenhouse/Lever/Ashby job, so paste the posting text as posting_text"}
+            return {"error": "no posting text: that URL is not a Greenhouse/Lever/Ashby/Workday job, so paste the posting text as posting_text"}
         company = company.strip() or (fetched.company if fetched else "")
         role = role.strip() or (fetched.title if fetched else "")
         if not company or not role:

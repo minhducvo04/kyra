@@ -12,7 +12,17 @@ AB = {"jobs": [{"id": "d9bcb6a2-0e54-4cb3-baec-43f2d74db18f", "title": "Software
                 "jobUrl": "https://jobs.ashbyhq.com/netic/d9bcb6a2-0e54-4cb3-baec-43f2d74db18f", "location": "San Francisco"}]}
 
 
+WD = {"jobPostingInfo": {"title": "Software Engineer, New Grad",
+                        "jobDescription": "&lt;p&gt;Build accelerated computing.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;C++&lt;/li&gt;&lt;/ul&gt;",
+                        "startDate": "2026-09-01", "location": "US, CA, Santa Clara",
+                        "externalUrl": "https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/SWE_JR1"},
+      # The legal entity, not what anyone calls the company - which is why it is not used.
+      "hiringOrganization": {"name": "2100 NVIDIA USA"}}
+
+
 def _fake(url):
+    if "myworkdayjobs" in url:
+        return WD
     if "greenhouse" in url:
         return GH
     if "lever" in url:
@@ -152,3 +162,41 @@ def test_a_linkedin_url_with_no_text_says_how_to_hand_over_the_company_link(tmp_
     out = TargetPostingTool(store).run(url="https://www.linkedin.com/jobs/view/4438446984/")
     assert "error" in out and "never read" in out["error"] and "source_url" in out["error"]
     assert store.list() == []
+
+
+WD_URL = "https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/SWE_JR1"
+
+
+def test_workday_urls_parse_in_all_the_shapes_they_are_pasted_in():
+    """Workday is the most common ATS at large companies. Its URL carries the
+    tenant in the subdomain and the site plus the posting path after the
+    optional locale, and Duc pastes it having clicked Apply, so the wizard
+    suffixes have to come off."""
+    from companion.job_posting_fetch import parse_posting_url
+
+    assert parse_posting_url(WD_URL) == ("workday", "nvidia", "NVIDIAExternalCareerSite/US-CA-Santa-Clara/SWE_JR1")
+    # no locale segment, a different pod, and the apply wizard's own suffixes
+    assert parse_posting_url("https://salesforce.wd12.myworkdayjobs.com/External_Career_Site/job/Dublin/Analyst_JR1") == (
+        "workday", "salesforce", "External_Career_Site/Dublin/Analyst_JR1")
+    assert parse_posting_url(WD_URL + "/apply") == parse_posting_url(WD_URL)
+    assert parse_posting_url(WD_URL + "/apply/applyManually?source=x") == parse_posting_url(WD_URL)
+    assert parse_posting_url("https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite") is None
+
+
+def test_workday_posting_is_fetched_from_its_public_json():
+    """Same "official API, not scraping" line as the other three: this is the
+    unauthenticated endpoint the careers site's own front end calls."""
+    got = fetch_posting(WD_URL, _fake)
+    assert got.source == "workday" and got.title == "Software Engineer, New Grad"
+    assert "Build accelerated computing" in got.text and "- C++" in got.text
+    assert got.posted_at == "2026-09-01" and got.location == "US, CA, Santa Clara"
+    # NOT "2100 NVIDIA USA": hiringOrganization is the legal entity, and this string
+    # becomes the tracker's company and the tailored resume's FILENAME.
+    assert got.company == "Nvidia"
+
+
+def test_a_workday_url_reaches_the_tracker_like_any_other_board(tmp_path):
+    store = JobApplicationStore(tmp_path / "j.db")
+    out = TargetPostingTool(store, fetch=lambda u: fetch_posting(u, _fake)).run(url=WD_URL)
+    assert out["created"] and out["application"]["company"] == "Nvidia"
+    assert out["application"]["status"] == "targeting" and out["posting_chars"] > 0

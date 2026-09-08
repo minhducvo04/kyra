@@ -40,5 +40,22 @@ single URL matched, and the company check could not see the slug either - so aut
 general resume to a form an employer reads. `_normalize_url` now keys on the posting's identity `(board, token, job
 id)` via `parse_posting_url`, which also makes the boards/job-boards/embed spellings of one job match each other.
 
+## Slice 4 - Workday, as far as the boundaries allow - DONE 2026-09-08
+Workday is the most common ATS at large companies and was the last big gap. Its **manual apply is a seven-step
+wizard whose first step is Sign In** (Google / LinkedIn / email), checked on a real live NVIDIA posting - so there
+will never be an autofill engine for it: Kyra does not sign in and does not create accounts. Everything before the
+form does work, which is most of the value: `parse_posting_url` recognizes Workday URLs in every shape Duc pastes
+them (optional locale, any pod, the `/apply` and `/apply/applyManually` suffixes stripped), and `fetch_posting`
+reads the posting from the site's own unauthenticated JSON endpoint, so the tracker entry, the signals, the tailored
+one-page resume and the cover letter all run. The pipeline then says *why* it cannot fill rather than "no engine
+yet", and hands back the link and the resume filename.
+-> verified: a real live NVIDIA posting fetched through the real code path (5,115 chars, correct title, date and
+location) from both the plain URL and the `/apply/applyManually` one.
+
+**The company name does not come from the API.** Workday's `hiringOrganization` is the legal entity - "2100 NVIDIA
+USA" - and that string would become the tracker's company and the tailored resume's filename an employer reads. It
+goes through `_company_name` (watchlist first, title-cased tenant otherwise) like Ashby and Lever, for the reason
+already recorded on 2026-09-07.
+
 ## Not in scope
-Clicking Submit. Easy Apply. Anything that logs into LinkedIn.
+Clicking Submit. Easy Apply. Anything that logs into LinkedIn. Signing in to or creating an account on any ATS.
