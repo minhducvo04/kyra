@@ -57,5 +57,14 @@ USA" - and that string would become the tracker's company and the tailored resum
 goes through `_company_name` (watchlist first, title-cased tenant otherwise) like Ashby and Lever, for the reason
 already recorded on 2026-09-07.
 
+## Slice 5 - watching Workday boards - DONE 2026-09-08
+`WorkdayBoard` behind the same `JobBoardSource` interface, so `scripts/watch_boards.py add "<Company>" <any Workday
+URL> "<kw1,kw2>"` works and the 05:00 digest picks the postings up. Searched rather than enumerated (the board caps
+a page at 20 and NVIDIA has 2,000 postings), so **a Workday entry needs keywords** and is refused without them.
+Keyword them the way the titles read: NVIDIA says "New College Grad", and the local filter is a substring test, so
+`grad` works where `new grad` silently matches nothing.
+-> verified live: 63 postings fetched for "new college grad", 57 matching, 0 new on a second run, and one of those
+URLs carried through fetch -> tracker -> signals.
+
 ## Not in scope
 Clicking Submit. Easy Apply. Anything that logs into LinkedIn. Signing in to or creating an account on any ATS.
