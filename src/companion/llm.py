@@ -74,6 +74,25 @@ class LLMBackend(ABC):
         ...
 
 
+def _cacheable(system: str):
+    """Mark the system prompt as cacheable.
+
+    It is the same text on every turn of a session - the persona, today's date,
+    and the memory notes rendered in full - and it is the biggest thing in the
+    request: 2,386 input tokens on a real turn, about 65% of it notes
+    (docs/voice-latency.md), and it grows as more notes are saved. Caching it
+    means later turns in a session re-read it instead of re-paying for it.
+
+    respond_with_tools() has done this for its tool schemas since the
+    distillation work; this is the larger block and was not covered. Returned as
+    a bare string when empty, because an empty block is rejected and there would
+    be nothing to cache.
+    """
+    if not system:
+        return system
+    return [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+
+
 class AnthropicLLM(LLMBackend):
     """Cloud backend: Claude via the Anthropic API. The default - see
     docs/model-benchmark.md for the quality gap this closes over local.
@@ -111,7 +130,7 @@ class AnthropicLLM(LLMBackend):
         said: list[str] = []
         try:
             with self._client.messages.stream(
-                model=self._model, max_tokens=self._max_tokens, system=system, messages=messages,
+                model=self._model, max_tokens=self._max_tokens, system=_cacheable(system), messages=messages,
             ) as stream:
                 if on_token is not None:
                     for delta in stream.text_stream:

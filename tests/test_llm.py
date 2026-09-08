@@ -37,7 +37,8 @@ def test_respond_uses_streaming_with_full_budget():
     assert reply == "hello"
     assert not client.create_called
     assert client.stream_kwargs["max_tokens"] == 40000
-    assert client.stream_kwargs["system"] == "sys"
+    # Blocks, not a bare string: the system prompt carries a cache_control marker.
+    assert client.stream_kwargs["system"][0]["text"] == "sys"
     assert client.stream_kwargs["messages"] == [
         {"role": "user", "content": "a"},
         {"role": "assistant", "content": "b"},
@@ -166,3 +167,26 @@ def test_cancelling_before_the_first_delta_still_returns_the_marker():
         raise TurnCancelled()
 
     assert AnthropicLLM(client).respond("sys", [], "hi", on_token=on_token) == CANCELLED_MARKER
+
+
+def test_the_system_prompt_is_marked_cacheable():
+    """Every turn re-sends the whole system prompt - persona, the date, and the
+    memory notes rendered in full, measured at 2,386 input tokens of which the
+    notes are about 65% (docs/voice-latency.md). It is identical from turn to
+    turn within a session, so it is exactly what prompt caching is for.
+    respond_with_tools() already caches its tool schemas; this was the larger
+    block and was not cached."""
+    client = _FakeStreamingClient(text="hi")
+    AnthropicLLM(client).respond("a long stable persona and memory block", [], "hi")
+    system = client.stream_kwargs["system"]
+    assert isinstance(system, list), "system must be blocks, not a bare string, to carry cache_control"
+    assert system[0]["type"] == "text"
+    assert system[0]["text"] == "a long stable persona and memory block"
+    assert system[0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_an_empty_system_prompt_is_not_sent_as_a_cached_block():
+    # A blank block is rejected by the API, and there is nothing to cache anyway.
+    client = _FakeStreamingClient(text="hi")
+    AnthropicLLM(client).respond("", [], "hi")
+    assert client.stream_kwargs["system"] == ""

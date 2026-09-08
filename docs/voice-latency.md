@@ -55,10 +55,21 @@ rendered in full, every turn, by design. That design is documented as resting on
 than lines. This is the thing to watch.
 
 At Sonnet-class rates (roughly $3 per million input, $15 per million output - check current pricing) that is
-about **$0.01 per turn**, so ~$0.50 on a fifty-turn day. Voice is local and free. Prompt caching would cut the
-input side substantially and is not yet applied to the system prompt: `respond_with_tools()` puts
-`cache_control` on the last tool schema, but `respond()` caches nothing, and the system prompt is stable within
-a session.
+about **$0.01 per turn**, so ~$0.50 on a fifty-turn day. Voice is local and free.
+
+**The system prompt is cached now** (2026-09-08). It is the same text every turn of a session and it was the
+largest thing in the request, so `respond()` marks it `cache_control: ephemeral` the way
+`respond_with_tools()` has always marked its tool schemas. Measured against the real API with the real memory
+notes:
+
+| | input | cache write | cache read |
+|---|---|---|---|
+| first turn of a session | 10 | 2,344 | 0 |
+| every turn after | 10 | 0 | **2,344** |
+
+A cache read is billed at about a tenth of an input token, so the input side of a turn drops roughly 90% after
+the first. The caveat is the TTL: the cache lasts about five minutes, so it pays for a conversation and not for
+one question an hour.
 
 ## What the numbers say to do next, in order of payoff per hour of work
 
