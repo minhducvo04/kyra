@@ -51,7 +51,7 @@ from companion.jobs import DbJobQueue, Handler, start_inline_worker
 from companion.learning import LearningStore
 from companion.llm import AnthropicLLM, LazyBackends, TurnCancelled, build_llm
 from companion.memory import ChromaMemoryStore
-from companion.memory_notes import MarkdownMemoryNotesStore
+from companion.memory_notes import SUGGESTED_CATEGORIES, MarkdownMemoryNotesStore
 from companion.news import TechNewsTool
 from companion.paths import DATA_DIR, WEB_DIR
 from companion.paths import GENERATED_RESUMES_DIR as RESUME_PDF_DIR
@@ -386,6 +386,53 @@ def correction(body: CorrectionIn) -> dict:
     excerpt = text if len(text) <= 120 else text[:120].rstrip() + "\u2026"
     _memory_notes.add("corrections", f"Duc marked this reply as wrong: {excerpt}")
     return {"saved": True, "category": "corrections"}
+
+
+class MemoryNoteIn(BaseModel):
+    category: str = "general"
+    note: str
+
+
+class MemoryNoteRef(BaseModel):
+    category: str
+    text: str
+
+
+@app.get("/api/memory-notes")
+def list_memory_notes() -> dict:
+    """What Kyra durably believes about Duc.
+
+    These are not the conversation log - they are the small curated set that
+    goes into *every* system prompt in full, and into every resume draft. Until
+    now the only way to read them was to open data/memory_notes/*.md, which is
+    the same transparency gap the PROFILE tab's "view raw record" closed for the
+    applicant profile. A true-but-irrelevant note has already become a
+    fabricated resume entry once (CLAUDE.md, 2026-09-04), so seeing them, and
+    being able to throw one away, is a real control rather than a nicety.
+    """
+    notes = _memory_notes.list_notes()
+    return {
+        "notes": [asdict(n) for n in notes],
+        "categories": sorted({n.category for n in notes}) or SUGGESTED_CATEGORIES,
+    }
+
+
+@app.post("/api/memory-notes")
+def add_memory_note(body: MemoryNoteIn) -> dict:
+    try:
+        _memory_notes.add(body.category, body.note)
+    except ValueError as e:
+        raise ApiError(400, "empty_note", str(e)) from e
+    return {"saved": True}
+
+
+@app.post("/api/memory-notes/delete")
+def delete_memory_note(body: MemoryNoteRef) -> dict:
+    # Human-initiated removal of one line; nothing here resolves contradictions
+    # on its own, which is the property memory_notes.py's docstring protects.
+    if not _memory_notes.delete(body.category, body.text):
+        raise ApiError(404, "note_not_found", "no note with that text in that category")
+    return {"deleted": True}
 
 
 @app.post("/api/voice", response_model=VoiceOut)

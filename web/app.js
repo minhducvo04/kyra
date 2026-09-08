@@ -1796,7 +1796,7 @@ function openToolsPanel() {
   toolsPanel.setAttribute("aria-hidden", "false");
   toolsToggle.classList.add("is-active");
   const activeTab = document.querySelector("#tools-panel .jobs-tab.is-active");
-  const loaders = { reminders: loadReminders, learning: loadLearningDue };
+  const loaders = { reminders: loadReminders, learning: loadLearningDue, memory: loadMemoryNotes };
   if (activeTab && loaders[activeTab.dataset.toolsTab]) loaders[activeTab.dataset.toolsTab]();
 }
 function closeToolsPanel() {
@@ -1815,10 +1815,95 @@ document.querySelectorAll("#tools-panel .jobs-tab").forEach((tab) => {
     document.querySelectorAll("#tools-panel .jobs-tab-panel").forEach((p) => {
       p.classList.toggle("is-active", p.dataset.toolsTabPanel === tab.dataset.toolsTab);
     });
-    const loaders = { reminders: loadReminders, learning: loadLearningDue };
+    const loaders = { reminders: loadReminders, learning: loadLearningDue, memory: loadMemoryNotes };
     if (loaders[tab.dataset.toolsTab]) loaders[tab.dataset.toolsTab]();
   });
 });
+
+/* -- memory notes --
+   The curated facts that go into every system prompt in full, and into every
+   resume draft. Until now the only way to read them was to open
+   data/memory_notes/*.md - the same transparency gap the PROFILE tab's "view
+   raw record" closed for the applicant profile. A true-but-irrelevant note
+   became a fabricated resume entry once (CLAUDE.md, 2026-09-04), which is why
+   throwing one away is a real control and not a nicety. */
+
+const memnoteList = document.getElementById("memnote-list");
+
+async function loadMemoryNotes() {
+  memnoteList.textContent = "loading…";
+  try {
+    const data = await readJson(await fetch("/api/memory-notes"));
+    renderMemoryNotes(data.notes || []);
+  } catch (err) {
+    memnoteList.textContent = `couldn't load — ${err.message}`;
+  }
+}
+
+function renderMemoryNotes(notes) {
+  memnoteList.innerHTML = "";
+  if (notes.length === 0) {
+    memnoteList.textContent = "she hasn't saved any durable facts yet";
+    return;
+  }
+  let lastCategory = null;
+  for (const n of notes) {
+    if (n.category !== lastCategory) {
+      const head = document.createElement("div");
+      head.className = "memnote-category";
+      head.textContent = n.category;
+      memnoteList.appendChild(head);
+      lastCategory = n.category;
+    }
+    const row = document.createElement("div");
+    row.className = "memnote-row";
+    const date = document.createElement("span");
+    date.className = "memnote-date";
+    date.textContent = n.date;
+    const text = document.createElement("span");
+    text.className = "memnote-text";
+    text.textContent = n.text;
+    const del = document.createElement("button");
+    del.className = "line-wrong-btn memnote-del";
+    del.type = "button";
+    del.textContent = "\u2715";
+    del.title = "Forget this";
+    del.setAttribute("aria-label", `Forget: ${n.text}`);
+    del.addEventListener("click", async () => {
+      // Deleting is what she will stop knowing about him, so it asks first.
+      if (!window.confirm(`Forget this?\n\n${n.text}`)) return;
+      try {
+        await readJson(await fetch("/api/memory-notes/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category: n.category, text: n.text }),
+        }));
+        loadMemoryNotes();
+      } catch (err) {
+        addLine("error", `couldn't forget that — ${err.message}`);
+      }
+    });
+    row.append(date, text, del);
+    memnoteList.appendChild(row);
+  }
+}
+
+document.getElementById("memnote-add").addEventListener("click", async () => {
+  const category = document.getElementById("memnote-category");
+  const text = document.getElementById("memnote-text");
+  try {
+    await readJson(await fetch("/api/memory-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: category.value.trim() || "general", note: text.value.trim() }),
+    }));
+    text.value = "";
+    loadMemoryNotes();
+  } catch (err) {
+    addLine("error", `couldn't save that note — ${err.message}`);
+  }
+});
+
 
 /* -- reminders -- */
 

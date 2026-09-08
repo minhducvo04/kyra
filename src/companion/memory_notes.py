@@ -31,6 +31,7 @@ tracking, that's a rewrite, not a tweak - documented here so nobody
 """
 import re
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -41,6 +42,17 @@ DEFAULT_DIR = DATA_DIR / "memory_notes"
 
 SUGGESTED_CATEGORIES = ["people", "preferences", "projects", "events"]
 
+# `- [YYYY-MM-DD] the note` - the exact shape add() writes, so the file stays
+# something a person can edit by hand and this can still read it back.
+_BULLET = re.compile(r"^-\s*\[(\d{4}-\d{2}-\d{2})\]\s*(.+?)\s*$")
+
+
+@dataclass
+class MemoryNote:
+    category: str
+    date: str
+    text: str
+
 
 class MemoryNotesStore(ABC):
     """Interface: swap the backend (Markdown files today, maybe a real
@@ -49,6 +61,29 @@ class MemoryNotesStore(ABC):
 
     @abstractmethod
     def add(self, category: str, note: str) -> None: ...
+
+    @abstractmethod
+    def list_notes(self) -> list["MemoryNote"]:
+        """The same content render() returns, as rows rather than one blob.
+
+        render() is for the model; this is for a person, who needs to see what
+        Kyra durably believes about them - these notes reach every system prompt
+        and every resume draft, and a true-but-irrelevant one has already become
+        a fabricated resume entry once (CLAUDE.md, 2026-09-04).
+        """
+        ...
+
+    @abstractmethod
+    def delete(self, category: str, text: str) -> bool:
+        """Remove one note. Returns False if it was not there.
+
+        A deliberate, human-initiated removal. The append-only design this
+        module documents is about *code* never silently pruning history to
+        resolve a contradiction; nothing here resolves anything, it just does
+        what Duc asked. Without it, correcting a wrong note means opening the
+        Markdown by hand - which is fine for him but not a feature.
+        """
+        ...
 
     @abstractmethod
     def render(self) -> str:
@@ -87,6 +122,50 @@ class MarkdownMemoryNotesStore(MemoryNotesStore):
             if is_new:
                 f.write(f"# {category.strip()}\n\n")
             f.write(f"- [{date_str}] {note}\n")
+
+    def _path(self, category: str) -> Path:
+        return self._dir / f"{self._slug(category)}.md"
+
+    @staticmethod
+    def _category_of(path: Path) -> str:
+        """The display name from the file's own `# Heading`, falling back to the
+        slug - add() writes the heading with the caller's capitalization."""
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("# "):
+                return line[2:].strip()
+        return path.stem
+
+    def list_notes(self) -> list[MemoryNote]:
+        notes: list[MemoryNote] = []
+        for path in sorted(self._dir.glob("*.md")):
+            category = self._category_of(path)
+            for line in path.read_text(encoding="utf-8").splitlines():
+                m = _BULLET.match(line)
+                if m:
+                    notes.append(MemoryNote(category=category, date=m.group(1), text=m.group(2)))
+        return notes
+
+    def delete(self, category: str, text: str) -> bool:
+        path = self._path(category)
+        if not path.exists():
+            return False
+        text = text.strip()
+        kept, removed = [], False
+        for line in path.read_text(encoding="utf-8").splitlines():
+            m = _BULLET.match(line)
+            if not removed and m and m.group(2) == text:
+                removed = True
+                continue
+            kept.append(line)
+        if not removed:
+            return False
+        # A file with only its heading left would still be rendered into every
+        # system prompt as a category with nothing under it.
+        if any(_BULLET.match(line) for line in kept):
+            path.write_text("\n".join(kept).rstrip() + "\n", encoding="utf-8")
+        else:
+            path.unlink()
+        return True
 
     def render(self) -> str:
         sections = []

@@ -46,3 +46,35 @@ def test_an_empty_reply_is_rejected_rather_than_saved(client):
     res = client.post("/api/correction", json={"reply": "   "})
     assert res.status_code == 400
     assert res.json()["error"]["code"] == "empty_reply"
+
+
+# --- the MEMORY tab's endpoints ------------------------------------------------
+# Same store the corrections above write to, and the same one every system prompt
+# and every resume draft reads. Duc could only see it by opening the Markdown.
+
+
+def test_notes_list_returns_rows_a_panel_can_render(client):
+    client.post("/api/memory-notes", json={"category": "preferences", "note": "likes standing desks"})
+    body = client.get("/api/memory-notes").json()
+    row = next(n for n in body["notes"] if n["text"] == "likes standing desks")
+    assert row["category"].lower() == "preferences" and len(row["date"]) == 10
+    assert "preferences" in [c.lower() for c in body["categories"]]
+
+
+def test_an_empty_note_is_rejected(client):
+    res = client.post("/api/memory-notes", json={"category": "preferences", "note": "  "})
+    assert res.status_code == 400
+    assert res.json()["error"]["code"] == "empty_note"
+
+
+def test_deleting_a_note_removes_it_from_what_the_model_sees(client):
+    client.post("/api/memory-notes", json={"category": "people", "note": "a fact to remove"})
+    assert "a fact to remove" in webapp._memory_notes.render()
+    res = client.post("/api/memory-notes/delete", json={"category": "people", "text": "a fact to remove"})
+    assert res.status_code == 200 and res.json()["deleted"] is True
+    assert "a fact to remove" not in webapp._memory_notes.render()
+
+
+def test_deleting_something_that_is_not_there_is_a_404(client):
+    res = client.post("/api/memory-notes/delete", json={"category": "people", "text": "never existed"})
+    assert res.status_code == 404
