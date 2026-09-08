@@ -81,12 +81,26 @@ JS/CSS is small (1.5k lines) and every slice below is additive.
    system prompt (`voice_text.SPOKEN_REGISTER`), and `spoken_text()` strips markdown before synthesis as the
    guarantee; the transcript keeps the written reply. -> verified: unit tests on the prompt line and the stripper,
    the endpoint with stubbed speech, and a real Kokoro clip round-tripped through the running server.
-5. **Persistent transcript + "that was wrong"** - `localStorage` for the session transcript (restored on reload,
-   cleared by a button), and a small ✕ on any Kyra line that saves a `corrections` memory note ("Duc marked this
-   reply as wrong: <first 120 chars>"). -> verify: reload keeps the conversation; the note lands in
-   `data/memory_notes/corrections.md` and shows in the next system prompt.
-6. **Phone layout** - one more breakpoint: input bar wraps to two rows, panels go full-width, transcript text
-   14-15 px. -> verify: the browser pane at 375 × 812.
+5. **Persistent transcript + "that was wrong"** - DONE 2026-09-08. `localStorage` for the transcript, restored on
+   load and forgotten by a CLEAR button; a ✕ on any Kyra line posts to `POST /api/correction`, which saves a
+   `corrections` memory note. Notes are loaded in full into every system prompt, so a correction is in front of
+   her on the next turn rather than sitting in a log nobody reads. `dataset.raw` holds the reply itself, apart
+   from the meta and interrupted badges that also live in `.line-text`, so a restore can never read a badge back
+   in as something she said; a stopped turn never gets the `done` event that would set it, so `markInterrupted`
+   reads the partial back off the painted text nodes.
+   -> verified in the running page: three lines stored and restored across a reload with the backend badge
+   intact, the wrong-mark survives the reload too, CLEAR empties both the DOM and storage, and a real click wrote
+   the 120-character excerpt into `data/memory_notes/corrections.md`. Verification data cleared afterwards.
+6. **Phone layout** - DONE 2026-09-08, and it was broken rather than merely cramped: `.header-controls` held a
+   min-content width of 616 px, which pushed the header and the stage off *both* edges at 375 px, so the
+   wordmark, the line tags and the mic button were all clipped away. The old narrow rule hid the PTT/HANDS-FREE
+   toggle to buy room - the wrong trade on the one device that is all microphone. Wrapping fixes the cause:
+   header controls on two rows, the input on a full-width row with its controls beneath, the voice toggle back,
+   transcript at 15.2 px, long unbroken tokens wrapped, and the mark-wrong control faintly visible by default
+   since a touch screen has no hover.
+   -> verified at 375 × 812: `scrollWidth` equals the viewport with nothing off-screen, panels open full width
+   and their chips wrap inside it. Re-checked at 1280 × 800: header and input bar back to `nowrap`, transcript
+   back to 14.7 px - no desktop change.
 
 ## Found while verifying slice 3: memory writes can vanish silently
 
