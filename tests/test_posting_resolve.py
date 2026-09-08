@@ -81,7 +81,30 @@ class TestBoardCandidates:
         path = tmp_path / "watchlist.json"
         save_watchlist([], path)
         candidates = board_candidates("Nuvo", watchlist_path=path)
+        # Workday is absent on purpose: its token is "<tenant>.<pod>/<site>", which a
+        # company name cannot produce, and its board cannot be enumerated without keywords.
         assert set(candidates) == {("greenhouse", "nuvo"), ("lever", "nuvo"), ("ashby", "nuvo")}
+
+    def test_a_watched_workday_board_is_searched_with_the_role(self, tmp_path):
+        """It cannot be guessed, but Duc's watchlist has the real token - and the role
+        title is exactly the search text that board needs."""
+        from companion.job_boards import WorkdayBoard
+
+        path = tmp_path / "watchlist.json"
+        save_watchlist([WatchEntry("Nvidia", "workday", "nvidia.wd5/Site", ["grad"])], path)
+        assert ("workday", "nvidia.wd5/Site") in board_candidates("Nvidia", watchlist_path=path)
+
+        asked = {}
+
+        class _Board(WorkdayBoard):
+            def fetch(self, company, token, keywords=None):
+                asked["keywords"] = keywords
+                return [Posting("workday", company, "1", "Software Engineer, New Grad", "CA",
+                                "https://nvidia.wd5.myworkdayjobs.com/Site/job/x", "2026-09-01")]
+
+        match = find_posting("Nvidia", "Software Engineer, New Grad",
+                             sources={"workday": _Board()}, watchlist_path=path)
+        assert match is not None and asked["keywords"] == ["Software Engineer, New Grad"]
 
     def test_a_multi_word_company_guesses_both_joined_and_hyphenated(self, tmp_path):
         path = tmp_path / "watchlist.json"

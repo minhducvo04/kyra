@@ -129,3 +129,36 @@ def test_autofill_survives_a_broken_tracker(tmp_path):
     out = tool.run("https://boards.greenhouse.io/northwind/jobs/1")
     assert engine.seen_resume == str(default) and "couldn't read the tracker" in out["resume_choice"]
     assert Path(out["resume_attached"]).name == "general.pdf"
+
+
+def test_two_embed_postings_do_not_collide_into_the_general_resume(store):
+    """A Greenhouse embed URL (what a company careers page hosts, and where
+    LinkedIn's "Apply on company website" link lands) carries the company and
+    the job id ONLY in its query string. Host+path normalization strips both,
+    so every embed application in the tracker normalized to the same string:
+    two of them collided, no single URL match survived, and the company check
+    could not see "anthropic" either - so autofill would silently fall back to
+    the general resume on a form an employer reads."""
+    store.add("Anthropic", "MTS", link="https://boards.greenhouse.io/embed/job_app?for=anthropic&token=1", resume_path="/r/anthropic.pdf")
+    store.add("Northwind", "SWE", link="https://boards.greenhouse.io/embed/job_app?for=northwind&token=2", resume_path="/r/northwind.pdf")
+    apps = store.list()
+
+    path, why = resume_for_url("https://boards.greenhouse.io/embed/job_app?for=anthropic&token=1", apps)
+    assert path == "/r/anthropic.pdf", why
+    path, why = resume_for_url("https://boards.greenhouse.io/embed/job_app?for=northwind&token=2", apps)
+    assert path == "/r/northwind.pdf", why
+
+
+def test_the_same_posting_by_any_of_its_url_forms_is_one_posting(store):
+    """boards / job-boards / the embed form are three URLs for one job. Keying
+    on the posting's identity rather than its spelling means the resume Duc
+    tailored is attached whichever link he pastes."""
+    store.add("Meridian", "Quant", link="https://boards.greenhouse.io/janestreet/jobs/7001", resume_path="/r/js.pdf")
+    apps = store.list()
+    for url in (
+        "https://job-boards.greenhouse.io/janestreet/jobs/7001",
+        "https://boards.greenhouse.io/embed/job_app?for=janestreet&token=7001",
+        "https://job-boards.greenhouse.io/embed/job_app?token=7001&for=janestreet&b=x",
+    ):
+        path, why = resume_for_url(url, apps)
+        assert path == "/r/js.pdf", f"{url}: {why}"

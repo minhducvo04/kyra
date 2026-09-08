@@ -1201,8 +1201,8 @@ def _run_apply_job(payload: dict, on_progress) -> dict:
             payload["url"], store=_job_store, resume_llm=_resume_llm, draft_llm=_draft_llm,
             base_latex=_apply_base_latex(), profile=load_profile(), engines=_autofill_engines, extra_facts=extra_facts,
             posting_text=payload.get("posting_text", ""), company=payload.get("company", ""), role=payload.get("role", ""),
-            cover_letter=payload.get("cover_letter", "auto"), retailor=payload.get("retailor", False),
-            fetch=_fetch_posting, on_progress=on_progress,
+            source_url=payload.get("source_url", ""), cover_letter=payload.get("cover_letter", "auto"),
+            retailor=payload.get("retailor", False), fetch=_fetch_posting, on_progress=on_progress,
         )
     except ApplyError as e:
         raise ApiError(400, "apply_failed", str(e)) from e
@@ -1278,6 +1278,7 @@ class ApplyIn(BaseModel):
     posting_text: str = ""  # for a single non-board URL (LinkedIn, a company site) - pasted text
     company: str = ""
     role: str = ""
+    source_url: str = ""  # where the one posting was found (a LinkedIn listing); recorded, never read
     # An application that already has a tailored resume reuses it (apply_pipeline). Set this
     # to spend a fresh multi-minute loop anyway - after the base .tex has changed, say.
     retailor: bool = False
@@ -1294,11 +1295,14 @@ def enqueue_apply_jobs(body: ApplyIn) -> dict:
         raise ApiError(400, "bad_cover_letter", "cover_letter must be auto, always or never")
     if body.posting_text and len(urls) > 1:
         raise ApiError(400, "text_needs_one_url", "pasted posting text applies to exactly one URL")
+    if body.source_url.strip() and len(urls) > 1:
+        raise ApiError(400, "source_needs_one_url", "a source (LinkedIn) link belongs to exactly one posting URL")
     _apply_base_latex()  # fail now, not inside every queued job
     ids = [
         _queue.enqueue("apply", {
             "url": u, "cover_letter": body.cover_letter, "posting_text": body.posting_text,
-            "company": body.company, "role": body.role, "retailor": body.retailor,
+            "company": body.company, "role": body.role, "source_url": body.source_url.strip(),
+            "retailor": body.retailor,
         })
         for u in urls
     ]

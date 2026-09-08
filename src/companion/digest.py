@@ -21,6 +21,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
+from companion.job_applications import JobApplication, JobApplicationStore
 from companion.job_boards import Posting, WatchReport, check_boards, load_watchlist, render_report
 from companion.learning import LearningItem, LearningStore
 from companion.news import TechNewsTool
@@ -65,6 +66,11 @@ class DigestData:
     reviews: list[LearningItem] = field(default_factory=list)
     news: list[NewsItem] = field(default_factory=list)
     report: WatchReport | None = None
+    # What the apply pipeline finished and left for Duc. `waiting` is the whole
+    # point of mass apply - the form is filled and only his click is missing -
+    # and it was invisible until he next opened the JOBS panel.
+    waiting: list[JobApplication] = field(default_factory=list)
+    needs_attention: list[JobApplication] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
     @property
@@ -73,7 +79,8 @@ class DigestData:
 
     @property
     def action_count(self) -> int:
-        return len(self.due_reminders) + len(self.due_follow_ups) + len(self.reviews)
+        return (len(self.due_reminders) + len(self.due_follow_ups) + len(self.reviews)
+                + len(self.waiting) + len(self.needs_attention))
 
 
 def _maybe_ellipsis(text: str) -> str:
@@ -165,6 +172,14 @@ def build_digest(news_per_source: int = 3, seen_path: Path | None = None) -> Dig
         logger.warning("outreach section failed: %s", e)
         data.warnings.append(f"outreach section failed - {type(e).__name__}: {e}")
 
+    try:
+        apps = JobApplicationStore().list()
+        data.waiting = [a for a in apps if a.status == "ready_to_submit"]
+        data.needs_attention = [a for a in apps if a.status == "needs_attention"]
+    except Exception as e:  # a missing/locked tracker must not kill the digest
+        logger.warning("applications section failed: %s", e)
+        data.warnings.append(f"applications section failed - {type(e).__name__}: {e}")
+
     watchlist = load_watchlist()
     if watchlist:
         try:
@@ -182,11 +197,22 @@ def build_digest(news_per_source: int = 3, seen_path: Path | None = None) -> Dig
 
 
 def summary_line(data: DigestData) -> str:
-    """The one line that fits in a macOS notification."""
-    return (
-        f"{len(data.due_reminders)} due, {len(data.due_follow_ups)} follow-ups, "
-        f"{len(data.reviews)} reviews, {data.new_postings} new postings, {len(data.news)} headlines"
-    )
+    """The one line that fits in a macOS notification.
+
+    Applications appear only when there are some. The line is already five
+    numbers long, and "0 to submit" every morning would train Duc to stop
+    reading it - but an application that is filled and waiting on his click is
+    the most actionable thing the digest ever holds, so when there is one it
+    goes first.
+    """
+    parts = []
+    if data.waiting:
+        parts.append(f"{len(data.waiting)} to submit")
+    parts += [
+        f"{len(data.due_reminders)} due", f"{len(data.due_follow_ups)} follow-ups",
+        f"{len(data.reviews)} reviews", f"{data.new_postings} new postings", f"{len(data.news)} headlines",
+    ]
+    return ", ".join(parts)
 
 
 def render_markdown(data: DigestData) -> str:
@@ -206,6 +232,12 @@ def render_markdown(data: DigestData) -> str:
         f"- [ ] nudge {c.name} at {c.company} (sent {c.sent_at[:10] if c.sent_at else '?'})"
         for c in data.due_follow_ups
     ] or ["- no follow-ups due"]
+    lines.append("")
+    lines.append(f"## Applications ({len(data.waiting)} filled and waiting, {len(data.needs_attention)} need a fix)")
+    lines += (
+        [f"- [ ] submit **{a.company}** — {a.role}" + (f" <{a.link}>" if a.link else "") for a in data.waiting]
+        + [f"- [ ] fix **{a.company}** — {a.role}" + (f" <{a.link}>" if a.link else "") for a in data.needs_attention]
+    ) or ["- nothing waiting on you"]
     lines.append("")
     lines.append(f"## Reviews due ({len(data.reviews)})")
     lines += [f"- **{i.topic}** — {i.key_takeaway}" for i in data.reviews] or ["- none"]
@@ -461,6 +493,35 @@ def render_html(data: DigestData, *, prev_day: str | None = None, next_day: str 
                f"Open profile →</a></p>" if c.profile_url else "")
             + "</article>"
         )
+    for a in d.waiting:
+        # The click is the whole action, so the link is the card. The resume
+        # filename is there because it is what an employer receives and Duc
+        # asked to be able to check that before sending, every time.
+        resume = Path(a.resume_path).name if a.resume_path else ""
+        acts.append(
+            f'<article class="card act"><p class="m">Application · filled, not sent</p>'
+            f'<p class="t">Submit <span style="color:var(--accent)">{_e(a.company)}</span> · {_e(a.role)}</p>'
+            + (f'<p class="m">attaches {_e(resume)}</p>' if resume else "")
+            + (f'<p class="links"><a href="{_e(a.link)}" target="_blank" rel="noopener">Open the form →</a></p>'
+               if a.link else "")
+            + "</article>"
+        )
+    for a in d.needs_attention:
+        # The reasons the pipeline recorded are in the row's notes; the last
+        # [apply ...] line is the one from the run that stopped.
+        why = ""
+        for line in reversed((a.notes or "").splitlines()):
+            if line.startswith("[apply ") and "attention:" in line:
+                why = line.split("attention:", 1)[1].strip()
+                break
+        acts.append(
+            f'<article class="card act"><p class="m">Application · needs a fix</p>'
+            f'<p class="t">Fix <span style="color:var(--accent)">{_e(a.company)}</span> · {_e(a.role)}</p>'
+            + (f'<p class="m">{_e(why[:300])}</p>' if why else "")
+            + (f'<p class="links"><a href="{_e(a.link)}" target="_blank" rel="noopener">Open the form →</a></p>'
+               if a.link else "")
+            + "</article>"
+        )
     for i in d.reviews:
         acts.append(
             f'<article class="card act"><p class="m">Review · {_e(i.review_count)} so far</p>'
@@ -569,6 +630,8 @@ def to_json(data: DigestData) -> dict:
         "reviews": [asdict(i) for i in data.reviews],
         "news": [asdict(n) for n in data.news],
         "report": report,
+        "waiting": [asdict(a) for a in data.waiting],
+        "needs_attention": [asdict(a) for a in data.needs_attention],
         "warnings": list(data.warnings),
     }
 
@@ -590,6 +653,8 @@ def from_json(raw: dict) -> DigestData:
         open_reminders=[Reminder(**r) for r in raw.get("open_reminders", [])],
         due_follow_ups=[OutreachContact(**c) for c in raw.get("due_follow_ups", [])],
         awaiting_replies=raw.get("awaiting_replies", 0),
+        waiting=[JobApplication(**a) for a in raw.get("waiting", [])],
+        needs_attention=[JobApplication(**a) for a in raw.get("needs_attention", [])],
         reviews=[LearningItem(**i) for i in raw.get("reviews", [])],
         news=[NewsItem(**n) for n in raw.get("news", [])],
         report=report,

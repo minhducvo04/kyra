@@ -18,7 +18,7 @@ import re
 import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from companion.paths import DATA_DIR
@@ -62,6 +62,37 @@ def _norm_title(title: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
 
 
+def _post_json(url: str, body: dict, timeout: int = 20):
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(url, data=data, headers={
+        "User-Agent": USER_AGENT, "Accept": "application/json", "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.load(resp)
+
+
+def _workday_posted_on(phrase: str, now: datetime | None = None) -> str:
+    """Workday dates a posting with a phrase ("Posted Today", "Posted 5 Days Ago",
+    "Posted 30+ Days Ago") instead of a timestamp, and the age of a posting is a
+    real signal here - Duc's own note is that a role open a long time, or reposted,
+    says something worth knowing. So the phrase becomes a date.
+
+    "30+" is a floor, not a date: it becomes exactly 30 days ago, which is the
+    least it can be. Reporting an older age would be inventing precision the
+    board does not give.
+    """
+    now = now or datetime.now().astimezone()
+    text = (phrase or "").lower()
+    if "today" in text or "yesterday" in text:
+        return (now - timedelta(days=0 if "today" in text else 1)).isoformat()
+    m = re.search(r"(\d+)\+?\s*day", text)
+    if m:
+        return (now - timedelta(days=int(m.group(1)))).isoformat()
+    m = re.search(r"(\d+)\+?\s*month", text)
+    if m:
+        return (now - timedelta(days=30 * int(m.group(1)))).isoformat()
+    return ""
+
+
 def _get_json(url: str, timeout: int = 20):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -70,6 +101,10 @@ def _get_json(url: str, timeout: int = 20):
 
 class JobBoardSource(ABC):
     name: str
+    # A board too large to enumerate cannot be watched without a filter to search
+    # by. Declared here so the CLI can refuse at add time, where Duc can fix it,
+    # rather than every daily run reporting the same error.
+    requires_keywords: bool = False
 
     @abstractmethod
     def fetch(self, company: str, token: str) -> list[Posting]:
@@ -84,7 +119,7 @@ class GreenhouseBoard(JobBoardSource):
     def __init__(self, fetch_json=_get_json):
         self._fetch_json = fetch_json
 
-    def fetch(self, company: str, token: str) -> list[Posting]:
+    def fetch(self, company: str, token: str, keywords: list[str] | None = None) -> list[Posting]:
         data = self._fetch_json(f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs")
         out = []
         for j in data.get("jobs", []):
@@ -104,7 +139,7 @@ class LeverBoard(JobBoardSource):
     def __init__(self, fetch_json=_get_json):
         self._fetch_json = fetch_json
 
-    def fetch(self, company: str, token: str) -> list[Posting]:
+    def fetch(self, company: str, token: str, keywords: list[str] | None = None) -> list[Posting]:
         data = self._fetch_json(f"https://api.lever.co/v0/postings/{token}?mode=json")
         out = []
         for j in data if isinstance(data, list) else []:
@@ -127,7 +162,7 @@ class AshbyBoard(JobBoardSource):
     def __init__(self, fetch_json=_get_json):
         self._fetch_json = fetch_json
 
-    def fetch(self, company: str, token: str) -> list[Posting]:
+    def fetch(self, company: str, token: str, keywords: list[str] | None = None) -> list[Posting]:
         data = self._fetch_json(f"https://api.ashbyhq.com/posting-api/job-board/{token}")
         out = []
         for j in data.get("jobs", []):
@@ -139,7 +174,69 @@ class AshbyBoard(JobBoardSource):
         return out
 
 
-SOURCES: dict[str, type[JobBoardSource]] = {"greenhouse": GreenhouseBoard, "lever": LeverBoard, "ashby": AshbyBoard}
+class WorkdayBoard(JobBoardSource):
+    """Workday, the ATS most large companies use. The token is
+    "<tenant>.<pod>/<site>", e.g. "nvidia.wd5/NVIDIAExternalCareerSite", which
+    slug_from_url() builds from any posting or careers URL.
+
+    Two things make this board unlike the other three, both checked against the
+    real NVIDIA board (2026-09-08):
+
+    - **It cannot be enumerated.** NVIDIA alone has 2,000 open postings and a
+      page is capped at 20 (asking for 100 returns nothing at all), so a full
+      crawl would be 100 requests per company per run. Instead the watch entry's
+      own title keywords are sent as the board's search text, one request per
+      keyword, and the caller's usual local filter still decides what counts -
+      the search only narrows what has to be fetched. A watch entry with no
+      keywords is refused rather than crawled.
+    - **Its posting list is a POST**, not a GET, and dates are relative phrases.
+
+    Note this board can be watched but never autofilled: applying goes through a
+    sign-in wizard, and Kyra does not sign in (apply_pipeline.CANNOT_FILL).
+    """
+
+    name = "workday"
+    requires_keywords = True
+    PAGE = 20  # the board's own cap; a larger limit returns an empty response
+    MAX_PAGES = 5  # 100 postings per keyword is plenty for a daily "what is new" check
+
+    def __init__(self, post_json=_post_json):
+        self._post_json = post_json
+
+    def fetch(self, company: str, token: str, keywords: list[str] | None = None) -> list[Posting]:
+        if not keywords:
+            raise ValueError(
+                f"a Workday board has thousands of postings and pages 20 at a time, so {company} needs "
+                "title keywords on its watch entry to search with (they are what would be filtered on anyway)"
+            )
+        tenant_pod, _, site = token.partition("/")
+        tenant = tenant_pod.split(".")[0]
+        host = f"{tenant_pod}.myworkdayjobs.com"
+        url = f"https://{host}/wday/cxs/{tenant}/{site}/jobs"
+        out: dict[str, Posting] = {}
+        for keyword in keywords:
+            for page in range(self.MAX_PAGES):
+                data = self._post_json(url, {
+                    "limit": self.PAGE, "offset": page * self.PAGE, "appliedFacets": {}, "searchText": keyword,
+                }) or {}
+                postings = data.get("jobPostings") or []
+                for j in postings:
+                    path = (j.get("externalPath") or "").removeprefix("/job/").strip("/")
+                    if not path:
+                        continue
+                    out.setdefault(path, Posting(
+                        source=self.name, company=company, id=path, title=(j.get("title") or "").strip(),
+                        location=j.get("locationsText") or "", url=f"https://{host}/{site}/job/{path}",
+                        updated_at=_workday_posted_on(j.get("postedOn") or ""),
+                    ))
+                if len(postings) < self.PAGE:
+                    break
+        return list(out.values())
+
+
+SOURCES: dict[str, type[JobBoardSource]] = {
+    "greenhouse": GreenhouseBoard, "lever": LeverBoard, "ashby": AshbyBoard, "workday": WorkdayBoard,
+}
 
 
 @dataclass
@@ -232,7 +329,7 @@ def check_boards(
             errors.append(f"{entry.company}: unknown source {entry.source!r}")
             continue
         try:
-            postings = src.fetch(entry.company, entry.token)
+            postings = src.fetch(entry.company, entry.token, entry.title_keywords)
         except Exception as e:
             errors.append(f"{entry.company} ({entry.source}/{entry.token}): {type(e).__name__}: {e}")
             logger.warning("board fetch failed for %s: %s", entry.company, e)
@@ -253,6 +350,25 @@ def check_boards(
     return WatchReport(checked_at=now, new=new, still_open=still_open, errors=errors, reposted=reposted)
 
 
+def seed_entry(
+    entry: WatchEntry, seen_path: Path = SEEN_PATH, sources: dict[str, JobBoardSource] | None = None,
+) -> WatchReport:
+    """Check one board the moment it is added, and record what is open.
+
+    A board Duc has just started watching has no "since I last looked", so
+    without this its whole current list arrives in the next morning's digest as
+    if it appeared overnight - 57 postings for NVIDIA, 120 for Anthropic - and
+    buries whatever genuinely did. Nothing is hidden by seeding: the openings
+    are printed at the moment he asks for them, which is where he is looking,
+    and the daily digest goes back to meaning "what changed".
+
+    A fetch failure is reported, not raised: the watchlist entry is what he
+    asked for, and losing it to a momentary network problem would be worse
+    than losing the preview.
+    """
+    return check_boards([entry], seen_path=seen_path, sources=sources)
+
+
 def render_report(report: WatchReport) -> str:
     lines = [f"## Job boards ({len(report.new)} new, {report.still_open} matching open)"]
     for p in report.new:
@@ -270,7 +386,8 @@ def render_report(report: WatchReport) -> str:
 def slug_from_url(url: str) -> tuple[str, str] | None:
     """Best-effort: turn a careers URL into (source, token) so a watchlist
     entry can be added from a link. Greenhouse: boards.greenhouse.io/<tok>
-    or job-boards.greenhouse.io/<tok>/...; Lever: jobs.lever.co/<tok>/...; Ashby: jobs.ashbyhq.com/<tok>/..."""
+    or job-boards.greenhouse.io/<tok>/...; Lever: jobs.lever.co/<tok>/...; Ashby: jobs.ashbyhq.com/<tok>/...;
+    Workday: <tenant>.<pod>.myworkdayjobs.com/[locale/]<site>/..."""
     m = re.search(r"(?:boards|job-boards)\.greenhouse\.io/([A-Za-z0-9_-]+)", url)
     if m:
         return "greenhouse", m.group(1)
@@ -280,6 +397,11 @@ def slug_from_url(url: str) -> tuple[str, str] | None:
     m = re.search(r"jobs\.ashbyhq\.com/([A-Za-z0-9_-]+)", url)
     if m:
         return "ashby", m.group(1)
+    # Workday needs the pod and the site as well as the tenant, so its token
+    # carries all three: "nvidia.wd5/NVIDIAExternalCareerSite".
+    m = re.search(r"([A-Za-z0-9-]+\.wd\d+)\.myworkdayjobs\.com/(?:[a-z]{2}-[A-Z]{2}/)?([A-Za-z0-9_-]+)", url)
+    if m:
+        return "workday", f"{m.group(1)}/{m.group(2)}"
     return None
 
 
@@ -372,7 +494,12 @@ def board_candidates(company: str, watchlist_path: Path = WATCHLIST_PATH) -> lis
 
     words = _norm_title(company).split()
     guesses = {"".join(words), "-".join(words)} - {""}
-    guessed = [(name, token) for token in sorted(guesses) for name in sorted(SOURCES)]
+    # Only boards whose token IS a company slug can be guessed at. Workday's is
+    # "<tenant>.<pod>/<site>" (nvidia.wd5/NVIDIAExternalCareerSite), which no amount of
+    # guessing from a company name produces - it has to come from the watchlist, where
+    # slug_from_url built it from a real URL.
+    guessable = sorted(n for n, cls in SOURCES.items() if not cls.requires_keywords)
+    guessed = [(name, token) for token in sorted(guesses) for name in guessable]
     return watched + [c for c in guessed if c not in watched]
 
 
@@ -432,7 +559,10 @@ def _scan(
             continue
         display = company_for_token(source_name, token, watchlist_path) or company
         try:
-            postings = source.fetch(display, token)
+            # A board that cannot be enumerated (Workday) takes the role as its search
+            # text - which is exactly what this function is matching on anyway, so the
+            # search only narrows what has to be fetched.
+            postings = source.fetch(display, token, [role]) if source.requires_keywords else source.fetch(display, token)
         except Exception as e:  # noqa: BLE001 - a guessed slug that 404s is the normal case, not an error
             logger.debug("board %s/%s did not answer: %s", source_name, token, e)
             continue

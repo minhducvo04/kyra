@@ -99,14 +99,31 @@ def test_no_engine_for_ashby_needs_attention_but_still_tailors(tmp_path):
 @requires_latex
 def test_attention_reasons_accumulate(tmp_path):
     store = JobApplicationStore(tmp_path / "j.db")
-    # unchanged pass-through -> tailoring check; an empty profile field -> autofill attention; letter requested
-    engine = RecordingEngine(skipped=[SkippedField("LinkedIn Profile", "profile.linkedin_url is empty")])
+    # unchanged pass-through -> tailoring check; a REQUIRED field the profile cannot
+    # answer -> autofill attention; letter requested
+    engine = RecordingEngine(skipped=[SkippedField("LinkedIn Profile", "profile.linkedin_url is empty", required=True)])
     r = _run(tmp_path, store, engine=engine, resume_outputs=[ONE_PAGE], cover_letter="always", draft_outputs=["draft", "final letter"])
     assert r.status == "needs_attention"
     assert any("without content changes" in a for a in r.attention)
     assert any("could not fill 'LinkedIn Profile'" in a for a in r.attention)
     assert r.cover_letter == "final letter" and (tmp_path / "letters" / "Duc_Vo_Resume_Meridian_Software_Engineer_New_Grad_Cover_Letter.txt").exists()
     assert "attention:" in store.list()[0].notes
+
+
+@requires_latex
+def test_an_optional_field_the_profile_cannot_answer_does_not_stop_an_application(tmp_path):
+    """Duc has no portfolio site and no Twitter, so an optional box for either used
+    to turn a finished application into needs_attention. The form's own required
+    marking decides now: the skip is still listed in the summary he reads, it just
+    is not a reason to stop."""
+    store = JobApplicationStore(tmp_path / "j.db")
+    engine = RecordingEngine(skipped=[
+        SkippedField("Portfolio", "profile.portfolio_url is empty", required=False),
+        SkippedField("Anything else?", "no matching profile field - custom question", required=False),
+    ])
+    r = _run(tmp_path, store, engine=engine)
+    assert r.status == "ready_to_submit", r.attention
+    assert r.autofill_skipped == ["Portfolio", "Anything else?"], "still reported, just not blocking"
 
 
 @requires_latex
@@ -264,3 +281,31 @@ def test_reuse_never_renames_a_file_that_is_not_this_application_s(tmp_path):
     assert base_tex.read_text().startswith("\\documentclass")
     assert r.resume_pdf_path == str(base_pdf)  # used as-is, not renamed
     assert not (resumes / "Duc_Vo_Resume_Meridian_Software_Engineer_New_Grad.tex").exists()
+
+@requires_latex
+def test_source_url_is_kept_on_the_tracker_row(tmp_path):
+    """Found on LinkedIn, applied through the company's Greenhouse page: the
+    pipeline runs against the company link and the row says where it came from."""
+    store = JobApplicationStore(tmp_path / "j.db")
+    r = _run(tmp_path, store, engine=RecordingEngine(), source_url="https://www.linkedin.com/jobs/view/7/")
+    assert r.status == "ready_to_submit"
+    assert "[found via] https://www.linkedin.com/jobs/view/7/" in store.list()[0].notes
+
+
+@requires_latex
+def test_workday_tailors_the_resume_and_says_why_it_cannot_fill(tmp_path):
+    """Workday's manual apply is a seven-step wizard whose first step is Sign In
+    (checked on a real NVIDIA posting, 2026-09-08). Kyra cannot sign in or make
+    an account, so there will never be an engine - and the pipeline has to say
+    that, not "no engine yet", which reads as "coming soon". Everything before
+    the form still runs: tracker entry, tailored one-page resume, cover letter."""
+    from tests.test_job_posting_fetch import WD_URL
+
+    store = JobApplicationStore(tmp_path / "j.db")
+    r = _run(tmp_path, store, url=WD_URL, engine=RecordingEngine())
+    assert r.company == "Nvidia" and r.resume_pdf_path and r.resume_fit
+    assert r.status == "needs_attention"
+    reason = " ".join(r.attention)
+    assert "account" in reason and "sign in" in reason.lower()
+    assert "yet" not in reason, "this is not a gap waiting to be filled"
+    assert WD_URL in reason, "hand him the link he has to open himself"

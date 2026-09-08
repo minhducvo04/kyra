@@ -11,8 +11,14 @@ Boundaries that do not move here:
 - Nothing is ever submitted. The end state is `ready_to_submit` (the form is
   filled in an open browser window) or `needs_attention` (something for Duc to
   fix or fill by hand). `applied` is set by Duc after he clicks.
-- LinkedIn is never read or driven. A LinkedIn URL needs the posting text
-  pasted, same as target_job_posting.
+- An ATS that cannot be filled within these boundaries says so plainly rather
+  than "no engine yet" (CANNOT_FILL): Workday's apply flow begins at Sign In,
+  and Kyra never signs in or creates an account.
+- LinkedIn is never read or driven, and there are two ways past that. Kyra looks
+  the posting up on the company's own board from the company and role already on
+  the tracker row (resolve_apply_url); failing that, Duc pastes the "Apply on
+  company website" link as `url` and the listing as `source_url`, which is
+  recorded on the row and nothing more. Either way the listing is never fetched.
 - One resume per company: the tailored PDF is saved under data/resumes/ and set
   on the tracked application, and that is the file autofill attaches.
 - Every fact check the fit loop already runs (guard, invented numbers, tailoring
@@ -48,6 +54,19 @@ COVER_LETTER_MODES = ("auto", "always", "never")
 # posting Duc already applied to would at best waste a model call and at worst confuse
 # the tracker about what was actually sent.
 ALREADY_DONE = {"applied", "referral_pending", "interviewing", "offer", "rejected", "withdrawn"}
+
+
+# An ATS whose application cannot be filled within this project's boundaries, and
+# why. This is not the same as "no engine yet": Workday's manual apply is a
+# seven-step wizard whose first step is Sign In (checked on a real NVIDIA posting,
+# 2026-09-08), and Kyra neither signs in nor creates accounts. Saying "yet" about
+# something that is never coming wastes Duc's attention on every run.
+CANNOT_FILL = {
+    "workday": (
+        "Workday needs your account: its apply flow is a seven-step wizard that starts at Sign In, "
+        "and Kyra never signs in or creates accounts. Open {url} yourself and attach {resume}"
+    ),
+}
 
 
 class ApplyError(Exception):
@@ -242,6 +261,7 @@ def run_apply_pipeline(
     posting_text: str = "",
     company: str = "",
     role: str = "",
+    source_url: str = "",
     cover_letter: str = "auto",
     retailor: bool = False,
     fetch: Callable = fetch_posting,
@@ -265,6 +285,7 @@ def run_apply_pipeline(
     )
     if url != pasted_url:
         note(f"{pasted_url} is not a job board - applying through {why}")
+        source_url = source_url or pasted_url
         # Target under the row's OWN company and role. Dedup matches on company+role,
         # and the two spellings differ in practice - his LinkedIn row reads "... New
         # Grad - 2026-2027" where the Ashby board says "... New Grad" - so targeting
@@ -275,13 +296,15 @@ def run_apply_pipeline(
             company, role = company.strip() or tracked.company, role.strip() or tracked.role
 
     # 2. Target: posting text + tracker entry (fetch for the three boards, pasted text otherwise).
-    target = TargetPostingTool(store, fetch=fetch).run(url=url, posting_text=posting_text, company=company, role=role)
+    target = TargetPostingTool(store, fetch=fetch).run(
+        url=url, posting_text=posting_text, company=company, role=role, source_url=source_url
+    )
     if "error" in target:
         raise ApplyError(target["error"])
     app = JobApplication(**target["application"])
     text = target["posting_text"]
     result = ApplyResult(url=url, application_id=app.id, company=app.company, role=app.role, status=app.status)
-    result.source_url = pasted_url if pasted_url != url else None
+    result.source_url = source_url or None
     result.steps = steps
     note(f"targeted {app.company} - {app.role} (tracker #{app.id}, {'new' if target['created'] else 'already tracked'})")
     if app.status in ALREADY_DONE:
@@ -328,8 +351,11 @@ def run_apply_pipeline(
 
     # 5. Autofill, when an engine exists for this ATS and there is a PDF to attach.
     engine, ats = engine_for_url(url, engines)
-    if engine is None:
-        result.attention.append(f"no autofill engine for {ats} postings yet - fill the form by hand with {Path(result.resume_pdf_path).name if result.resume_pdf_path else 'the resume'}")
+    resume_name = Path(result.resume_pdf_path).name if result.resume_pdf_path else "the resume"
+    if ats in CANNOT_FILL:
+        result.attention.append(CANNOT_FILL[ats].format(url=url, resume=resume_name))
+    elif engine is None:
+        result.attention.append(f"no autofill engine for {ats} postings yet - fill the form by hand with {resume_name}")
     elif not result.resume_pdf_path:
         result.attention.append("autofill skipped: no compiled resume to attach")
     else:
@@ -343,9 +369,11 @@ def run_apply_pipeline(
                 result.autofill_summary_path = report.summary_path
                 result.autofill_filled = len(report.filled)
                 result.autofill_skipped = [s.label for s in report.skipped]
-                # A custom question with no profile data is expected on nearly every form and Duc
-                # reviews the window anyway; an empty profile field or a fill error is not.
-                hard = [s for s in report.skipped if "custom question" not in s.reason]
+                # What stops an application is what the FORM marks required, not what kind of
+                # field it is: an unanswered optional custom question is normal on nearly every
+                # posting, and a blank required one is not. Each ATS marks it differently, so
+                # job_autofill reads the marking and SkippedField.required carries it here.
+                hard = [s for s in report.skipped if s.required]
                 for s in hard:
                     result.attention.append(f"autofill could not fill '{s.label}': {s.reason}")
                 note(f"filled {len(report.filled)} field(s), {len(report.skipped)} left for you")
