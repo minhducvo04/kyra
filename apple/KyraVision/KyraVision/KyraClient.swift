@@ -33,6 +33,11 @@ struct ChatOut: Codable, Sendable {
     }
 }
 
+struct AudioClip: Codable, Sendable {
+    let b64: String
+    let text: String
+}
+
 enum KyraError: LocalizedError {
     case badURL
     case unauthorized
@@ -148,6 +153,46 @@ final class KyraClient {
 
         guard let final else { throw KyraError.stream("the reply ended before it finished") }
         return final
+    }
+
+    /// Speak text that has already been written, one sentence at a time.
+    ///
+    /// `onClip` fires per sentence as its audio arrives, so playback can start
+    /// on the first one while the rest is still being synthesised - the same
+    /// trick that took the browser's first spoken word from 4.45s to 3.61s
+    /// (docs/voice-latency.md). Kokoro on the Mac rather than AVSpeechSynthesizer
+    /// on device: her voice should be the same voice everywhere, and the round
+    /// trip is on a LAN.
+    func speak(_ text: String, onClip: @Sendable @escaping (Data) -> Void) async throws {
+        let body = try JSONEncoder().encode(["text": text])
+        let (bytes, response) = try await Self.session.bytes(for: try request("/api/speak", body: body))
+        try Self.check(response)
+
+        var event = ""
+        var payload = ""
+
+        func flush() {
+            guard !payload.isEmpty else { return }
+            if event == "audio",
+               let clip = try? JSONDecoder().decode(AudioClip.self, from: Data(payload.utf8)),
+               let wav = Data(base64Encoded: clip.b64) {
+                onClip(wav)
+            }
+            event = ""
+            payload = ""
+        }
+
+        for try await line in bytes.lines {
+            if line.hasPrefix("event: ") {
+                flush()   // see send(): blank lines are not delivered
+                event = String(line.dropFirst("event: ".count))
+            } else if line.hasPrefix("data: ") {
+                payload += line.dropFirst("data: ".count)
+            } else if line.isEmpty {
+                flush()
+            }
+        }
+        flush()
     }
 
     /// Stop a reply that is still being generated. The server keeps running the

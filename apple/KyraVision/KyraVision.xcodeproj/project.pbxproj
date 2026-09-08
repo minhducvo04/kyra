@@ -11,6 +11,7 @@
 		A1000000000000000000102 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002 /* ContentView.swift */; };
 		A1000000000000000000103 /* KyraClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000003 /* KyraClient.swift */; };
 		A1000000000000000000104 /* PresenceOrb.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000004 /* PresenceOrb.swift */; };
+		A1000000000000000000105 /* SpeechPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000005 /* SpeechPlayer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -19,6 +20,7 @@
 		A1000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1000000000000000000003 /* KyraClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KyraClient.swift; sourceTree = "<group>"; };
 		A1000000000000000000004 /* PresenceOrb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceOrb.swift; sourceTree = "<group>"; };
+		A1000000000000000000005 /* SpeechPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechPlayer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -47,6 +49,7 @@
 				A1000000000000000000002 /* ContentView.swift */,
 				A1000000000000000000003 /* KyraClient.swift */,
 				A1000000000000000000004 /* PresenceOrb.swift */,
+				A1000000000000000000005 /* SpeechPlayer.swift */,
 			);
 			path = KyraVision;
 			sourceTree = "<group>";
@@ -131,6 +134,7 @@
 				A1000000000000000000102 /* ContentView.swift in Sources */,
 				A1000000000000000000103 /* KyraClient.swift in Sources */,
 				A1000000000000000000104 /* PresenceOrb.swift in Sources */,
+				A1000000000000000000105 /* SpeechPlayer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

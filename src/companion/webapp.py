@@ -552,6 +552,57 @@ def delete_memory_note(body: MemoryNoteRef) -> dict:
     return {"deleted": True}
 
 
+def _audio_event(sentence: str, encode_wav_bytes) -> tuple[str, dict] | None:
+    """One sentence -> one `audio` SSE event, or None when there is nothing a
+    voice can say (a code fence strips to nothing). Shared by /api/voice/stream
+    and /api/speak so the two cannot drift: both strip markdown per sentence
+    before the synthesiser ever sees it, which is the guarantee voice_text.py
+    exists to make."""
+    speech = spoken_text(sentence)
+    if not speech:
+        return None
+    samples, rate = _rt.tts.speak(speech)
+    wav = encode_wav_bytes(samples, rate)
+    return ("audio", {"b64": base64.b64encode(wav).decode(), "rate": rate, "text": speech})
+
+
+class SpeakIn(BaseModel):
+    text: str
+
+
+@app.post("/api/speak")
+def speak(body: SpeakIn) -> StreamingResponse:
+    """Say text that is already written, one sentence at a time.
+
+    /api/voice/stream takes a microphone recording and runs a whole turn; a
+    client that typed its turn through /api/chat/stream has the reply already
+    and only needs a voice for it. Same events (`audio` per sentence, then
+    `done`) so a client reuses one player for both, and same per-sentence
+    synthesis so the first words arrive while the rest is still being made.
+
+    Synchronous rather than threaded, unlike the voice path: there is no model
+    call to overlap with, only synthesis, and Kokoro is fast enough that the
+    first sentence is out in about half a second.
+    """
+    from companion.voice import encode_wav_bytes
+
+    text = body.text.strip()
+    if not text:
+        raise ApiError(400, "empty_text", "there is nothing to say")
+
+    def events():
+        sentences, _ = take_sentences(text, final=True)
+        for sentence in sentences:
+            event = _audio_event(sentence, encode_wav_bytes)
+            if event:
+                yield f"event: {event[0]}\ndata: {json.dumps(event[1])}\n\n"
+        yield f"event: done\ndata: {json.dumps({'sentences': len(sentences)})}\n\n"
+
+    return StreamingResponse(
+        events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
+
+
 @app.post("/api/voice/stream")
 def voice_stream(audio: UploadFile) -> StreamingResponse:
     """One utterance in, her reply out sentence by sentence as SSE.
@@ -579,12 +630,9 @@ def voice_stream(audio: UploadFile) -> StreamingResponse:
 
     def say(sentence: str) -> None:
         """Synthesise one sentence and hand it to the browser."""
-        speech = spoken_text(sentence)
-        if not speech:
-            return
-        samples, rate = _rt.tts.speak(speech)
-        wav = encode_wav_bytes(samples, rate)
-        q.put(("audio", {"b64": base64.b64encode(wav).decode(), "rate": rate, "text": speech}))
+        event = _audio_event(sentence, encode_wav_bytes)
+        if event:
+            q.put(event)
 
     def run() -> None:
         try:

@@ -241,3 +241,56 @@ def test_silence_in_gets_no_audio_out(client, monkeypatch):
         events = _sse(res.read().decode())
     assert [k for k, _ in events] == ["transcript", "done"]
     assert said == []
+
+
+# --- speaking text that is already written -------------------------------------
+# The visionOS client types a turn through /api/chat/stream and then needs to
+# hear the reply. /api/voice/stream takes audio in, so it cannot serve that; this
+# is the same sentence-by-sentence synthesis with the STT and the turn removed.
+
+
+def test_speak_streams_one_audio_chunk_per_sentence(client, monkeypatch):
+    said = []
+
+    class Tts:
+        def speak(self, text):
+            said.append(text)
+            return [0.0] * 160, 16000
+
+    monkeypatch.setitem(sys.modules, "companion.voice", types.SimpleNamespace(
+        encode_wav_bytes=lambda audio, rate: _wav_bytes()))
+    monkeypatch.setattr(webapp, "_rt", types.SimpleNamespace(tts=Tts()))
+
+    with client.stream("POST", "/api/speak", json={"text": "**Sure.** Run `pytest` now. Then read it."}) as res:
+        assert res.status_code == 200
+        events = _sse(res.read().decode())
+
+    audio = [p for kind, p in events if kind == "audio"]
+    # Markdown is stripped per sentence, exactly as on the voice path.
+    assert said == ["Sure.", "Run pytest now.", "Then read it."]
+    assert [a["text"] for a in audio] == said
+    assert base64.b64decode(audio[0]["b64"])[:4] == b"RIFF"
+    assert events[-1][0] == "done"
+
+
+def test_speaking_nothing_is_rejected_rather_than_answered_with_silence(client):
+    assert client.post("/api/speak", json={"text": "   "}).status_code == 400
+
+
+def test_text_with_no_sayable_content_still_ends_cleanly(client, monkeypatch):
+    # A reply that is only a code fence has nothing a voice can say; the caller
+    # needs `done`, not a stream that stops without explanation.
+    said = []
+
+    class Tts:
+        def speak(self, text):
+            said.append(text)
+            return [0.0] * 160, 16000
+
+    monkeypatch.setitem(sys.modules, "companion.voice", types.SimpleNamespace(
+        encode_wav_bytes=lambda audio, rate: _wav_bytes()))
+    monkeypatch.setattr(webapp, "_rt", types.SimpleNamespace(tts=Tts()))
+    with client.stream("POST", "/api/speak", json={"text": "```\ncode only\n```"}) as res:
+        events = _sse(res.read().decode())
+    assert said == []
+    assert [k for k, _ in events] == ["done"]

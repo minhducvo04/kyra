@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var backend = "…"
     @State private var showSettings = false
     @State private var turn: Task<Void, Never>?
+    @State private var speech = SpeechPlayer()
 
     private var connected: Bool { !client.baseURL.isEmpty }
     private var thinking: Bool { presence == .thinking }
@@ -26,6 +27,9 @@ struct ContentView: View {
             PresenceReadout(presence: presence)
                 .padding(.top, 26)
                 .padding(.bottom, 8)
+                // Tapping her is how you cut her off - the mic button does the
+                // same job on the web, and on a headset the orb is what you look at.
+                .onTapGesture { if speech.isSpeaking { stop() } }
             transcript
             composer
         }
@@ -193,6 +197,7 @@ struct ContentView: View {
                     lines.append(Line(who: .kyra, text: out.reply, badge: out.badge))
                 }
                 presence = .idle
+                await speakReply(out.reply)
             } catch is CancellationError {
                 // stop() already set .interrupted.
             } catch {
@@ -202,7 +207,27 @@ struct ContentView: View {
         }
     }
 
+    /// Reads the reply aloud, starting on the first sentence rather than waiting
+    /// for the whole thing to be synthesised. Failing to speak is not failing the
+    /// turn: the reply is already on screen, so a silent answer beats an error.
+    private func speakReply(_ reply: String) async {
+        guard !reply.isEmpty else { return }
+        presence = .speaking
+        do {
+            try await client.speak(reply) { wav in
+                Task { @MainActor in speech.enqueue(wav) }
+            }
+            while speech.isSpeaking, presence == .speaking {
+                try? await Task.sleep(for: .milliseconds(120))
+            }
+        } catch {
+            // fall through - she just does not say this one out loud
+        }
+        if presence == .speaking { presence = .idle }
+    }
+
     private func stop() {
+        speech.stop()
         turn?.cancel()
         // Cancelling the request only stops this end listening; the Mac keeps
         // generating and would file the whole reply into memory as if it had
