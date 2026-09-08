@@ -1,6 +1,9 @@
 """Ashby autofill engine. Built against two real live forms (Composio and
 Netic, 2026-09-07); these tests pin the parts that were wrong at some point
 during that build, without needing a browser."""
+import sys
+import types
+
 import pytest
 
 from companion.apply_pipeline import engine_for_url
@@ -264,11 +267,18 @@ def test_missing_browser_says_what_to_do(monkeypatch, tmp_path):
         def stop(self):
             stopped.append(True)
 
-    # fill() imports sync_playwright inside the function, so the real module is the
-    # only patch point - a module-level attribute on job_autofill is never consulted.
-    monkeypatch.setattr(
-        "playwright.sync_api.sync_playwright", lambda: type("S", (), {"start": lambda self: _PW()})()
-    )
+    # fill() imports sync_playwright inside the function, so the module is the only
+    # patch point - a module-level attribute on job_autofill is never consulted.
+    # Injected into sys.modules rather than monkeypatched by dotted path, because
+    # that form imports the real playwright to resolve it and playwright is not in
+    # requirements-web.txt: CI has no such module, and the test died there while
+    # passing on the laptop. Same trick the voice tests use for companion.voice.
+    fake_api = types.ModuleType("playwright.sync_api")
+    fake_api.sync_playwright = lambda: type("S", (), {"start": lambda self: _PW()})()
+    fake_pkg = types.ModuleType("playwright")
+    fake_pkg.sync_api = fake_api
+    monkeypatch.setitem(sys.modules, "playwright", fake_pkg)
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", fake_api)
     (tmp_path / "r.pdf").write_bytes(b"%PDF-1.4")
     profile = ApplicantProfile(
         first_name="A", last_name="B", email="a@b.co", phone="1", resume_path=str(tmp_path / "r.pdf")
