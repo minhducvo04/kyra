@@ -1255,3 +1255,118 @@ body[data-presence="failed"] .core-sub { color: var(--danger); }
 .search-hit-path { font-size: 0.6rem; color: var(--text-dim); word-break: break-all; flex: 1; }
 .search-hit-score { font-size: 0.55rem; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .search-hit-snippet { font-size: 0.66rem; line-height: 1.45; color: var(--text-dim); }
+
+/* ---- Focus blocks -------------------------------------------------------
+   docs/plans/2026-09-08-attention-environment.md. Two rules here are
+   post-conditions rather than taste, and tests/browser checks assert them:
+   the evening theme may only lower luminance and warm the hue (never
+   brighten), and nothing in the running state may name the assigned arm. */
+
+.focus-chip {
+  font-family: var(--mono, monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  border: 1px solid var(--accent-dim);
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.25);
+}
+.focus-chip[hidden] { display: none; }
+
+.focus-readout { text-align: center; padding: 0.6rem 0 0.9rem; }
+.focus-remaining {
+  font-family: var(--mono, monospace);
+  font-size: 2.6rem;
+  line-height: 1;
+  color: var(--text);
+  text-shadow: 0 0 18px var(--accent-glow);
+  font-variant-numeric: tabular-nums;
+}
+.focus-task-line { color: var(--text-dim); font-size: 0.8rem; margin-top: 0.4rem; }
+.focus-next-break { color: var(--text-faint); font-size: 0.72rem; margin-top: 0.2rem; }
+
+.focus-blind {
+  border: 1px dashed var(--grid);
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  text-align: center;
+  padding: 0.4rem;
+  margin-bottom: 0.7rem;
+}
+
+.focus-note { color: var(--text-faint); font-size: 0.72rem; margin: 0.5rem 0 0; }
+
+.jobs-field-row { flex-direction: row; align-items: center; gap: 0.5rem; }
+.jobs-field-row input[type="checkbox"] { width: auto; }
+
+.focus-rating { display: flex; gap: 0.35rem; }
+.focus-rate-btn {
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--grid);
+  color: var(--text-dim);
+  padding: 0.4rem 0;
+  cursor: pointer;
+  font-family: var(--mono, monospace);
+}
+.focus-rate-btn.is-active { border-color: var(--accent); color: var(--accent); }
+
+/* The probe target. Deliberately plain: a reaction-time measurement whose
+   target animates is measuring the animation. */
+.focus-target {
+  display: block;
+  width: 100%;
+  height: 140px;
+  margin: 0.8rem 0 0.4rem;
+  border: 1px solid var(--grid);
+  background: var(--panel-2);
+  cursor: pointer;
+}
+.focus-target[data-lit="true"] { background: var(--accent); border-color: var(--accent); }
+.focus-target[data-lit="early"] { background: var(--danger); border-color: var(--danger); }
+.focus-probe-head { font-size: 0.72rem; letter-spacing: 0.12em; color: var(--text-dim); }
+.focus-probe-progress {
+  font-family: var(--mono, monospace);
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  text-align: center;
+  margin-bottom: 0.6rem;
+}
+.jobs-btn-quiet { background: transparent; color: var(--text-faint); }
+
+.focus-result {
+  border-top: 1px solid var(--grid);
+  margin-top: 0.8rem;
+  padding-top: 0.7rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.focus-result strong { color: var(--text); }
+
+.focus-about { font-size: 0.76rem; color: var(--text-dim); line-height: 1.5; }
+.focus-about h4 { color: var(--text); font-size: 0.78rem; margin: 0.9rem 0 0.3rem; }
+.focus-about ul { margin: 0.2rem 0 0; padding-left: 1.1rem; }
+.focus-about li { margin-bottom: 0.25rem; }
+
+/* Running: the stage says so even with the panel closed. */
+body[data-focus="running"] .core-wrap { --idle-speed: 200s; }
+body[data-focus="running"] .ring-outer { stroke: var(--accent-dim); opacity: 0.5; }
+
+/* Evening. Only darkens and warms - never a brighter value than the day
+   token it replaces. Checked in the browser by reading computed luminance,
+   not by eye. */
+body[data-focus-evening="true"] {
+  --void: #070502;
+  --panel: #120c05;
+  --panel-2: #170f06;
+  --grid: #2a1c0c;
+  --text: #e8d3b0;
+  --text-dim: #8f7658;
+  --text-faint: #5c4c37;
+  --accent: #e08a3c;
+  --accent-dim: #7a4a17;
+  --accent-glow: rgba(224, 138, 60, 0.28);
+}
+body[data-focus-evening="true"] .hud-stage { filter: brightness(0.82); }

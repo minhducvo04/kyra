@@ -35,6 +35,8 @@
           <span class="dot"></span>LOCAL
         </button>
       </div>
+      <span class="focus-chip" id="focus-chip" hidden aria-live="polite"></span>
+      <button class="jobs-toggle" id="focus-toggle" type="button">FOCUS</button>
       <button class="jobs-toggle" id="search-toggle" type="button">SEARCH</button>
       <button class="jobs-toggle" id="tools-toggle" type="button">TOOLS</button>
       <button class="jobs-toggle" id="jobs-toggle" type="button">JOBS</button>
@@ -305,6 +307,90 @@
       <div class="search-status" id="search-status"></div>
       <div class="search-answer" id="search-answer-box" hidden></div>
       <div class="search-results" id="search-results"></div>
+    </section>
+  </aside>
+
+  <!-- Focus blocks. Plan and the evidence for every default:
+       docs/plans/2026-09-08-attention-environment.md. The arm is not shown while a
+       block runs (the server strips it); it is revealed when the block ends. -->
+  <aside class="jobs-panel" id="focus-panel" aria-hidden="true">
+    <div class="jobs-panel-header">
+      <span>FOCUS</span>
+      <button id="focus-close" type="button" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="jobs-tabs" role="tablist">
+      <button class="jobs-tab is-active" data-focus-tab="block" type="button">BLOCK</button>
+      <button class="jobs-tab" data-focus-tab="history" type="button">HISTORY</button>
+      <button class="jobs-tab" data-focus-tab="about" type="button">ABOUT</button>
+    </div>
+
+    <section class="jobs-tab-panel is-active" data-focus-tab-panel="block">
+      <div id="focus-idle">
+        <label class="jobs-field">
+          <span>What are you working on?</span>
+          <input id="focus-task" type="text" placeholder="tailoring the Northwind resume">
+        </label>
+        <label class="jobs-field">
+          <span>Length</span>
+          <select id="focus-minutes">
+            <option value="25">25 minutes</option>
+            <option value="50" selected>50 minutes (break at 25)</option>
+            <option value="90">90 minutes (breaks at 25, 50, 75)</option>
+          </select>
+        </label>
+        <label class="jobs-field jobs-field-row">
+          <input id="focus-probe-on" type="checkbox" checked>
+          <span>Run the 60-second reaction-time probe at both ends</span>
+        </label>
+        <button class="jobs-btn" id="focus-start" type="button">Start block</button>
+        <p class="focus-note">Headphones for every block, so the arms stay comparable.</p>
+      </div>
+
+      <div id="focus-running" hidden>
+        <div class="focus-readout">
+          <div class="focus-remaining" id="focus-remaining">--:--</div>
+          <div class="focus-task-line" id="focus-task-line"></div>
+          <div class="focus-next-break" id="focus-next-break"></div>
+        </div>
+        <div class="focus-blind">Sound condition hidden until the block ends.</div>
+        <label class="jobs-field">
+          <span>How did that go? (1 poor - 5 great)</span>
+          <div class="focus-rating" id="focus-rating" role="group" aria-label="Rating">
+            <button class="focus-rate-btn" data-rating="1" type="button">1</button>
+            <button class="focus-rate-btn" data-rating="2" type="button">2</button>
+            <button class="focus-rate-btn" data-rating="3" type="button">3</button>
+            <button class="focus-rate-btn" data-rating="4" type="button">4</button>
+            <button class="focus-rate-btn" data-rating="5" type="button">5</button>
+          </div>
+        </label>
+        <label class="jobs-field">
+          <span>One word on why</span>
+          <input id="focus-note" type="text" placeholder="steady / restless / interrupted">
+        </label>
+        <button class="jobs-btn" id="focus-end" type="button">End block</button>
+      </div>
+
+      <div id="focus-probe" hidden>
+        <div class="focus-probe-head" id="focus-probe-head">REACTION-TIME PROBE</div>
+        <p class="focus-note" id="focus-probe-hint">
+          Press SPACE the moment the dot appears. About a minute. Do not anticipate - waiting is the task.
+        </p>
+        <button class="focus-target" id="focus-target" type="button" aria-label="Probe target"></button>
+        <div class="focus-probe-progress" id="focus-probe-progress"></div>
+        <button class="jobs-btn jobs-btn-quiet" id="focus-probe-skip" type="button">Skip the probe</button>
+      </div>
+
+      <div class="focus-result" id="focus-result" hidden></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-focus-tab-panel="history">
+      <button class="jobs-btn" id="focus-history-refresh" type="button">Refresh</button>
+      <div class="jobs-tracker-list" id="focus-history-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-focus-tab-panel="about">
+      <div class="focus-about" id="focus-about"></div>
     </section>
   </aside>
 

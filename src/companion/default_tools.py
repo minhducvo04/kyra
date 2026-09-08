@@ -5,6 +5,7 @@ out of sync with each other - before this existed, `ToolRegistry(...)`
 was constructed three times with the same tool list typed out separately
 in each file.
 """
+from companion.focus import focus_tools
 from companion.job_applications import JobApplicationStore, job_application_tools
 from companion.job_autofill import job_autofill_tools
 from companion.job_posting_fetch import TargetPostingTool
@@ -48,6 +49,7 @@ def default_tool_registry(draft_backend: AnthropicLLM | None = None) -> ToolRegi
             llm=draft_backend, reminders=reminders, memory_notes=MarkdownMemoryNotesStore(), applications=applications
         )
         + [AnalyzePostingTool(), TargetPostingTool(applications)]
+        + focus_tools()
         + [SearchKyraDataTool()]  # opens its index on first use, not here
         + [TechNewsTool(), ScienceFactsTool()]
     )
