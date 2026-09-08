@@ -97,6 +97,10 @@ gone. Reproduced directly: two stores over the same collection, the second write
 the only mechanism that fits the one verification turn that streamed to the browser, raised nothing, and left no
 record. Fix belongs in `memory.py` on its own, with its own verification - not folded into this slice.
 
+**Fixed 2026-09-07** ([PR #14](https://github.com/minhducvo04/kyra/pull/14)): `add()` writes `uuid4().hex`, the counter is gone,
+`tests/test_memory.py` pins the two-instance repro (red first), and a real BGE run on a copy of the real store confirmed
+no migration is needed. The real store is already missing ids 30-37; see the CLAUDE.md bullet for what the log shows.
+
 ## Not doing, and why
 - **A framework rewrite (React etc.)** - nothing above needs one; the cache-busting and EventSource plumbing
   already work, and the Vision Pro client is native SwiftUI, not a web view.
