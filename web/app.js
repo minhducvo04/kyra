@@ -2842,6 +2842,15 @@ function focusReachedEnd() {
   setPresence("idle", "block over — rate it in FOCUS");
   addLine("system", "Focus block finished. Rate it in the FOCUS panel to record the result.");
   earcon("listening");
+  focusNotify("Focus block finished", "Rate it in the FOCUS panel to record the result.");
+}
+
+// One guarded helper for both cues. A browser that denies notifications, or one
+// that needs a service worker for them, falls through to the in-page cue that
+// has already fired - so this can only ever add reach, never replace it.
+function focusNotify(title, body) {
+  if (!window.Notification || Notification.permission !== "granted") return;
+  try { new Notification(title, { body, tag: "kyra-focus" }); } catch (_) { /* in-page cue stands */ }
 }
 
 function focusScheduleBreaks() {
@@ -2859,10 +2868,7 @@ function focusScheduleBreaks() {
       // The break is the best-supported intervention on the whole page, and a cue
       // Duc cannot see because he is in another tab is not a cue. Notifications are
       // only requested once he has actually started a block, never on page load.
-      if (window.Notification && Notification.permission === "granted") {
-        try { new Notification("Look away for 20 seconds", { body: `${at} minutes in.`, tag: "kyra-break" }); }
-        catch (_) { /* some browsers require a service worker; the in-page cue stands */ }
-      }
+      focusNotify("Look away for 20 seconds", `${at} minutes in.`);
     }, inMs));
   }
 }
@@ -3119,3 +3125,12 @@ async function focusRestore() {
   }
 }
 focusRestore();
+
+// Wind-down must arrive on its own: without this the evening theme only applied
+// when Duc happened to send a turn, so an evening spent reading would stay on the
+// daytime palette - which is the one thing the evening rule exists to prevent. The
+// hour lives in companion/focus.py and is reported by /api/focus/active, so this
+// asks rather than duplicating the constant. Slow on purpose; it is a theme, not a
+// countdown, and the same call keeps the block state in step with the other front
+// doors for free.
+setInterval(focusSync, 5 * 60 * 1000);
