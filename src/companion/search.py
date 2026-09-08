@@ -44,10 +44,12 @@ from abc import ABC, abstractmethod
 from collections import Counter
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 from companion.doc_text import UnsupportedDocumentType, extract_text
 from companion.paths import DATA_DIR, PROJECT_ROOT
+from companion.tools import Tool
 
 log = logging.getLogger(__name__)
 
@@ -578,6 +580,13 @@ class HybridSearchIndex(SearchIndex):
             )
         return self._collection
 
+    def last_indexed(self) -> float | None:
+        """When the newest source in the index was written, or None for an
+        empty index. Search never reindexes on its own, so callers that
+        present results to a human need a way to say how old they are."""
+        row = self._conn.execute("SELECT MAX(indexed_at) FROM manifest").fetchone()
+        return row[0] if row and row[0] else None
+
     def close(self) -> None:
         self._conn.close()
 
@@ -1044,3 +1053,96 @@ def answer(index: SearchIndex, query: str, k: int = 6, llm=None,
     )
     text, used, warnings = enforce_citations(reply, len(hits))
     return Answer(text=text, citations=[hits[i - 1].chunk for i in used], hits=hits, warnings=warnings)
+
+
+# --- the chat tool ---------------------------------------------------------
+
+SEARCH_TOOL_SNIPPET_WORDS = 60
+
+
+class SearchKyraDataTool(Tool):
+    """Look something up in everything Kyra stores, from a chat turn.
+
+    The one thing this deliberately cannot do is reach private material.
+    The web SEARCH panel can, because a human ticks a box there and watches
+    the result; a chat turn has no such gesture and its far end is the
+    Anthropic API. So there is no include_sensitive parameter to get wrong -
+    the absence is the guarantee, and asking for the `private` kind is
+    refused rather than quietly answered with an empty list, which would
+    read as "nothing there" instead of "not yours to read".
+    """
+
+    name = "search_kyra_data"
+    description = (
+        "Search everything Kyra stores - project docs and plans, daily digests, resumes and cover "
+        "letters, job applications and outreach, reminders, learning items, saved memory notes and "
+        "past conversations - and get back the passages that match, each with the file it came from. "
+        "Use it when Duc asks what was decided, written, measured or saved about something, or when "
+        "answering needs a detail you would otherwise be guessing at. Not for source code: ripgrep is "
+        "better at that. Private material is never searched."
+    )
+    input_schema = {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "What to look for. A question or a phrase both work; exact "
+                               "identifiers (CS 169A, qwen1.5b-v4-s13) work especially well.",
+            },
+            "kind": {
+                "type": "string",
+                "description": "Optional filter to one kind of material, e.g. "
+                               f"{', '.join(k for k in KINDS if k != 'private')}.",
+            },
+            "k": {"type": "integer", "description": "How many passages to return (1-10, default 5)."},
+        },
+        "required": ["query"],
+    }
+
+    def __init__(self, index: SearchIndex | None = None, index_factory=HybridSearchIndex):
+        # Built lazily: default_tool_registry() runs at startup in all three
+        # front doors, and opening SQLite + Chroma there would cost every
+        # launch whether or not the turn ever searches anything.
+        self._index = index
+        self._index_factory = index_factory
+
+    @property
+    def index(self) -> SearchIndex:
+        if self._index is None:
+            self._index = self._index_factory()
+        return self._index
+
+    def run(self, query: str = "", kind: str | None = None, k: int = 5) -> dict:
+        query = query.strip()
+        if not query:
+            return {"error": "no query given - say what to look for"}
+        if kind == "private":
+            return {"error": "private material is not searchable from a chat turn - "
+                             "open the SEARCH panel and turn on the private toggle"}
+        if kind and kind not in KINDS:
+            return {"error": f"unknown kind {kind!r} - have: "
+                             f"{', '.join(x for x in KINDS if x != 'private')}"}
+        k = max(1, min(int(k or 5), 10))
+
+        hits = self.index.search(query, k=k, kinds=[kind] if kind else None, include_sensitive=False)
+        results = [
+            {
+                "path": h.chunk.path,
+                "kind": h.chunk.kind,
+                "title": h.chunk.title,
+                "score": round(h.score, 4),
+                "text": " ".join(h.chunk.text.split()[:SEARCH_TOOL_SNIPPET_WORDS]),
+            }
+            for h in hits
+        ]
+        last = getattr(self.index, "last_indexed", lambda: None)()
+        return {
+            "query": query,
+            "results": results,
+            # Search never reindexes, so a query right after an edit answers from
+            # the previous index. Saying when that was is what keeps a stale
+            # answer from reading like a current one.
+            "index_last_updated": (
+                datetime.fromtimestamp(last).astimezone().strftime("%Y-%m-%d %H:%M") if last else "never"
+            ),
+        }

@@ -16,6 +16,7 @@ from companion.outreach import outreach_tools
 from companion.posting_signals import AnalyzePostingTool
 from companion.reminders import RemindersStore, reminder_tools
 from companion.science import ScienceFactsTool
+from companion.search import SearchKyraDataTool
 from companion.tools import ToolRegistry
 
 
@@ -47,5 +48,6 @@ def default_tool_registry(draft_backend: AnthropicLLM | None = None) -> ToolRegi
             llm=draft_backend, reminders=reminders, memory_notes=MarkdownMemoryNotesStore(), applications=applications
         )
         + [AnalyzePostingTool(), TargetPostingTool(applications)]
+        + [SearchKyraDataTool()]  # opens its index on first use, not here
         + [TechNewsTool(), ScienceFactsTool()]
     )
