@@ -49,7 +49,7 @@ from companion.job_documents import JobDocumentStore
 from companion.job_posting_fetch import fetch_posting as _fetch_posting
 from companion.jobs import DbJobQueue, Handler, start_inline_worker
 from companion.learning import LearningStore
-from companion.llm import AnthropicLLM, LazyBackends, build_llm
+from companion.llm import AnthropicLLM, LazyBackends, TurnCancelled, build_llm
 from companion.memory import ChromaMemoryStore
 from companion.memory_notes import MarkdownMemoryNotesStore
 from companion.news import TechNewsTool
@@ -104,6 +104,7 @@ _backends = LazyBackends(claude=_claude)
 _registry = default_tool_registry()
 _router = TurnRouter(_registry)
 _current_backend = "auto"  # "claude" | "local" | "auto" - auto (the router) is the default now that it exists
+_cancel_current: threading.Event | None = None  # the in-flight streamed turn's stop signal, if any
 
 
 class _Runtime:
@@ -302,14 +303,29 @@ def chat_stream(body: ChatIn) -> StreamingResponse:
     q: queue.Queue = queue.Queue()
     done = object()
 
+    # Each turn owns its own stop signal and _cancel_current just points at the
+    # newest one, so a stop pressed a moment late sets an Event nobody is
+    # reading rather than killing whatever turn started next.
+    global _cancel_current
+    cancel = threading.Event()
+    _cancel_current = cancel
+
+    def on_token(delta: str) -> None:
+        if cancel.is_set():
+            raise TurnCancelled()
+        q.put(("token", delta))
+
     def run() -> None:
+        global _cancel_current
         try:
-            out = _answer(body.message, on_token=lambda delta: q.put(("token", delta)))
+            out = _answer(body.message, on_token=on_token)
             q.put(("done", out.model_dump()))
         except Exception as e:  # noqa: BLE001 - surfaced to the client as an error event, never swallowed
             logger.exception("chat stream failed")
             q.put(("error", f"{type(e).__name__}: {e}"))
         finally:
+            if _cancel_current is cancel:
+                _cancel_current = None
             q.put(done)
 
     threading.Thread(target=run, name="kyra-chat-stream", daemon=True).start()
@@ -325,6 +341,28 @@ def chat_stream(body: ChatIn) -> StreamingResponse:
     return StreamingResponse(
         events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     )
+
+
+@app.post("/api/chat/cancel")
+def chat_cancel() -> dict:
+    """Stop the reply that is being generated right now.
+
+    The browser aborting its fetch only stops it *listening*: the turn keeps
+    running here, and ConversationManager._record_turn would then file the
+    whole reply into history and memory - leaving Kyra remembering saying
+    something Duc never saw, and quoting it back next turn. This is the half
+    that actually stops the model, via the on_token callback the streaming
+    turn is already calling per delta (see llm.TurnCancelled).
+
+    Only a streamed text turn can be stopped. A tool turn has no on_token and
+    runs to completion, which is what you want once a tool has begun doing
+    something real; the browser stops showing it either way.
+    """
+    ev = _cancel_current
+    if ev is None:
+        return {"cancelled": False}
+    ev.set()
+    return {"cancelled": True}
 
 
 @app.post("/api/voice", response_model=VoiceOut)

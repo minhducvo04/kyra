@@ -25,6 +25,23 @@ DEFAULT_LOCAL_MODEL = "mlx-community/Qwen2.5-14B-Instruct-4bit"
 # re-typing/matching the marker text themselves.
 TRUNCATION_MARKER = "\n\n[cut off - ran out of room, try again or ask for something shorter]"
 
+# The other way a reply can end early: Duc stopped it. Same reasoning as the
+# marker above - history and memory record what he actually saw, so a turn he
+# cut off can never read back as a complete reply Kyra stands behind.
+CANCELLED_MARKER = "\n\n[interrupted]"
+
+
+class TurnCancelled(Exception):
+    """Raise from an on_token callback to stop a reply mid-generation.
+
+    Cancellation rides the callback that already runs per delta rather than a
+    new parameter threaded through respond()/handle_turn()/route_and_answer():
+    the caller that wants to cancel is the same one that wanted the tokens.
+    Only streamed text turns can be stopped this way - a tool turn has no
+    on_token and runs to completion, which is the behaviour you want anyway
+    once a tool has started doing something real.
+    """
+
 # Local LLM weights are large (GBs) and reproducible - keep them out of the
 # default ~/.cache/huggingface and in this project's own gitignored data/
 # dir, same convention as data/voice_models. Separate from
@@ -91,13 +108,21 @@ class AnthropicLLM(LLMBackend):
         # real (2026-09-07: every resume job failed with "Streaming is required..."). The final message
         # is the same object create() returns, so nothing downstream changes. respond_with_tools()
         # still uses create(): its 2000-token budget is nowhere near the cap.
-        with self._client.messages.stream(
-            model=self._model, max_tokens=self._max_tokens, system=system, messages=messages,
-        ) as stream:
-            if on_token is not None:
-                for delta in stream.text_stream:
-                    on_token(delta)
-            response = stream.get_final_message()
+        said: list[str] = []
+        try:
+            with self._client.messages.stream(
+                model=self._model, max_tokens=self._max_tokens, system=system, messages=messages,
+            ) as stream:
+                if on_token is not None:
+                    for delta in stream.text_stream:
+                        on_token(delta)
+                        said.append(delta)  # after the callback, so `said` is what the client actually got
+                response = stream.get_final_message()
+        except TurnCancelled:
+            # Leaving the context closes the stream, so the API stops generating.
+            # Return what Duc actually saw, marked - his interruption is part of
+            # the conversation, not an error to swallow or a reply to complete.
+            return "".join(said) + CANCELLED_MARKER
         if response.stop_reason == "max_tokens":
             # Same bug class documented for respond_with_tools() above -
             # Sonnet 5's adaptive thinking can eat into max_tokens even on
