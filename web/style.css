@@ -612,17 +612,35 @@ body {
   }
 }
 
-@media (max-width: 560px) {
-  .voice-mode-toggle { display: none; }
-}
-
+/* ---------- phone ----------
+   Everything here is one idea: let the two control rows WRAP instead of
+   forcing a width the screen doesn't have. They used to hold their
+   min-content width - .header-controls alone wanted 616px on a 375px
+   screen - which pushed the header and the stage off both edges, so the
+   wordmark, the line tags and the mic were all clipped away. The old rule
+   hid the PTT / HANDS-FREE toggle to buy room; wrapping gives it a row of
+   its own instead, because losing the voice-mode switch on the one device
+   that is all microphone is the wrong trade. */
 @media (max-width: 560px) {
   .wordmark-sub { display: none; }
-  .header-controls { gap: 0.5rem; }
+  .hud-header { flex-wrap: wrap; gap: 0.55rem; padding: 0.75rem 0.85rem; }
+  .header-controls { flex-wrap: wrap; justify-content: flex-end; gap: 0.45rem; min-width: 0; }
   .jobs-toggle { padding: 0.5rem 0.55rem; font-size: 0.58rem; }
-  .core-wrap { width: min(26vh, 160px); height: min(26vh, 160px); }
-  .line { max-width: 100%; }
+  .backend-btn { padding: 0.45rem 0.6rem; font-size: 0.58rem; }
+  .status { font-size: 0.58rem; }
+
+  .stage { padding: 0.8rem 0.7rem 0.3rem; min-width: 0; }
+  .core-wrap { width: min(22vh, 132px); height: min(22vh, 132px); }
+  .line { max-width: 100%; font-size: 0.95rem; line-height: 1.55; }
   .line-tag { width: 3.4rem; }
+  .line-text { overflow-wrap: anywhere; }
+  /* The mark is hover-only on a pointer; a touch screen has no hover. */
+  .line-wrong-btn { opacity: 0.55; }
+
+  /* Input on its own full-width row, its controls on a second one. */
+  .input-bar { flex-wrap: wrap; gap: 0.55rem; padding: 0.7rem 0.85rem 1rem; }
+  .input-frame { order: -1; flex: 1 0 100%; }
+  #send { margin-left: auto; }
 }
 
 /* ---------- jobs panel ---------- */
