@@ -87,9 +87,103 @@ function addLine(who, text, meta) {
   }
   body.appendChild(document.createTextNode(text));
   line.append(tag, body);
+  // dataset.raw is the reply itself, kept apart from the meta/interrupted spans
+  // that also live in .line-text - so saving and restoring never re-reads a badge
+  // back in as part of what she said.
+  line.dataset.who = who;
+  line.dataset.raw = text;
+  if (who === "kyra") line.appendChild(wrongButton(line));
   transcript.appendChild(line);
   transcript.scrollTop = transcript.scrollHeight;
+  saveTranscript();
   return line;
+}
+
+// --- Marking a reply wrong ------------------------------------------------------
+// The 2026 problem with a companion is correction, not recognition: the answer is
+// slightly wrong and there is no way to say so. The mark saves a memory note, which
+// is loaded in full into every system prompt - so she sees it on the next turn.
+function wrongButton(line) {
+  const btn = document.createElement("button");
+  btn.className = "line-wrong-btn";
+  btn.type = "button";
+  btn.textContent = "\u2715";
+  btn.title = "Tell her this reply was wrong";
+  btn.setAttribute("aria-label", "Mark this reply as wrong");
+  btn.addEventListener("click", () => markWrong(line));
+  return btn;
+}
+
+function tagWrong(line) {
+  line.dataset.wrong = "1";
+  const btn = line.querySelector(".line-wrong-btn");
+  if (btn) btn.remove();
+  if (!line.querySelector(".line-wrong-tag")) {
+    const tag = document.createElement("span");
+    tag.className = "line-meta line-wrong-tag";
+    tag.textContent = "marked wrong";
+    line.querySelector(".line-text").appendChild(tag);
+  }
+}
+
+async function markWrong(line) {
+  try {
+    await readJson(await fetch("/api/correction", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reply: line.dataset.raw || "" }),
+    }));
+    tagWrong(line);
+    saveTranscript();
+  } catch (err) {
+    addLine("error", `couldn't save that correction — ${err.message}`);
+  }
+}
+
+// --- Keeping the transcript across a reload -------------------------------------
+// Only in this browser: the server's own history lives in the running process, so
+// a restored transcript is a record of what was said, not proof she still has the
+// context. It survives a page reload, which is what loses it in practice.
+const TRANSCRIPT_KEY = "kyra.transcript";
+const TRANSCRIPT_MAX = 200;
+
+function saveTranscript() {
+  try {
+    const lines = [...transcript.querySelectorAll(".line")].slice(-TRANSCRIPT_MAX).map((l) => ({
+      who: l.dataset.who || (l.className.match(/line-(\w+)/) || [])[1] || "system",
+      text: l.dataset.raw ?? l.querySelector(".line-text").textContent,
+      meta: (l.querySelector(".line-meta:not(.line-interrupted):not(.line-wrong-tag)") || {}).textContent || "",
+      interrupted: !!l.querySelector(".line-interrupted"),
+      wrong: l.dataset.wrong === "1",
+    }));
+    localStorage.setItem(TRANSCRIPT_KEY, JSON.stringify(lines));
+  } catch (_) {
+    // private window, storage disabled, quota - the conversation still works
+  }
+}
+
+function restoreTranscript() {
+  let saved;
+  try {
+    saved = JSON.parse(localStorage.getItem(TRANSCRIPT_KEY) || "null");
+  } catch (_) {
+    return;
+  }
+  if (!Array.isArray(saved) || !saved.length) return;
+  transcript.replaceChildren();
+  for (const l of saved) {
+    const line = addLine(l.who, l.text, l.meta || undefined);
+    if (l.interrupted) markInterrupted(line);
+    if (l.wrong) tagWrong(line);
+  }
+}
+
+function clearTranscript() {
+  try {
+    localStorage.removeItem(TRANSCRIPT_KEY);
+  } catch (_) { /* nothing stored to remove */ }
+  transcript.replaceChildren();
+  addLine("system", "transcript cleared in this browser — she still remembers the conversation");
 }
 
 function setThinking(on) {
@@ -126,10 +220,17 @@ async function cancelTurn() {
 }
 
 function markInterrupted(line) {
+  const body = line.querySelector(".line-text");
+  // A stopped turn never gets the `done` event that would set dataset.raw, so the
+  // partial has to be read back off the nodes the tokens were painted into -
+  // otherwise a restored transcript shows the interruption with nothing before it.
+  const painted = [...body.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join("");
+  if (painted) line.dataset.raw = painted;
   const mark = document.createElement("span");
   mark.className = "line-meta line-interrupted";
   mark.textContent = "interrupted";
-  line.querySelector(".line-text").appendChild(mark);
+  body.appendChild(mark);
+  saveTranscript();
 }
 
 function replyMeta(data) {
@@ -169,6 +270,7 @@ async function streamTurn(text) {
       final = payload;
       if (line) {
         textNode.textContent = payload.reply; // the authoritative text (e.g. a truncation marker)
+        line.dataset.raw = payload.reply;
         const meta = replyMeta(payload);
         if (meta) {
           const metaSpan = document.createElement("span");
@@ -256,6 +358,7 @@ async function send() {
     return;
   }
   setThinking(false);
+  saveTranscript();
   input.focus();
 }
 
@@ -569,6 +672,8 @@ function setVoiceMode(mode) {
   btnHandsfree.classList.toggle("is-active", mode === "handsfree");
 }
 
+document.getElementById("transcript-clear").addEventListener("click", clearTranscript);
+
 btnPtt.addEventListener("click", () => setVoiceMode("ptt"));
 btnHandsfree.addEventListener("click", () => setVoiceMode("handsfree"));
 
@@ -580,6 +685,7 @@ btnHandsfree.addEventListener("click", () => setVoiceMode("handsfree"));
   } catch {
     /* server not reachable yet on first paint - defaults stay as rendered */
   }
+  restoreTranscript();
   input.focus();
   loadDraftDocPickers().catch(() => {}); // Draft tab is open by default - populate its doc picker up front
 })();
@@ -612,6 +718,7 @@ document.querySelectorAll(".jobs-tab").forEach((tab) => {
       p.classList.toggle("is-active", p.dataset.tabPanel === tab.dataset.tab);
     });
     if (tab.dataset.tab === "tracker") loadTrackerList();
+    if (tab.dataset.tab === "outreach") loadOutreachList();
     if (tab.dataset.tab === "profile") { loadProfile(); loadDocumentList(); }
     if (tab.dataset.tab === "draft") loadDraftDocPickers();
   });
@@ -1466,6 +1573,218 @@ docAddBtn.addEventListener("click", async () => {
   }
 });
 
+/* ---------------- outreach (JOBS panel) ----------------
+   The five outreach tools have worked through chat since 2026-09-06 but had no
+   UI, the same gap the TOOLS panel closed for reminders and news. Every button
+   here hits a dedicated endpoint, which runs the same tool object the chat path
+   runs - so drafting still reads the linked application's status, and marking a
+   contact "sent" still schedules the follow-up reminder the digest surfaces.
+   Kyra never sends: the last step is always Duc pasting it himself. */
+
+const OUTREACH_STATUSES = ["drafted", "sent", "accepted", "replied", "call_done", "referred", "no_reply"];
+const outreachList = document.getElementById("outreach-list");
+const outreachDueOnly = document.getElementById("outreach-due-only");
+
+async function loadOutreachList() {
+  outreachList.textContent = "loading…";
+  try {
+    const q = outreachDueOnly.checked ? "?due_only=true" : "";
+    const data = await readJson(await fetch(`/api/outreach${q}`));
+    renderOutreachList(data.contacts || []);
+  } catch (err) {
+    outreachList.textContent = `couldn't load — ${err.message}`;
+  }
+}
+
+function outreachField(id, placeholder) {
+  const el = document.createElement("input");
+  el.type = "text";
+  el.placeholder = placeholder;
+  el.dataset.field = id;
+  return el;
+}
+
+function outreachTextBlock(label, text, onCopy) {
+  const wrap = document.createElement("div");
+  wrap.className = "outreach-note";
+  const head = document.createElement("div");
+  head.className = "outreach-note-head";
+  const tag = document.createElement("span");
+  // The 200-character limit is enforced in code, not asked for in the prompt,
+  // so showing the count is showing a real constraint rather than trivia.
+  tag.textContent = `${label} · ${text.length} chars`;
+  const copy = document.createElement("button");
+  copy.className = "jobs-btn";
+  copy.textContent = "Copy";
+  copy.addEventListener("click", onCopy);
+  head.append(tag, copy);
+  const body = document.createElement("div");
+  body.className = "outreach-note-text";
+  body.textContent = text;
+  wrap.append(head, body);
+  return wrap;
+}
+
+function renderOutreachList(contacts) {
+  outreachList.innerHTML = "";
+  if (contacts.length === 0) {
+    outreachList.textContent = outreachDueOnly.checked
+      ? "no follow-ups are due"
+      : "no outreach contacts yet";
+    return;
+  }
+  for (const c of contacts) {
+    const item = document.createElement("div");
+    item.className = "jobs-tracker-item";
+
+    const top = document.createElement("div");
+    top.className = "jobs-tracker-item-top";
+    const left = document.createElement("div");
+    const who = document.createElement("div");
+    who.className = "jobs-tracker-item-company";
+    who.textContent = c.name;
+    const where = document.createElement("div");
+    // Scoped clamp, not on .jobs-tracker-item-role: the tracker's roles are short,
+    // but a real outreach `role` often holds a paragraph of context about the
+    // person, which buries every other contact in the list. Full text on hover.
+    where.className = "jobs-tracker-item-role outreach-where";
+    where.textContent = [c.company, c.role].filter(Boolean).join(" · ");
+    where.title = where.textContent;
+    left.append(who, where);
+    if (c.relation) {
+      const rel = document.createElement("div");
+      rel.className = "jobs-tracker-item-role";
+      rel.textContent = c.relation;
+      left.appendChild(rel);
+    }
+
+    const select = document.createElement("select");
+    select.className = "jobs-tracker-status";
+    for (const st of OUTREACH_STATUSES) {
+      const opt = document.createElement("option");
+      opt.value = st;
+      opt.textContent = st;
+      opt.selected = st === c.status;
+      select.appendChild(opt);
+    }
+    select.addEventListener("change", async () => {
+      try {
+        const out = await readJson(await fetch(`/api/outreach/${c.id}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: select.value }),
+        }));
+        // "sent" is the one status with a side effect worth reporting back.
+        if (out.reminder_id) addLine("system", `follow-up reminder set for ${c.name}`);
+        loadOutreachList();
+      } catch (err) {
+        addLine("error", `status update failed — ${err.message}`);
+        select.value = c.status;
+      }
+    });
+    top.append(left, select);
+    item.appendChild(top);
+
+    if (c.profile_url) {
+      const link = document.createElement("a");
+      link.href = c.profile_url;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.className = "jobs-tracker-item-link";
+      link.textContent = c.profile_url;
+      item.appendChild(link);
+    }
+    if (c.follow_up_at) {
+      const due = document.createElement("div");
+      due.className = "jobs-tracker-item-role";
+      due.textContent = `follow up after ${c.follow_up_at.slice(0, 10)}`;
+      item.appendChild(due);
+    }
+
+    const details = document.createElement("details");
+    details.className = "jobs-details outreach-draft";
+    const summary = document.createElement("summary");
+    summary.textContent = c.note ? "Draft again" : "Draft the note";
+    const context = outreachField("job_context", "The role, a line or two");
+    const mutuals = outreachField("mutual_connections", "Mutual connections (people you both know)");
+    // The prompt asks for one true, specific thing to build the ask around;
+    // without it the note falls back to generic school-and-company framing.
+    const angle = outreachField("personal_angle", "One true, specific thing about them");
+    const go = document.createElement("button");
+    go.className = "jobs-btn";
+    go.textContent = "Draft";
+    const status = document.createElement("div");
+    status.className = "jobs-hint";
+    go.addEventListener("click", async () => {
+      go.disabled = true;
+      status.textContent = "drafting — this is two real Claude calls, give it a moment…";
+      try {
+        const out = await readJson(await fetch(`/api/outreach/${c.id}/draft`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_context: context.value.trim(),
+            mutual_connections: mutuals.value.trim(),
+            personal_angle: angle.value.trim(),
+          }),
+        }));
+        // A draft that failed a post-condition must not read as a clean one.
+        for (const w of out.warnings || []) addLine("error", `outreach draft: ${w}`);
+        loadOutreachList();
+      } catch (err) {
+        status.textContent = `draft failed — ${err.message}`;
+      } finally {
+        go.disabled = false;
+      }
+    });
+    details.append(summary, context, mutuals, angle, go, status);
+    item.appendChild(details);
+
+    const copy = async (which) => {
+      try {
+        const out = await readJson(await fetch(`/api/outreach/${c.id}/copy`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ which }),
+        }));
+        addLine("system", out.message);
+      } catch (err) {
+        addLine("error", `copy failed — ${err.message}`);
+      }
+    };
+    if (c.note) item.appendChild(outreachTextBlock("note", c.note, () => copy("note")));
+    if (c.follow_up) item.appendChild(outreachTextBlock("follow-up", c.follow_up, () => copy("follow_up")));
+
+    outreachList.appendChild(item);
+  }
+}
+
+document.getElementById("outreach-add").addEventListener("click", async () => {
+  const value = (id) => document.getElementById(id).value.trim();
+  try {
+    await readJson(await fetch("/api/outreach", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: value("outreach-name"),
+        company: value("outreach-company"),
+        role: value("outreach-role") || null,
+        profile_url: value("outreach-url") || null,
+        relation: value("outreach-relation") || null,
+      }),
+    }));
+    for (const id of ["outreach-name", "outreach-company", "outreach-role", "outreach-url", "outreach-relation"]) {
+      document.getElementById(id).value = "";
+    }
+    loadOutreachList();
+  } catch (err) {
+    addLine("error", `couldn't add that contact — ${err.message}`);
+  }
+});
+
+outreachDueOnly.addEventListener("change", loadOutreachList);
+
+
 /* ---------------- tools panel ---------------- */
 
 const toolsToggle = document.getElementById("tools-toggle");
@@ -1477,7 +1796,7 @@ function openToolsPanel() {
   toolsPanel.setAttribute("aria-hidden", "false");
   toolsToggle.classList.add("is-active");
   const activeTab = document.querySelector("#tools-panel .jobs-tab.is-active");
-  const loaders = { reminders: loadReminders, learning: loadLearningDue };
+  const loaders = { reminders: loadReminders, learning: loadLearningDue, memory: loadMemoryNotes };
   if (activeTab && loaders[activeTab.dataset.toolsTab]) loaders[activeTab.dataset.toolsTab]();
 }
 function closeToolsPanel() {
@@ -1496,10 +1815,95 @@ document.querySelectorAll("#tools-panel .jobs-tab").forEach((tab) => {
     document.querySelectorAll("#tools-panel .jobs-tab-panel").forEach((p) => {
       p.classList.toggle("is-active", p.dataset.toolsTabPanel === tab.dataset.toolsTab);
     });
-    const loaders = { reminders: loadReminders, learning: loadLearningDue };
+    const loaders = { reminders: loadReminders, learning: loadLearningDue, memory: loadMemoryNotes };
     if (loaders[tab.dataset.toolsTab]) loaders[tab.dataset.toolsTab]();
   });
 });
+
+/* -- memory notes --
+   The curated facts that go into every system prompt in full, and into every
+   resume draft. Until now the only way to read them was to open
+   data/memory_notes/*.md - the same transparency gap the PROFILE tab's "view
+   raw record" closed for the applicant profile. A true-but-irrelevant note
+   became a fabricated resume entry once (CLAUDE.md, 2026-09-04), which is why
+   throwing one away is a real control and not a nicety. */
+
+const memnoteList = document.getElementById("memnote-list");
+
+async function loadMemoryNotes() {
+  memnoteList.textContent = "loading…";
+  try {
+    const data = await readJson(await fetch("/api/memory-notes"));
+    renderMemoryNotes(data.notes || []);
+  } catch (err) {
+    memnoteList.textContent = `couldn't load — ${err.message}`;
+  }
+}
+
+function renderMemoryNotes(notes) {
+  memnoteList.innerHTML = "";
+  if (notes.length === 0) {
+    memnoteList.textContent = "she hasn't saved any durable facts yet";
+    return;
+  }
+  let lastCategory = null;
+  for (const n of notes) {
+    if (n.category !== lastCategory) {
+      const head = document.createElement("div");
+      head.className = "memnote-category";
+      head.textContent = n.category;
+      memnoteList.appendChild(head);
+      lastCategory = n.category;
+    }
+    const row = document.createElement("div");
+    row.className = "memnote-row";
+    const date = document.createElement("span");
+    date.className = "memnote-date";
+    date.textContent = n.date;
+    const text = document.createElement("span");
+    text.className = "memnote-text";
+    text.textContent = n.text;
+    const del = document.createElement("button");
+    del.className = "line-wrong-btn memnote-del";
+    del.type = "button";
+    del.textContent = "\u2715";
+    del.title = "Forget this";
+    del.setAttribute("aria-label", `Forget: ${n.text}`);
+    del.addEventListener("click", async () => {
+      // Deleting is what she will stop knowing about him, so it asks first.
+      if (!window.confirm(`Forget this?\n\n${n.text}`)) return;
+      try {
+        await readJson(await fetch("/api/memory-notes/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category: n.category, text: n.text }),
+        }));
+        loadMemoryNotes();
+      } catch (err) {
+        addLine("error", `couldn't forget that — ${err.message}`);
+      }
+    });
+    row.append(date, text, del);
+    memnoteList.appendChild(row);
+  }
+}
+
+document.getElementById("memnote-add").addEventListener("click", async () => {
+  const category = document.getElementById("memnote-category");
+  const text = document.getElementById("memnote-text");
+  try {
+    await readJson(await fetch("/api/memory-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: category.value.trim() || "general", note: text.value.trim() }),
+    }));
+    text.value = "";
+    loadMemoryNotes();
+  } catch (err) {
+    addLine("error", `couldn't save that note — ${err.message}`);
+  }
+});
+
 
 /* -- reminders -- */
 

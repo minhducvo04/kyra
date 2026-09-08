@@ -98,6 +98,27 @@ def notify(title: str, message: str, open_path: Path | None = None) -> None:
     _osascript_notify(title, message)
 
 
+def reindex_search() -> None:
+    """Refresh the search index as part of the morning run.
+
+    `search()` never reindexes on its own, so without this the index only
+    moves when someone remembers to pass --reindex - which means a search the
+    morning after a day's work answers from yesterday's material without
+    saying so. This is the one job that already runs every day.
+
+    Best-effort on purpose: the digest is what Duc reads at 05:00, and a
+    failure to index must never be the reason it doesn't arrive.
+    """
+    try:
+        from companion.search import HybridSearchIndex
+
+        stats = HybridSearchIndex().index()
+        logger.info("search index: %d added, %d updated, %d unchanged, %d removed",
+                    stats.added, stats.updated, stats.unchanged, stats.deleted)
+    except Exception:  # noqa: BLE001 - the digest matters more than the index
+        logger.exception("search reindex failed; the digest is unaffected but search is now stale")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--no-notify", action="store_true")
@@ -107,6 +128,8 @@ def main() -> None:
     parser.add_argument("--index", action="store_true", help="open the archive index (every day, newest first)")
     parser.add_argument("--rebuild", action="store_true", help="regenerate every page from the JSON archive")
     parser.add_argument("--search", metavar="TERM", help="find an archived headline by keyword")
+    parser.add_argument("--no-reindex", action="store_true",
+                        help="skip refreshing the search index (it is refreshed here because nothing else does)")
     args = parser.parse_args()
     configure_logging()
 
@@ -165,6 +188,11 @@ def main() -> None:
         notify("Kyra — morning digest", summary, open_path=latest)
     if args.open:
         subprocess.run(["open", str(latest)], check=False)
+
+    # Last, not first: the digest is what Duc is waiting on at 05:00, and the
+    # index refresh is housekeeping nothing downstream reads today.
+    if not args.no_reindex:
+        reindex_search()
 
 
 if __name__ == "__main__":

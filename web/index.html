@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KYRA</title>
+<!-- Inline so there is no second request: without it every page load logged a
+     404 for /favicon.ico, which is a permanent false positive in any console
+     check. The mark is the wordmark's own glyph. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='25' x='4' font-size='24' fill='%2329d8ff'%3E%E2%97%88%3C/text%3E%3C/svg%3E">
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -52,6 +56,7 @@
       <button class="jobs-tab is-active" data-tab="draft" type="button">DRAFT</button>
       <button class="jobs-tab" data-tab="profile" type="button">PROFILE</button>
       <button class="jobs-tab" data-tab="tracker" type="button">TRACKER</button>
+      <button class="jobs-tab" data-tab="outreach" type="button">OUTREACH</button>
       <button class="jobs-tab" data-tab="autofill" type="button">AUTOFILL</button>
       <button class="jobs-tab" data-tab="apply" type="button">APPLY</button>
     </div>
@@ -215,6 +220,23 @@
       <div class="jobs-tracker-list" id="tracker-list"></div>
     </section>
 
+    <section class="jobs-tab-panel" data-tab-panel="outreach">
+      <div class="jobs-tracker-add">
+        <input id="outreach-name" type="text" placeholder="Name">
+        <input id="outreach-company" type="text" placeholder="Company">
+        <input id="outreach-role" type="text" placeholder="Role (optional)">
+        <input id="outreach-url" type="text" placeholder="Profile URL (optional)">
+        <input id="outreach-relation" type="text" placeholder="How you know them (optional)">
+        <button class="jobs-btn" id="outreach-add" type="button">Add</button>
+      </div>
+      <label class="jobs-field">
+        <input type="checkbox" id="outreach-due-only">
+        <span>only follow-ups that are due</span>
+      </label>
+      <p class="jobs-hint">Kyra drafts and tracks. She never sends anything and never touches LinkedIn &mdash; you paste and press send yourself.</p>
+      <div class="jobs-tracker-list" id="outreach-list"></div>
+    </section>
+
     <section class="jobs-tab-panel" data-tab-panel="autofill">
       <label class="jobs-field">
         <span>Greenhouse job posting URL</span>
@@ -298,6 +320,7 @@
       <button class="jobs-tab" data-tools-tab="news" type="button">NEWS</button>
       <button class="jobs-tab" data-tools-tab="science" type="button">SCIENCE</button>
       <button class="jobs-tab" data-tools-tab="learning" type="button">LEARNING</button>
+      <button class="jobs-tab" data-tools-tab="memory" type="button">MEMORY</button>
     </div>
 
     <section class="jobs-tab-panel is-active" data-tools-tab-panel="reminders">
@@ -336,6 +359,16 @@
         <button class="jobs-btn" id="learning-add" type="button">Save for spaced repetition</button>
       </div>
     </section>
+    <section class="jobs-tab-panel" data-tools-tab-panel="memory">
+      <p class="jobs-hint">Everything here goes into <em>every</em> system prompt, in full &mdash; and into every resume draft. This is what Kyra durably believes about you.</p>
+      <div class="jobs-tracker-add">
+        <input id="memnote-category" type="text" placeholder="Category (e.g. preferences)">
+        <input id="memnote-text" type="text" placeholder="The fact to remember">
+        <button class="jobs-btn" id="memnote-add" type="button">Add</button>
+      </div>
+      <div class="jobs-tracker-list" id="memnote-list"></div>
+    </section>
+
   </aside>
 
   <main class="stage">
@@ -354,6 +387,9 @@
       </div>
     </div>
 
+    <div class="transcript-bar">
+      <button id="transcript-clear" class="ghost-btn" type="button" title="Forget the transcript kept in this browser">CLEAR</button>
+    </div>
     <section class="transcript" id="transcript" aria-live="polite">
       <div class="line line-kyra">
         <span class="line-tag">KYRA</span>

@@ -176,12 +176,12 @@ so every added stage has to earn its place with a number.
   -> verify: real browser interaction and a screenshot, no console errors, sensitive hits
      visibly absent until the toggle is on
 
-### Slice 4 — wiring (deferred, needs its own session)
+### Slice 4 — wiring
 
-- `search_kyra_data` chat tool + router adapter **round 5** (a new tool means retraining, two
-  seeds, per the standing rule)
+- `search_kyra_data` chat tool - **DONE 2026-09-08** - + router adapter **round 5** (a new tool
+  means retraining, two seeds, per the standing rule)
 - Drafting paths pull background through `search(..., include_sensitive=False)` instead of
-  whole documents
+  whole documents - **not done, deliberately**; see below
   -> verify: a real draft run proves no `private_docs` content reaches generated material
 
 ## Not built, on purpose
@@ -262,3 +262,36 @@ content in its sources.
 
 Still open: slice 4 (the `search_kyra_data` chat tool) remains deferred - it needs router
 adapter round 5, per the standing rule that a new tool means a retrain on two seeds.
+
+## Slice 4 as built (2026-09-08)
+
+`SearchKyraDataTool` in `search.py`, registered by `default_tool_registry()`. Three properties
+worth keeping:
+
+- **No `include_sensitive` parameter at all.** The panel can reach private material because a
+  human ticks a box and watches the result; a chat turn has no such gesture and its far end is
+  the Anthropic API. Asking for the `private` kind is *refused*, not answered with an empty
+  list - empty reads as "nothing there" rather than "not yours to read".
+- **The index opens on first use.** `default_tool_registry()` runs at startup in all three front
+  doors; the registry still builds in 0.55 s and does not import chromadb.
+- **Every result carries the index's last-updated date**, because search never reindexes on its
+  own. Which is also why `scripts/daily_digest.py` now reindexes as part of the 05:00 run
+  (best-effort, `--no-reindex` to skip, never reached by `--dry-run`): the digest is the one job
+  that already runs every day, so the morning after a day's work the index is current.
+
+Verified against the real index: correct hits with paths, zero private hits on a query that
+returns four of them with the panel toggle on, the refusal path, and then a real Claude
+tool-calling turn - which called the tool twice with refined queries, cited the right files, and
+correctly said it found no decision about *tuning* k=60 rather than inventing one.
+
+### The second half, and why it is not built
+
+Routing the drafting paths through retrieved passages instead of whole documents is a **quality**
+change, not a safety one: `data/private_docs/` never reaches drafting today, because the drafting
+paths read the document library and memory notes and private docs are in neither. Against it:
+retrieval decides what the model can see, and what is not retrieved cannot be written about. The
+2026-09-06 Northwind run cut the whole ICPC block for a role where competitive programming was the
+strongest signal on the page - with the *full* document in front of it. A retrieved subset gives
+that failure a second, quieter place to happen, and `resume_guard.py` can see an invention but
+never an omission. Left for Duc as `needs-your-input.md` item 23, with a recommendation to apply
+it to background facts only, never to the resume source.

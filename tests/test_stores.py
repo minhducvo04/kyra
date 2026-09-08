@@ -138,3 +138,50 @@ def test_profile_roundtrip_and_readiness(tmp_path):
     # unknown keys in an older/newer saved record are ignored, not fatal
     path.write_text('{"first_name": "A", "some_future_field": 1}')
     assert load_profile(path).first_name == "A"
+
+
+def test_memory_notes_list_is_structured_enough_to_render_and_address(tmp_path):
+    """The notes reach every system prompt and every resume draft, so Duc needs
+    to see them somewhere other than a text editor. render() is one blob for the
+    model; this is the same content as rows."""
+    store = MarkdownMemoryNotesStore(tmp_path / "notes")
+    assert store.list_notes() == []
+    store.add("Preferences", "likes standing desks")
+    store.add("preferences", "prefers dark mode")
+    store.add("people", "sister is Linh")
+
+    notes = store.list_notes()
+    assert [n.text for n in notes] == ["sister is Linh", "likes standing desks", "prefers dark mode"]
+    assert [n.category for n in notes] == ["people", "Preferences", "Preferences"]
+    assert all(len(n.date) == 10 and n.date[4] == "-" for n in notes)
+
+
+def test_deleting_a_note_removes_that_line_and_leaves_the_rest(tmp_path):
+    # Human-initiated removal of one wrong line. The append-only property this
+    # module documents is about code never silently pruning history to resolve a
+    # contradiction; it is not a promise that Duc cannot throw a note away.
+    store = MarkdownMemoryNotesStore(tmp_path / "notes")
+    store.add("preferences", "likes standing desks")
+    store.add("preferences", "prefers dark mode")
+
+    assert store.delete("preferences", "likes standing desks") is True
+    assert [n.text for n in store.list_notes()] == ["prefers dark mode"]
+    assert "standing desks" not in store.render()
+
+
+def test_deleting_a_note_that_is_not_there_says_so(tmp_path):
+    store = MarkdownMemoryNotesStore(tmp_path / "notes")
+    store.add("preferences", "prefers dark mode")
+    assert store.delete("preferences", "never said this") is False
+    assert store.delete("nonexistent-category", "prefers dark mode") is False
+    assert len(store.list_notes()) == 1
+
+
+def test_deleting_the_last_note_takes_the_file_with_it(tmp_path):
+    # Otherwise a bare "# preferences" header would keep going into every system
+    # prompt as a category with nothing under it.
+    store = MarkdownMemoryNotesStore(tmp_path / "notes")
+    store.add("preferences", "prefers dark mode")
+    assert store.delete("preferences", "prefers dark mode") is True
+    assert not (tmp_path / "notes" / "preferences.md").exists()
+    assert store.render() == "(no saved notes yet)"

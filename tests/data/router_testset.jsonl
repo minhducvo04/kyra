@@ -70,3 +70,16 @@
 {"message": "how do I write a good LinkedIn note in general", "path": "text", "backend": "claude", "note": "hard: 'LinkedIn note' but general advice, no contact"}
 {"message": "what does a reposted job usually mean", "path": "text", "backend": "claude", "note": "hard: 'reposted job' but an explanation, no posting given"}
 {"message": "my cousin's recruiter friend ghosted her, brutal", "path": "text", "backend": "local", "note": "hard: 'recruiter' but casual"}
+{"message": "what did we decide about the recency weight in memory retrieval", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "find that note where I wrote down my writing voice", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "search my digests for the Anthropic posting", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "what does CLAUDE.md say about the resume token budget", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "look up what I saved about the Northwind application", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "dig up the cover letter I wrote for the Ashby role", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "use the Northwind resume for that application", "path": "tool", "backend": "claude", "note": "set_application_resume"}
+{"message": "attach the tailored Netic pdf to the Netic application", "path": "tool", "backend": "claude", "note": "set_application_resume"}
+{"message": "set the resume on the Stripe application to the one we just made", "path": "tool", "backend": "claude", "note": "set_application_resume"}
+{"message": "what's the difference between BM25 and TF-IDF", "path": "text", "backend": "claude", "note": "bait: lookup-shaped but general knowledge"}
+{"message": "how do I search for a file by name in bash", "path": "text", "backend": "claude", "note": "bait: lookup-shaped but general knowledge"}
+{"message": "what should I look for in a startup offer", "path": "text", "backend": "claude", "note": "bait: look for != search my data"}
+{"message": "I searched everywhere for my keys this morning", "path": "text", "backend": "local", "note": "bait: casual search"}

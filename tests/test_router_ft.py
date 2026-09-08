@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from companion.router_ft import (
     CATEGORIES,
     TESTSET2_PATH,
@@ -102,3 +104,18 @@ def test_split_cap_per_category_balances_before_split():
 def test_generate_restricts_to_requested_categories():
     rows = generate_synthetic(ScriptedLLM(['["only this"]']), 1, [], categories=["text_hard_negative_claude"])
     assert [r.category for r in rows] == ["text_hard_negative_claude"] and rows[0].backend == "claude"
+
+
+def test_generate_retries_an_unreadable_reply_then_gives_up_loudly():
+    """A category that silently contributes nothing is how a tool ends up
+    untrained while the run still looks like it worked - the exact gap round 3
+    existed to close. Seen for real on 2026-09-08: two of four new categories
+    returned got=0 on one run and 60 on the next."""
+    # First reply is unparseable, second is fine: the category still lands.
+    rows = generate_synthetic(ScriptedLLM(["sorry, I can't do that", '["a real one"]']), 1, [],
+                              categories=["search_kyra_data"])
+    assert [r.message for r in rows] == ["a real one"]
+
+    with pytest.raises(RuntimeError, match="refusing to train a category blind"):
+        generate_synthetic(ScriptedLLM(["nope", "still nope", "nope again"]), 1, [],
+                           categories=["search_kyra_data"])

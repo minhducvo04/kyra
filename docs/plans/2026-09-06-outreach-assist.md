@@ -53,8 +53,15 @@ Clipboard only. Tracker gets `targeting` and `referral_pending`. Duc pastes name
 3. `ClipboardChannel` + tools + `default_tools.py` wiring; `sent` creates the reminder. -> verify: real chat
    turn "draft a note to <name> at Northwind" through the router; reminder appears in `reminders.db`; test data
    cleaned from `reminders.db` and `router.log` afterward.
-4. JOBS panel Outreach tab + endpoints. -> verify: real browser click-through, `readJson` error path on a bad
-   status, no console errors.
+4. JOBS panel Outreach tab + endpoints. **DONE 2026-09-08.** Five endpoints over the *same tool objects* the
+   chat path runs (`_registry.run(...)`, not fresh store calls), so drafting still reads the linked
+   application's status and `sent` still schedules the follow-up reminder - two front doors, one
+   implementation. The tab reuses the tracker's item classes the way the TOOLS panel reuses the JOBS panel's.
+   -> verified by real click-through against the real store (8 real contacts rendered, untouched) with a
+   fictional ninth: add, draft with a personal angle (two real Claude calls), copy (real `pbcopy`, checked with
+   `pbpaste`, profile deliberately not opened), status -> sent with the reminder created and reported,
+   due-only filter, and the `readJson` error path returning "no outreach contact with id 9999" rather than a
+   bare 404. Only console error was that deliberate 404. Test contact and reminder removed afterwards.
 5. Digest section. -> verify: `daily_digest.py --dry-run` shows a due follow-up.
 6. Record: CLAUDE.md decision bullet (the boundary and why), `industry-standards.md` row for the in-code
    character limit, tracker `targeting` status if question 3 says yes.
@@ -71,3 +78,17 @@ Clipboard only. Tracker gets `targeting` and `referral_pending`. Duc pastes name
 ## Not in this plan
 Reading LinkedIn profiles or inbox, auto-accepting, any message sending, and discovering "people like these"
 from LinkedIn suggestions. If LinkedIn ever ships a personal-data API, revisit; do not route around the ToS.
+
+## Found by verifying step 4 (2026-09-08): the dash rule needed a post-condition
+
+The first real draft came back with `cutting deploy times - what turned out to be the bottleneck` **after**
+the humanizer critique pass had run. Duc's standing rule forbids an em-dash, an en-dash, or a spaced hyphen
+standing in for one in anything a human other than him reads, and CLAUDE.md already notes that a single pass
+does not reliably catch the ASCII stand-in.
+
+So `outreach.py` now has `has_dash()` and one `DEDASH_PROMPT` rewrite after the length check - the same shape
+as the existing character-limit post-condition, because a prompt is a request and this is a guarantee. It never
+raises: a usable draft with a flagged dash beats no draft, so a dash that survives the retry comes back in
+`OutreachDraft.warnings`, which the tool returns and the panel prints as an error line. A hyphenated word
+("new-grad") is explicitly not a dash. Re-verified on a real redraft of the same contact: both note and
+follow-up dash-free, the personal angle still used, and nothing about the recipient re-attributed to Duc.
