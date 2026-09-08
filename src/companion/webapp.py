@@ -225,6 +225,10 @@ class BackendIn(BaseModel):
     backend: str
 
 
+class CorrectionIn(BaseModel):
+    reply: str
+
+
 @app.get("/")
 def index() -> HTMLResponse:
     """Serves index.html with each static asset's real file mtime
@@ -363,6 +367,25 @@ def chat_cancel() -> dict:
         return {"cancelled": False}
     ev.set()
     return {"cancelled": True}
+
+
+@app.post("/api/correction")
+def correction(body: CorrectionIn) -> dict:
+    """Duc marking one Kyra line as wrong.
+
+    The 2026 problem with a companion is correction, not recognition
+    (docs/plans/2026-09-07-human-interface.md, point 5): the interface answer
+    is a transcript he can point at, and this is the data answer. It lands in
+    memory notes rather than the vector store on purpose - notes are loaded in
+    full into every system prompt, so a correction is in front of her on the
+    next turn instead of waiting to be semantically similar to something.
+    """
+    text = " ".join(body.reply.split())
+    if not text:
+        raise ApiError(400, "empty_reply", "there is no reply text to mark wrong")
+    excerpt = text if len(text) <= 120 else text[:120].rstrip() + "\u2026"
+    _memory_notes.add("corrections", f"Duc marked this reply as wrong: {excerpt}")
+    return {"saved": True, "category": "corrections"}
 
 
 @app.post("/api/voice", response_model=VoiceOut)

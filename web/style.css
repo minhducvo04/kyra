@@ -323,6 +323,51 @@ body {
 .transcript::-webkit-scrollbar { width: 6px; }
 .transcript::-webkit-scrollbar-thumb { background: var(--accent-dim); }
 
+/* The transcript is kept in this browser across a reload; this forgets it. */
+.transcript-bar {
+  width: min(100%, 720px);
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 0.2rem;
+}
+
+.ghost-btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-faint);
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.56rem;
+  letter-spacing: 0.16em;
+  padding: 0.2rem 0.4rem;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.ghost-btn:hover, .ghost-btn:focus-visible { color: var(--text-dim); border-color: var(--grid); }
+
+/* "That was wrong" - quiet until the line is hovered, but always keyboard-reachable. */
+.line-wrong-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 0.15rem 0.25rem;
+  align-self: flex-start;
+  flex: 0 0 auto;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.line:hover .line-wrong-btn, .line-wrong-btn:focus-visible { opacity: 1; }
+.line-wrong-btn:hover, .line-wrong-btn:focus-visible { color: var(--danger); }
+
+.line-wrong-tag { color: var(--danger); border-color: var(--danger); background: transparent; margin-right: 0; margin-left: 0.5em; }
+.line[data-wrong="1"] .line-text { color: var(--text-dim); }
+
 .line {
   display: flex;
   gap: 0.7rem;

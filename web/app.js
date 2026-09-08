@@ -87,9 +87,103 @@ function addLine(who, text, meta) {
   }
   body.appendChild(document.createTextNode(text));
   line.append(tag, body);
+  // dataset.raw is the reply itself, kept apart from the meta/interrupted spans
+  // that also live in .line-text - so saving and restoring never re-reads a badge
+  // back in as part of what she said.
+  line.dataset.who = who;
+  line.dataset.raw = text;
+  if (who === "kyra") line.appendChild(wrongButton(line));
   transcript.appendChild(line);
   transcript.scrollTop = transcript.scrollHeight;
+  saveTranscript();
   return line;
+}
+
+// --- Marking a reply wrong ------------------------------------------------------
+// The 2026 problem with a companion is correction, not recognition: the answer is
+// slightly wrong and there is no way to say so. The mark saves a memory note, which
+// is loaded in full into every system prompt - so she sees it on the next turn.
+function wrongButton(line) {
+  const btn = document.createElement("button");
+  btn.className = "line-wrong-btn";
+  btn.type = "button";
+  btn.textContent = "\u2715";
+  btn.title = "Tell her this reply was wrong";
+  btn.setAttribute("aria-label", "Mark this reply as wrong");
+  btn.addEventListener("click", () => markWrong(line));
+  return btn;
+}
+
+function tagWrong(line) {
+  line.dataset.wrong = "1";
+  const btn = line.querySelector(".line-wrong-btn");
+  if (btn) btn.remove();
+  if (!line.querySelector(".line-wrong-tag")) {
+    const tag = document.createElement("span");
+    tag.className = "line-meta line-wrong-tag";
+    tag.textContent = "marked wrong";
+    line.querySelector(".line-text").appendChild(tag);
+  }
+}
+
+async function markWrong(line) {
+  try {
+    await readJson(await fetch("/api/correction", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reply: line.dataset.raw || "" }),
+    }));
+    tagWrong(line);
+    saveTranscript();
+  } catch (err) {
+    addLine("error", `couldn't save that correction — ${err.message}`);
+  }
+}
+
+// --- Keeping the transcript across a reload -------------------------------------
+// Only in this browser: the server's own history lives in the running process, so
+// a restored transcript is a record of what was said, not proof she still has the
+// context. It survives a page reload, which is what loses it in practice.
+const TRANSCRIPT_KEY = "kyra.transcript";
+const TRANSCRIPT_MAX = 200;
+
+function saveTranscript() {
+  try {
+    const lines = [...transcript.querySelectorAll(".line")].slice(-TRANSCRIPT_MAX).map((l) => ({
+      who: l.dataset.who || (l.className.match(/line-(\w+)/) || [])[1] || "system",
+      text: l.dataset.raw ?? l.querySelector(".line-text").textContent,
+      meta: (l.querySelector(".line-meta:not(.line-interrupted):not(.line-wrong-tag)") || {}).textContent || "",
+      interrupted: !!l.querySelector(".line-interrupted"),
+      wrong: l.dataset.wrong === "1",
+    }));
+    localStorage.setItem(TRANSCRIPT_KEY, JSON.stringify(lines));
+  } catch (_) {
+    // private window, storage disabled, quota - the conversation still works
+  }
+}
+
+function restoreTranscript() {
+  let saved;
+  try {
+    saved = JSON.parse(localStorage.getItem(TRANSCRIPT_KEY) || "null");
+  } catch (_) {
+    return;
+  }
+  if (!Array.isArray(saved) || !saved.length) return;
+  transcript.replaceChildren();
+  for (const l of saved) {
+    const line = addLine(l.who, l.text, l.meta || undefined);
+    if (l.interrupted) markInterrupted(line);
+    if (l.wrong) tagWrong(line);
+  }
+}
+
+function clearTranscript() {
+  try {
+    localStorage.removeItem(TRANSCRIPT_KEY);
+  } catch (_) { /* nothing stored to remove */ }
+  transcript.replaceChildren();
+  addLine("system", "transcript cleared in this browser — she still remembers the conversation");
 }
 
 function setThinking(on) {
@@ -126,10 +220,17 @@ async function cancelTurn() {
 }
 
 function markInterrupted(line) {
+  const body = line.querySelector(".line-text");
+  // A stopped turn never gets the `done` event that would set dataset.raw, so the
+  // partial has to be read back off the nodes the tokens were painted into -
+  // otherwise a restored transcript shows the interruption with nothing before it.
+  const painted = [...body.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join("");
+  if (painted) line.dataset.raw = painted;
   const mark = document.createElement("span");
   mark.className = "line-meta line-interrupted";
   mark.textContent = "interrupted";
-  line.querySelector(".line-text").appendChild(mark);
+  body.appendChild(mark);
+  saveTranscript();
 }
 
 function replyMeta(data) {
@@ -169,6 +270,7 @@ async function streamTurn(text) {
       final = payload;
       if (line) {
         textNode.textContent = payload.reply; // the authoritative text (e.g. a truncation marker)
+        line.dataset.raw = payload.reply;
         const meta = replyMeta(payload);
         if (meta) {
           const metaSpan = document.createElement("span");
@@ -256,6 +358,7 @@ async function send() {
     return;
   }
   setThinking(false);
+  saveTranscript();
   input.focus();
 }
 
@@ -569,6 +672,8 @@ function setVoiceMode(mode) {
   btnHandsfree.classList.toggle("is-active", mode === "handsfree");
 }
 
+document.getElementById("transcript-clear").addEventListener("click", clearTranscript);
+
 btnPtt.addEventListener("click", () => setVoiceMode("ptt"));
 btnHandsfree.addEventListener("click", () => setVoiceMode("handsfree"));
 
@@ -580,6 +685,7 @@ btnHandsfree.addEventListener("click", () => setVoiceMode("handsfree"));
   } catch {
     /* server not reachable yet on first paint - defaults stay as rendered */
   }
+  restoreTranscript();
   input.focus();
   loadDraftDocPickers().catch(() => {}); // Draft tab is open by default - populate its doc picker up front
 })();
