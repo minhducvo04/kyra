@@ -13,15 +13,19 @@ struct ContentView: View {
 
     @State private var lines: [Line] = []
     @State private var draft = ""
-    @State private var thinking = false
+    @State private var presence: Presence = .idle
     @State private var backend = "…"
     @State private var showSettings = false
     @State private var turn: Task<Void, Never>?
 
     private var connected: Bool { !client.baseURL.isEmpty }
+    private var thinking: Bool { presence == .thinking }
 
     var body: some View {
         VStack(spacing: 0) {
+            PresenceReadout(presence: presence)
+                .padding(.top, 26)
+                .padding(.bottom, 8)
             transcript
             composer
         }
@@ -36,7 +40,17 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSettings) { settings }
         .task { await refreshBackend() }
-        .onAppear { if !connected { showSettings = true } }
+        .onAppear {
+            if !connected { showSettings = true }
+            // Lets a question be handed in at launch:
+            //   xcrun simctl launch booted com.kyra.KyraVision --args -kyra.ask "hello"
+            // which is how the client can be driven without a keyboard, and the
+            // same seam a Shortcut or spatial Siri would use later.
+            if let ask = UserDefaults.standard.string(forKey: "kyra.ask"), !ask.isEmpty, connected {
+                draft = ask
+                send()
+            }
+        }
     }
 
     private var transcript: some View {
@@ -142,7 +156,12 @@ struct ContentView: View {
 
     private func refreshBackend() async {
         guard connected else { return }
-        do { backend = try await client.backend() } catch { backend = "offline" }
+        do {
+            backend = try await client.backend()
+        } catch {
+            backend = "offline"
+            presence = .failed
+        }
     }
 
     private func send() {
@@ -150,7 +169,7 @@ struct ContentView: View {
         guard !message.isEmpty, connected else { return }
         draft = ""
         lines.append(Line(who: .duc, text: message))
-        thinking = true
+        presence = .thinking
 
         turn = Task {
             // One row is created on the first delta and grown in place, so the
@@ -173,12 +192,13 @@ struct ContentView: View {
                 } else {
                     lines.append(Line(who: .kyra, text: out.reply, badge: out.badge))
                 }
+                presence = .idle
             } catch is CancellationError {
-                // stop() already marked it.
+                // stop() already set .interrupted.
             } catch {
                 lines.append(Line(who: .system, text: error.localizedDescription))
+                presence = .failed
             }
-            thinking = false
         }
     }
 
@@ -191,6 +211,6 @@ struct ContentView: View {
         if let last = lines.indices.last, lines[last].who == .kyra {
             lines[last].badge = "interrupted"
         }
-        thinking = false
+        presence = .interrupted
     }
 }
