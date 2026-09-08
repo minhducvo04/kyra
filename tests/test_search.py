@@ -158,6 +158,34 @@ def test_editing_one_file_updates_only_that_source(index, corpus):
     assert "Silero" in " ".join(h.chunk.text for h in index.search("Silero"))
 
 
+def test_an_edited_document_replaces_its_vector_not_only_its_text(index, corpus):
+    """The test above searches hybrid, which the lexical half alone can
+    satisfy - so a stale embedding would pass it unnoticed. Chunk ids are
+    deterministic (`source_id#i`), so re-indexing rewrites ids that already
+    exist, and Chroma ignores an add whose id is taken. `_drop_source`'s
+    vector delete frees them first, but it is deliberately swallowed on
+    failure; sabotaging it here proves the write does not depend on it.
+    """
+    public, _ = corpus
+    sources = [FileSource(public, ["*.md"], kind="doc")]
+
+    def vector_text() -> str:
+        rows = index._vectors().get(include=["documents"])
+        return " ".join(rows["documents"])
+
+    (public / "voice.md").write_text("# Voice\n\nNow it mentions Silero.\n", encoding="utf-8")
+    index.index(sources)
+    assert "Silero" in vector_text()
+
+    def refuse(*args, **kwargs):
+        raise RuntimeError("simulated vector delete failure")
+
+    index._vectors().delete = refuse
+    (public / "voice.md").write_text("# Voice\n\nAnd now Whisper too.\n", encoding="utf-8")
+    index.index(sources)
+    assert "Whisper" in vector_text()
+
+
 def test_a_deleted_file_leaves_no_hits_behind(index, corpus):
     public, private = corpus
     (public / "voice.md").unlink()
