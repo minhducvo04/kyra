@@ -80,3 +80,64 @@ def test_an_omitted_handover_is_visible_rather_than_absent():
     block = session_log.render("codex", "build", "body")
     assert "- Next: (not stated)" in block
     assert "- Suggested: (not stated)" in block
+
+
+# -- regressions from Codex's review of 1221bb5 -----------------------------
+# Both were reproduced independently before these were written. The earlier
+# tests in this file asserted field *labels* were present, which is why neither
+# defect was caught: a test that checks a line exists cannot see that the value
+# on it is wrong. These assert measured values.
+
+
+def test_two_different_branches_never_share_one_thread():
+    # `slug` mapped every unsafe character to "_", so `session/x` and
+    # `session_x` are both valid branch names that collided on one file: two
+    # slices' hand-offs interleaved in one thread, and each agent read the
+    # other's block as its own history.
+    a, b = "session/review-probe", "session_review-probe"
+    assert session_log.slug(a) != session_log.slug(b)
+
+    session_log.append("claude", "build", "body from the slashed branch", branch=a)
+    session_log.append("codex", "review", "body from the underscored branch", branch=b)
+    assert "underscored" not in session_log.read(a)
+    assert "slashed" not in session_log.read(b)
+
+
+def _tiny_repo(tmp_path):
+    import subprocess
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def run(*a):
+        subprocess.run(["git", *a], cwd=repo, capture_output=True, check=True)
+
+    run("init", "-q")
+    run("config", "user.email", "t@example.com")
+    run("config", "user.name", "T")
+    # A synthetic fixture, never the real .env: this test must not read a secret.
+    (repo / ".env").write_text("FAKE_KEY=not-a-real-key\n", encoding="utf-8")
+    (repo / "keep.txt").write_text("x\n", encoding="utf-8")
+    run("add", ".env", "keep.txt")
+    run("commit", "-qm", "seed")
+    return repo
+
+
+def test_an_unstaged_change_to_a_private_file_is_reported(tmp_path):
+    # `git status --porcelain` marks an unstaged modification with a LEADING
+    # space (" M .env"). The helper stripped the whole output, so on the first
+    # row that space vanished, the path slice returned "env" instead of ".env",
+    # and the private-path check reported nothing wrong. The block then told the
+    # next agent a private file was untouched while it was modified.
+    repo = _tiny_repo(tmp_path)
+    (repo / ".env").write_text("FAKE_KEY=changed\n", encoding="utf-8")
+    f = session_log.facts(cwd=repo)
+    assert f["tree"] != "clean"
+    assert ".env" in f["private"], f"private-path check missed it: {f['private']!r}"
+    assert f["private"].startswith("ATTENTION")
+
+
+def test_a_clean_tree_reports_no_private_paths(tmp_path):
+    # The other half: the check must not cry wolf, or it stops being read.
+    f = session_log.facts(cwd=_tiny_repo(tmp_path))
+    assert f["tree"] == "clean"
+    assert f["private"] == "none staged or modified"
