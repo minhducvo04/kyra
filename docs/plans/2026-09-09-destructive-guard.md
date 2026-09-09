@@ -1,8 +1,13 @@
-# Stopping an accidental deletion of the data or the repo (plan, 2026-09-09)
+# Stopping an accidental deletion of the data or the repo (deferred plan, 2026-09-09)
 
 Duc's ask: a hook so that neither agent, nor he, accidentally deletes the databases or the repository.
 
 Owner split under the roles set today: this plan and the failing tests are Claude Code's; the implementation is Codex's.
+
+**Status:** deferred. No hook is installed in Claude Code or Codex. The shared instructions and
+skills setup is complete without hooks. If this plan resumes, verify each harness against its
+current official documentation before assuming one event schema or one response format works in
+both; binary inspection alone is not a supported integration contract.
 
 ## 0. What is actually at risk, measured
 
@@ -27,7 +32,11 @@ The irreplaceable state is small and has **no backup at all**:
 
 So **slice 1 is the snapshot and it ships first**, even though the ask was for a hook. A hook with no backup behind it is one clever `bash -c` away from being worth nothing.
 
-Both harnesses make the hook layer genuinely shared: Codex and Claude Code use the **same hook event names** (`PreToolUse`, `PostToolUse`, `SessionStart`, `Stop`, ...) and the **same wire format**, a JSON event on stdin and a reply carrying `hookSpecificOutput.permissionDecision` of `allow`, `deny` or `ask`. Verified by inspecting the Codex binary's own hook schema. So **one script serves both**, registered twice.
+The intended design is one repository guard script with separate harness registrations. That is a
+design constraint, not a verified capability: no registration exists today, and the earlier claim
+of a shared event schema came from binary inspection rather than supported documentation. Treat
+the two integrations independently until a real allowed and blocked command has been verified in
+each harness.
 
 ## 2. Slice 1: a snapshot of the 5 MB that cannot be regenerated
 
