@@ -73,15 +73,20 @@ python3 scripts/session_log.py --list     # every thread, newest first, with wha
 Finishing, before you stop:
 
 ```bash
-python3 scripts/session_log.py --write --agent claude --open-for review <<'EOF'
+python3 scripts/session_log.py --write --agent claude --open-for review \
+    --next "wire the engine into apply_pipeline" --suggest "Sonnet 5 / medium" <<'EOF'
 Done: steps 1 to 3 of the plan.
 Verified: pytest 494 passed, ruff clean, one real Lever form filled headless with fake data.
 Not done: step 4, waiting on a real posting URL.
 Pollution: hermetic only.
+To Codex: the required-field union lives in `_is_required`; reading one board's marking alone
+calls every field on the other two optional.
 EOF
 ```
 
 `--agent` is one of claude, codex, duc. `--open-for` is one of critique, tests, build, review, duc, nothing, and it is validated, because a typo there misroutes the next session silently. The branch, head commit, count of commits ahead of master, working-tree state and the private-path check are measured from git and written into the block for you. Do not type them: a hand-off whose facts are recalled is one the receiver has to re-check anyway, which is the copying problem again in a smaller form.
+
+**Every block ends with three things, and none of them is optional in practice.** `--next` is the one line saying what comes next, so the receiver does not re-derive the plan. `--suggest` is the model and effort for that next piece, in the vocabulary of whoever picks it up: Opus 5 or Sonnet 5 with an effort for Claude Code, a reasoning level for Codex, and say which agent when it is not obvious. Both render as `(not stated)` when left out, so a missing hand-over is visible in the thread rather than being something a reader has to notice is absent. The third is the body itself, which **is** the message to whoever `--open-for` names: write it to them, not about them, and open a line with `To Codex:` or `To Claude:` for anything they specifically need to know, such as a trap you hit, a decision you made that they might undo, or a question you want answered. When the block is for Duc rather than the other agent, set `--open-for duc` and address him.
 
 The receiving agent's first action is to read the thread, then `git checkout <branch> && git log -3 && python3 -m pytest`, and its first line back is whether those match the last block.
 

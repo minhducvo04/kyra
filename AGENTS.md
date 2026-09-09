@@ -65,7 +65,7 @@ Job search, digest, search:
 - Autofill needs `data/applicant_profile.json` (see `profile.py::ApplicantProfile`; `resume_path` must be a real file). It fills and stops; a visible window stays open for Duc to submit.
 
 Agent hand-off (both agents, every session):
-- `python3 scripts/session_log.py` prints this branch's hand-off thread; `--list` shows every thread; `--write --agent <claude|codex|duc> --open-for <critique|tests|build|review|duc|nothing>` appends a block with the body on stdin. Threads live in `data/sessions/<branch>.md`, append-only and gitignored. Details in `docs/agent-workflow.md` section 5.
+- `python3 scripts/session_log.py` prints this branch's hand-off thread; `--list` shows every thread; `--write --agent <claude|codex|duc> --open-for <critique|tests|build|review|duc|nothing> --next "..." --suggest "..."` appends a block with the body on stdin. Threads live in `data/sessions/<branch>.md`, append-only and gitignored. Details in `docs/agent-workflow.md` section 5.
 
 Training, measurement, maintenance:
 - Router fine-tune: `scripts/router_ft.py gen | build | train | eval` (see `docs/router-finetune.md`); activate an adapter with `KYRA_CLASSIFIER_ADAPTER` in `.env`. Tool-calling distillation: `scripts/tool_ft.py gen | trace | build | train | eval` (`docs/tool-calling-distill.md`, measured and not shipped).
@@ -119,7 +119,7 @@ With two agents in the repo, `docs/agent-workflow.md` says who owns each phase, 
 3. **Build** on a branch named `session/<date>-<topic>`: one plan section per session; tests first for any hard constraint.
 4. **Verify**: a real run, not just `pytest`.
 5. **Record**: a dated entry at the top of the matching `docs/log/<topic>.md` with the *why*; a row in `docs/industry-standards.md` if a standard changed; a `data/private_docs/needs-your-input.md` entry for anything only Duc can decide; a rule in this file only if it is a standing rule that every future session needs (this file is the rulebook, the log is the history).
-6. **Close**: `ruff check src scripts tests` and `python3 -m pytest` green, `git status --porcelain` clean of private files, commit. Do not push. Then `python3 scripts/session_log.py --write --agent <you> --open-for <phase>` so the other agent picks up from a file rather than from Duc repeating it (`docs/agent-workflow.md` section 5).
+6. **Close**: `ruff check src scripts tests` and `python3 -m pytest` green, `git status --porcelain` clean of private files, commit. Do not push. Then write the hand-off block: `python3 scripts/session_log.py --write --agent <you> --open-for <phase> --next "<what comes next>" --suggest "<model / effort>"`, with the body addressed to whoever `--open-for` names and a `To Claude:` or `To Codex:` line for anything they specifically need. The other agent then picks up from a file rather than from Duc repeating it (`docs/agent-workflow.md` section 5).
 
 ## 7. Read the log before you touch a subsystem
 

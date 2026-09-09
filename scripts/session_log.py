@@ -6,10 +6,12 @@ both can read rather than text Duc copies between two chats.
 
     python3 scripts/session_log.py                      # this branch's thread
     python3 scripts/session_log.py --list               # every thread
-    python3 scripts/session_log.py --write --agent codex --open-for build <<'EOF'
+    python3 scripts/session_log.py --write --agent codex --open-for build \
+        --next "wire the engine into apply_pipeline" --suggest "Sonnet 5 / medium" <<'EOF'
     Done: steps 1-3. Verified: pytest 494 passed, ruff clean.
     Not done: step 4, needs a real board fetch.
     Pollution: hermetic only.
+    To Claude: the required-field union is in _is_required, do not read one board's marking alone.
     EOF
 """
 import argparse
@@ -26,6 +28,8 @@ def main() -> int:
     ap.add_argument("--write", action="store_true", help="append a block; the body is read from stdin")
     ap.add_argument("--agent", choices=AGENTS, help="who is writing")
     ap.add_argument("--open-for", choices=OPEN_FOR, help="what the next actor is asked for")
+    ap.add_argument("--next", dest="next_up", default="", help="what comes next, one line")
+    ap.add_argument("--suggest", default="", help="model and effort for that next piece")
     ap.add_argument("--branch", help="override the branch (default: the current one)")
     ap.add_argument("--list", action="store_true", help="list every thread")
     args = ap.parse_args()
@@ -42,7 +46,7 @@ def main() -> int:
         if not args.agent or not args.open_for:
             ap.error("--write needs --agent and --open-for")
         body = "" if sys.stdin.isatty() else sys.stdin.read()
-        path = append(args.agent, args.open_for, body, branch=args.branch)
+        path = append(args.agent, args.open_for, body, next_up=args.next_up, suggest=args.suggest, branch=args.branch)
         print(f"appended to {path}")
         return 0
 
