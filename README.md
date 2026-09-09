@@ -1,42 +1,109 @@
-# AI Companion — Kyra
+# Kyra
 
-A personal AI companion project: persona-driven dialogue, long-term memory via RAG, agentic tools, voice, and eventually animation.
+A personal AI companion, built to learn the whole AI pipeline by shipping one: persona-driven
+dialogue, long-term memory over retrieval, agentic tools, local and hosted models side by side,
+and voice in and out.
 
-Kyra's personality is warm and protective (Black Widow looking out for the team) crossed with sharp and resourceful (Hermione Granger) — see `docs/design.md` for the full design.
+It runs on a laptop. Text chat, a voice loop, a browser HUD, and a visionOS client all talk to the
+same conversation core. Design rationale is in [docs/design.md](docs/design.md).
 
-Built as a hands-on learning project for AI pipeline / LLM / agentic RAG experience, alongside prep for a software engineering interview.
+## What is worth looking at
 
-## Status
+Each of these was measured rather than assumed, and the write-ups keep the numbers that did not
+flatter the decision.
 
-Phase 1 done and verified end-to-end: persona, long-term memory (Chroma-backed `MemoryStore`), and the conversation orchestrator (multi-turn chat + memory persisting and getting recalled across sessions).
+| Piece | Where | The short version |
+|---|---|---|
+| Per-turn router | [src/companion/router.py](src/companion/router.py) | Decides tool vs text, and local vs hosted, on every turn. A fine-tuned 1.5B classifier replaced a few-shot 3B prompt: 91.7% against 73.8%, on 122 prompt tokens instead of 2,051. [docs/router-finetune.md](docs/router-finetune.md) |
+| Hybrid search | [src/companion/search.py](src/companion/search.py) | SQLite FTS5 and Chroma over the same chunks, fused by reciprocal rank. Vector-only scored 69.2% recall against lexical 88.5%, because embeddings miss identifiers. [docs/search-eval.md](docs/search-eval.md) |
+| One-page resume fitting | [src/companion/job_applications.py](src/companion/job_applications.py) | A real compile, measure, iterate loop. It shells out to LaTeX, reads the page count back from the PDF, and feeds the measured overflow into the next pass, because a model editing LaTeX cannot know what it renders to. |
+| Tool-calling distillation | [docs/tool-calling-distill.md](docs/tool-calling-distill.md) | Trained a local 7B to take over tool calls, measured 80.0% against the teacher's 90.0%, and did not ship it. The negative result is the point. |
+| Two memory layers | [memory.py](src/companion/memory.py), [memory_notes.py](src/companion/memory_notes.py) | Retrieval over every exchange, plus a small curated set of facts loaded in full on every turn. Top-k retrieval misses a durable fact on an off-topic turn, so the two layers do different jobs. |
+| Voice latency | [docs/voice-latency.md](docs/voice-latency.md) | Measured end to end, then shortened by speaking the first sentence while the rest is still being written. First word at 3.61s against 4.45s. |
 
-Voice I/O is built and verified with a real microphone (2026-09-02) - local, open-source speech-to-text (faster-whisper) and text-to-speech (Kokoro), plus hands-free/push-to-talk listening (`scripts/voice_chat.py`).
+Everything follows one shape on purpose: a small interface, a swappable concrete backend. Memory,
+speech, listening, models, tools, job boards, search and job queues are each an abstract base class
+with a real implementation behind it, so "how would you extend this" always has an answer that is
+not a rewrite. [CLAUDE.md](CLAUDE.md) is the engineering log, and it records the bugs and the
+reversals as carefully as the wins.
 
-Web UI (`scripts/web_ui.py`) with a per-turn router (AUTO/CLAUDE/LOCAL), a JOBS panel (drafting, one-page LaTeX resume fitting with a real compile loop, tracker, Greenhouse autofill) and a TOOLS panel (reminders, news, science, spaced-repetition learning).
+## Running it
 
-Quality bar (2026-09-04): `pytest` suite (56 tests, hermetic - never touches your real `data/`), `ruff` lint, CI workflow, structured logging, a deterministic fact-check guard on every generated resume. See `docs/industry-standards.md` for what changed and why, `docs/v2-outline.md` for where it goes next.
+Tested on macOS with Apple silicon. The local model and voice paths use MLX and want that hardware.
+Text chat against the hosted model works anywhere Python does.
 
-Tests: `pip install -r requirements-dev.txt && python3 -m pytest`
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env      # then put a real Anthropic API key in it
+python3 scripts/smoke_test.py
+```
 
-## Setup (run in your own Terminal, not through Claude)
+The install includes the voice stack, so it pulls a few hundred megabytes once. If the smoke test
+fails, `python3 scripts/debug_api_key.py` prints the API's own error instead of a generic one.
 
-1. `cd` into this folder (drag the folder into Terminal to avoid typing the path).
-2. `python3 -m venv .venv`
-3. `source .venv/bin/activate`
-4. `pip install -r requirements.txt` — this now includes the voice stack (faster-whisper, kokoro-onnx, silero-vad, sounddevice, torch), so it'll take a few minutes and download a few hundred MB. That's a one-time cost.
-5. Open `.env` and replace the placeholder with your real Anthropic API key.
-6. `python3 scripts/smoke_test.py` — should print a one-line greeting.
-   If it fails, run `python3 scripts/debug_api_key.py` instead — it prints the actual error from Anthropic's API instead of a generic message.
-7. `python3 scripts/chat.py` — chat with Kyra over text. First run downloads a small embedding model (for memory search) — needs network and takes a few seconds, one time only. She'll remember things across runs (stored in `data/memory_db`, gitignored).
+Then pick a front door:
 
-## Voice setup (talk to Kyra out loud)
+```bash
+python3 scripts/chat.py      # text
+python3 scripts/web_ui.py    # browser HUD at http://127.0.0.1:8420
+python3 scripts/voice_chat.py
+```
 
-1. `python3 scripts/setup_voice_models.py` — one-time download of Kokoro's TTS model files (~350MB, into `data/voice_models`, gitignored).
-2. `python3 scripts/test_voice_roundtrip.py` — sanity check with **no microphone needed**: Kyra speaks a line, then transcribes her own recording back, so you can see both models are working (and hear how she sounds, if your speakers are on) before trying the live mic. First run also downloads faster-whisper's model (~500MB for the default "small" size).
-3. `python3 scripts/voice_chat.py` — the real thing. Defaults to hands-free (just start talking); add `--mode ptt` for push-to-talk (press Enter, speak, press Enter again) instead.
+The first run downloads a small embedding model for memory search. Conversations persist in
+`data/memory_db`, which is gitignored along with the rest of `data/`.
 
-**First time you run it, macOS will pop up a microphone permission prompt for Terminal** — allow it, or Kyra won't hear anything. If you don't see the prompt and nothing's being picked up, check System Settings → Privacy & Security → Microphone and make sure Terminal (or your terminal app) is allowed.
+### Voice
 
-`sounddevice` normally bundles the audio library it needs on macOS, so no extra install should be required. If you see a `PortAudio library not found` error, run `brew install portaudio` and try again.
+```bash
+python3 scripts/setup_voice_models.py     # one time, ~350MB of Kokoro TTS
+python3 scripts/test_voice_roundtrip.py   # no microphone needed
+python3 scripts/voice_chat.py             # hands-free; --mode ptt for push-to-talk
+```
 
-Everything here runs locally and is free - no API cost, audio never leaves your machine. See the "Voice I/O" section of `docs/design.md` for how it's built and why.
+Speech to text is faster-whisper, speech out is Kokoro, both local. No per-turn cost, and audio
+never leaves the machine. The first roundtrip also pulls the Whisper model, about 500MB.
+
+macOS asks for microphone permission the first time. If nothing is picked up and no prompt appeared,
+check System Settings, then Privacy and Security, then Microphone. On a `PortAudio library not
+found` error, `brew install portaudio`.
+
+## Tests and lint
+
+```bash
+pip install -r requirements-dev.txt
+python3 -m pytest          # 493 tests, about 20 seconds
+ruff check src scripts tests
+```
+
+The suite is hermetic. `tests/conftest.py` repoints the data directory at a temp path before any
+import, so a test run can never touch real conversations, resumes or databases. Tests that need a
+LaTeX toolchain skip cleanly when one is absent. Both commands run in CI.
+
+## Layout
+
+```
+src/companion/   the library: models, memory, voice, router, tools, search, job pipeline
+scripts/         one thin CLI per entry point, each over a module in src/
+web/             the browser HUD
+apple/           visionOS client (SwiftUI, hand-written xcodeproj)
+docs/            design, benchmarks, evaluations, and dated plans
+deploy/          Terraform for the container shape on AWS, never applied
+tests/           493 tests plus the handwritten held-out sets the evals score against
+```
+
+## Boundaries that are deliberate
+
+Some things are missing by decision rather than by backlog, and the reasons are in
+[CLAUDE.md](CLAUDE.md):
+
+- Job application autofill fills a form and stops. A human reviews and submits.
+- Nothing automates LinkedIn. Its terms forbid it, so outreach drafting hands over a clipboard.
+- Voice is local and open source, not a cloud speech API.
+- Generated resume text runs through a check that flags any number, link or proper noun absent from
+  the sources the model was given.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Vendored skill files under `.claude/skills/` keep their own upstream
+notices; see the attribution file there.

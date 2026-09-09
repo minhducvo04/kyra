@@ -36,3 +36,23 @@ handoff/
 apple/**/build/
 apple/**/*.xcodeproj/xcuserdata/
 apple/**/*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Personal documents, wherever they land.
+# /data/ above already covers the real stores (essays, transcripts, resumes,
+# applicant profile, job-search notes). These patterns are the second line: a
+# personal file dropped anywhere else in the tree stays out of a public repo by
+# default. The repo tracks zero files of these types, so nothing is hidden that
+# was meant to ship. If you ever genuinely need to commit one: git add -f <path>.
+*.doc
+*.docx
+*.pdf
+*.pages
+*.key
+*.numbers
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+*.odt
+*.rtf
+*.tex
