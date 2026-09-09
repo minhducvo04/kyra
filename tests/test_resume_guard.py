@@ -1,6 +1,6 @@
 from companion.resume_guard import check_resume_output, number_tokens, unsupported_numbers, unsupported_urls
 
-ORIGINAL = r"""GPA: 3.42 \\ 2023 -- 2024 \\ improved latency by 40\% for 1,000 users
+ORIGINAL = r"""GPA: 3.42 \\ 2023 to 2024 \\ improved latency by 40\% for 1,000 users
 \vspace{-5pt} % a LaTeX comment mentioning 999
 GPT-4 and H100 and 3B models. github.com/duc/kyra"""
 
@@ -33,9 +33,9 @@ def test_extra_facts_count_as_a_source():
     assert unsupported_numbers(output, [ORIGINAL, "Duc graduates in 2026"]) == []
 
 
-ORIGINAL_TEX = r"""\resumeSubheading{University of California, Berkeley}{June 2024 -- August 2026}{B.S. EECS}{GPA: 3.42}
+ORIGINAL_TEX = r"""\resumeSubheading{University of California, Berkeley}{June 2024 to August 2026}{B.S. EECS}{GPA: 3.42}
 \resumeItem{\textbf{Coursework}: Machine Learning (CS 189), Data Structures (CS 61B)}
-\resumeSubheading{Escaype LLC}{Novato, CA}{Software Engineer Intern}{Sep. 2024 -- Present}
+\resumeSubheading{Escaype LLC}{Novato, CA}{Software Engineer Intern}{Sep. 2024 to Present}
 \resumeItem{Reduced OpenRouter API overhead by 85\% using sidecar JSON metadata.}
 % \resumeProjectHeading{\textbf{\href{https://github.com/x/f500}{\underline{Fortune 500 Analysis}}} $|$ \emph{pandas}}{June 2023}
 % \resumeItem{Web-scraped data from 1955 to 2023 into SQLite.}
@@ -117,3 +117,30 @@ def test_a_company_whose_name_is_also_a_verb_is_still_checked():
     warnings = check_resume_output(
         r"\resumeSubheading{Applied Intuition}{2026}{Engineer}{Now}", [r"\resumeSubheading{Escaype}{2025}{Intern}{Now}"])
     assert any("Applied Intuition" in w for w in warnings)
+
+
+def test_guard_catches_latex_dashes_that_render_as_en_and_em_dashes():
+    """A resume source greps clean for the Unicode characters while the
+    compiled PDF shows dashes: LaTeX renders "--" as an en-dash and "---" as
+    an em-dash. Found 2026-09-09, when the shipped resume had four of them and
+    both the ad hoc grep and outreach's has_dash() reported none."""
+    src = r"\resumeItem{Benchmarked 8 models}"
+    out = (
+        "\n".join([
+            r"{University of California, Berkeley}{June 2024 -- August 2026}",
+            r"{\textbf{Kyra} --- Agent Harness}",
+            r"\resumeItem{Benchmarked 8 models (3B--32B)}",
+            r"% commented alternate -- ignored, never rendered",
+        ])
+    )
+    w = check_resume_output(out, [src])
+    dash = [x for x in w if x.startswith("dash check:")]
+    assert len(dash) == 1, w
+    # three live lines, and the commented one is not counted
+    assert "3 live line(s)" in dash[0]
+    assert "commented alternate" not in dash[0]
+
+
+def test_guard_does_not_flag_hyphenated_words():
+    out = r"\resumeItem{Built a well-tested, model-agnostic routing layer for new-grad hiring}"
+    assert not [x for x in check_resume_output(out, [out]) if x.startswith("dash check:")]

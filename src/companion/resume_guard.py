@@ -44,6 +44,23 @@ stripped before checking.
 """
 import re
 
+# Shared with outreach.py, which re-exports it. Defined here because
+# resume_guard sits below job_applications in the import graph and outreach
+# sits above it, so the other direction is a cycle.
+_DASH = re.compile(r"[\u2014\u2013]|(?<=\s)-(?=\s)|--")
+
+
+def has_dash(text: str) -> bool:
+    """True for an em-dash, an en-dash, a hyphen used as one ("a - b"), or a
+    LaTeX dash ("--" and "---", which render as en- and em-dashes). A
+    hyphenated word ("new-grad") is not a dash and must not be flagged.
+
+    The LaTeX case was missed until 2026-09-09: a resume source greps clean
+    for the Unicode characters while the compiled PDF shows four dashes.
+    """
+    return bool(_DASH.search(text))
+
+
 # A number token: digits with optional thousands separators, decimal
 # part, and trailing % - but not when glued to letters (so "GPT-4",
 # "3B" and "H100" aren't split into bare digits we then can't match;
@@ -245,6 +262,16 @@ def check_resume_output(output: str, sources: list[str]) -> list[str]:
         warnings.append(
             f"fact check: {len(heads)} entry heading(s) not in any source - a job/project that may have been invented: "
             + "; ".join(heads[:4])
+        )
+    dash_lines = [
+        ln.strip() for ln in output.splitlines()
+        if not ln.lstrip().startswith("%") and has_dash(ln)
+    ]
+    if dash_lines:
+        warnings.append(
+            f"dash check: {len(dash_lines)} live line(s) carry an em-dash, en-dash, or a LaTeX "
+            f'"--"/"---" that renders as one - the standing rule is none in outbound text: '
+            + "; ".join(x[:70] for x in dash_lines[:4])
         )
     courses = unsupported_courses(output, sources)
     if courses:
