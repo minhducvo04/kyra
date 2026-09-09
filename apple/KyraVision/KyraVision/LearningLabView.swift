@@ -6,7 +6,6 @@ struct LearningLabView: View {
     let client: KyraClient
     @Bindable var lab: LearningLab
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismissWindow) private var dismissWindow
     @State private var confirmDiscard = false
 
     var body: some View {
@@ -91,8 +90,6 @@ struct LearningLabView: View {
                 lab.toggle(2)
                 lab.prediction = 10
                 lab.run()
-                // Remove restored smoke windows before opening the keyed volume.
-                dismissWindow(id: "queue-lab")
                 openWindow(id: "queue-lab", value: "shared")
             }
         }

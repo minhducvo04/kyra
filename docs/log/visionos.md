@@ -6,7 +6,7 @@ Entries below were moved verbatim from `CLAUDE.md` on 2026-09-09 (original order
 
 ## Entries
 
-- **Reopening the lab reuses its volume (2026-09-09)**: the final simulator replay exposed duplicate windows from an unkeyed `WindowGroup`. The group now takes a stable `shared` value, and both the button and Debug fixture open that value. This gives repeated Open actions one existing volume to activate. The smoke fixture also closes restored older smoke windows before opening its volume.
+- **Reopening the lab reuses its volume (2026-09-09)**: the final simulator replay exposed duplicate windows from an unkeyed `WindowGroup`. The group now takes a stable `shared` value, and both the button and Debug fixture open that value. This gives repeated Open actions one existing volume to activate. The volume is placed relative to the explicitly named main window. A dismiss-then-open sequence was removed from the Debug fixture after it raced and closed the newly opened window.
 
 - **Workspace checkpoints and a spatial learning lab (2026-09-09)**: Duc asked Codex to build both brainstorming ideas. Workspace persists an explicitly edited task, last result, next action and inert reference text on the Mac. Resume restores context without executing it. The Learn tab runs a deterministic ten-tick shared-queue experiment with three optional servers, a committed numerical prediction, measured explanation and an editable takeaway saved into existing spaced repetition. A RealityKit volume in Shared Space shows enabled servers, completions and waiting work; it opens beside the main window. No LLM, room sensing or new permission is required to simulate.
 
