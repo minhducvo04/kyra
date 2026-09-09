@@ -198,6 +198,7 @@ def test_a_reused_resume_does_not_claim_a_fresh_verdict(tmp_path):
     assert any("reus" in line for line in r.steps)
 
 
+@requires_latex
 def test_retailor_forces_a_fresh_resume(tmp_path):
     store = JobApplicationStore(tmp_path / "j.db")
     _existing_resume(tmp_path, store)
@@ -206,6 +207,7 @@ def test_retailor_forces_a_fresh_resume(tmp_path):
     assert r.resume_pdf_path != str(tmp_path / "resumes" / "old.pdf")
 
 
+@requires_latex
 def test_a_resume_path_whose_file_is_gone_is_rebuilt(tmp_path):
     store = JobApplicationStore(tmp_path / "j.db")
     _, pdf = _existing_resume(tmp_path, store)
