@@ -64,3 +64,19 @@ def test_the_block_carries_measured_facts_not_the_agent_s_recollection():
 
 def test_reading_a_branch_with_no_thread_is_empty_not_an_error():
     assert session_log.read("never-used") == ""
+
+
+def test_a_block_always_states_what_is_next_and_which_model():
+    # A hand-off that ends without saying what comes next makes the receiver
+    # re-derive the plan, which is the copying problem in another form.
+    block = session_log.render("claude", "review", "body", next_up="wire it in", suggest="Sonnet 5 / medium")
+    assert "- Next: wire it in" in block
+    assert "- Suggested: Sonnet 5 / medium" in block
+
+
+def test_an_omitted_handover_is_visible_rather_than_absent():
+    # Rendering "(not stated)" makes the gap something a reader sees, instead of
+    # something they have to notice is missing.
+    block = session_log.render("codex", "build", "body")
+    assert "- Next: (not stated)" in block
+    assert "- Suggested: (not stated)" in block

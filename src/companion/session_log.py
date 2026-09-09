@@ -82,7 +82,15 @@ def facts(cwd: Path | None = None, base: str = "master") -> dict[str, str]:
     }
 
 
-def render(agent: str, open_for: str, body: str, *, now: datetime | None = None, cwd: Path | None = None) -> str:
+def render(agent: str, open_for: str, body: str, *, next_up: str = "", suggest: str = "",
+           now: datetime | None = None, cwd: Path | None = None) -> str:
+    """One block. `body` is the message to whoever `open_for` names.
+
+    `next_up` and `suggest` render even when empty, as "(not stated)". A missing
+    hand-over is then visible in the thread instead of being something the
+    reader has to notice is absent - the same reason a skipped step is reported
+    rather than quietly dropped.
+    """
     if agent not in AGENTS:
         raise ValueError(f"agent must be one of {AGENTS}, got {agent!r}")
     if open_for not in OPEN_FOR:
@@ -96,20 +104,22 @@ def render(agent: str, open_for: str, body: str, *, now: datetime | None = None,
         f"- {f['ahead']} commit(s) ahead of master, working tree {f['tree']}",
         f"- Private paths: {f['private']}",
         f"- **Open for: {open_for}**",
+        f"- Next: {next_up.strip() or '(not stated)'}",
+        f"- Suggested: {suggest.strip() or '(not stated)'}",
         "",
         body.strip() or "_(no notes)_",
         "",
     ])
 
 
-def append(agent: str, open_for: str, body: str, *, branch: str | None = None,
-           now: datetime | None = None, cwd: Path | None = None) -> Path:
+def append(agent: str, open_for: str, body: str, *, next_up: str = "", suggest: str = "",
+           branch: str | None = None, now: datetime | None = None, cwd: Path | None = None) -> Path:
     branch = branch or current_branch(cwd)
     path = SESSIONS_DIR / f"{slug(branch)}.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     header = "" if path.exists() else f"# Session thread: `{branch}`\n\nAppend-only. Newest block last. See `docs/agent-workflow.md`.\n\n"
     with path.open("a", encoding="utf-8") as fh:
-        fh.write(header + render(agent, open_for, body, now=now, cwd=cwd) + "\n")
+        fh.write(header + render(agent, open_for, body, next_up=next_up, suggest=suggest, now=now, cwd=cwd) + "\n")
     return path
 
 
