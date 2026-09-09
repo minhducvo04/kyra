@@ -44,4 +44,5 @@ Start with `../AGENTS.md` (rules, commands, architecture) and `../README.md` (th
 | `plans/2026-09-08-ambient-assistant.md` | Concept and research only. |
 | `plans/2026-09-08-attention-environment.md` | Slices 0 to 4 built (focus blocks); 5 to 7 open. |
 | `plans/2026-09-08-going-public.md` | Auth boundary, `/healthz`, `render.yaml` built; repo public since 2026-09-09; no deploy yet. |
+| `plans/2026-09-09-destructive-guard.md` | Planned. Snapshot first, then one guard hook script shared by both harnesses. |
 | `plans/2026-09-09-codex-onboarding.md` | This restructure, and how Codex joins the project. |
