@@ -213,14 +213,7 @@ _PARSE = re.compile(r"NOTE:\s*(.*?)\s*FOLLOW-UP:\s*(.*)", re.S)
 # stand-in - a real draft on 2026-09-08 came back with "cutting deploy times -
 # what turned out to be the bottleneck" after the pass had already run. A prompt
 # is a request; this is the post-condition, same shape as the length limit.
-_DASH = re.compile(r"[\u2014\u2013]|(?<=\s)-(?=\s)")
-
-
-def has_dash(text: str) -> bool:
-    """True for an em-dash, an en-dash, or a hyphen used as one ("a - b").
-    A hyphenated word ("new-grad") is not a dash and must not be flagged."""
-    return bool(_DASH.search(text))
-
+from companion.resume_guard import has_dash  # noqa: E402  (re-exported; defined there to avoid a cycle)
 
 DEDASH_PROMPT = """Rewrite this so it contains no em-dash, no en-dash, and no hyphen standing in for one
 ("x - y"). Use a full stop, a comma, or a rephrase instead. Hyphenated words like "new-grad" are fine.
