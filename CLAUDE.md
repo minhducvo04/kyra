@@ -9,10 +9,10 @@
 | Task | Model | Effort |
 |---|---|---|
 | Design, audits, hard debugging, prompt work needing real-run verification | Opus 5 | high |
-| Implementing a specified feature, wiring, docs, refactors covered by tests | Sonnet 5 | medium |
+| Writing tests, running verification, maintaining plans and docs | Sonnet 5 | medium |
 | Trivial edits, questions answerable from one file | Sonnet 5 | low |
 
-Start on Opus for the plan, switch to Sonnet to build, switch back only when stuck. Which phases are Claude Code's and which are Codex's: `docs/agent-workflow.md`. Global principles and the session-end line (`Finished: ... Next: ... Suggested: ...`) come from `~/.claude/CLAUDE.md`; the portable source for both halves is `docs/templates/PROJECT-WORKFLOW.md`.
+Lead planning, test design, independent testing, and review. Use Opus for plans and demanding reviews, and Sonnet for specified tests and routine verification. Codex is the primary code builder; contribute your own ideas alongside Codex during brainstorming. Which phases are Claude Code's and which are Codex's: `docs/agent-workflow.md`. Global principles and the session-end line (`Finished: ... Next: ... Suggested: ...`) come from `~/.claude/CLAUDE.md`; the portable source for both halves is `docs/templates/PROJECT-WORKFLOW.md`.
 
 ## Skills in use (vendored under `.claude/skills/`, see `ATTRIBUTION.md` there)
 
