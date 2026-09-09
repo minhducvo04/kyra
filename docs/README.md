@@ -9,6 +9,7 @@ Start with `../AGENTS.md` (rules, commands, architecture) and `../README.md` (th
 | `design.md` | The v1 design: persona, memory over retrieval, the conversation core. Where the project started. |
 | `agentic-roadmap.md` | Duc's prioritised use cases, routed against the model benchmark and answered. The router's design history. |
 | `v2-outline.md` | The industry-shaped v2 outline (services, stores, queue, deploy) that Phase 1 was built from. |
+| `agent-workflow.md` | Two-agent rota: which of Claude Code and Codex owns each phase, testing assignments, handoff block, models per side. |
 | `industry-standards.md` | Every standard applied to the code: what changed, what it was before, why the standard exists. |
 | `templates/PROJECT-WORKFLOW.md` | The portable session workflow; this repo's copy is `AGENTS.md` sections 5 and 6, original wording in `log/rules-history.md`. |
 

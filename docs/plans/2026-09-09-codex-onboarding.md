@@ -21,6 +21,7 @@ Duc's ask: the repo is public now; add Codex beside Claude Code; clean everythin
 - `AGENTS.md` is canonical. Codex reads it natively from the repo root. Claude Code reads it through `CLAUDE.md`, whose first line is `@AGENTS.md`.
 - Anything both agents need goes in `AGENTS.md`. Anything only Claude Code needs (skills, model table, launch config) goes in `CLAUDE.md`. History goes in `docs/log/<topic>.md`, newest entry at the top. Plans go in `docs/plans/`.
 - `AGENTS.md` stays under 32 KB: Codex's default `project_doc_max_bytes` truncates past that, silently. A rule that gets truncated is a rule nobody follows.
+- Who does which phase, who writes and runs which tests, and the handoff block between the two: `docs/agent-workflow.md`.
 - Codex has no memory directory. Claude Code's auto-memory (outside the repo) is personal to it; a fact the project needs must be in `docs/log/`, or Codex never learns it.
 
 ## 2. Setting Codex up for this repo (Duc)
