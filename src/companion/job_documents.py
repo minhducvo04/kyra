@@ -24,7 +24,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from companion.paths import DATA_DIR
+from companion.paths import DATA_DIR, write_json
 
 DEFAULT_DIR = DATA_DIR / "job_documents"
 INDEX_NAME = "index.json"
@@ -59,7 +59,7 @@ class JobDocumentStore:
         return docs
 
     def _write_all(self, docs: list[dict]) -> None:
-        self._index_path.write_text(json.dumps(docs, indent=2), encoding="utf-8")
+        write_json(self._index_path, docs)
 
     def add(
         self,

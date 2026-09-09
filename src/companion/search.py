@@ -613,7 +613,16 @@ class HybridSearchIndex(SearchIndex):
         collection = self._vectors()
         for i in range(0, len(chunks), 128):
             batch = chunks[i : i + 128]
-            collection.add(
+            # upsert, not add: a chunk_id is deterministic (`source_id#i`), so
+            # re-indexing an edited document writes ids that are already there.
+            # Chroma *ignores* an add whose id exists - no exception, no warning
+            # - and `_drop_source`'s vector delete is deliberately swallowed, so
+            # if it ever misses, add() would leave the OLD embedding in place
+            # while FTS holds the new text: hybrid search keeps working and
+            # nothing surfaces that half the index is stale. upsert has no such
+            # precondition. (Same failure Chroma has on ids everywhere - see
+            # ChromaMemoryStore.add.)
+            collection.upsert(
                 ids=[c.chunk_id for c in batch],
                 documents=[c.text for c in batch],
                 metadatas=[

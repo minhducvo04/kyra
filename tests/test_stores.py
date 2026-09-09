@@ -205,3 +205,26 @@ def test_an_applications_link_can_be_corrected(tmp_path):
     updated = store.set_link(a.id, "https://jobs.ashbyhq.com/netic/abc")
     assert updated.link == "https://jobs.ashbyhq.com/netic/abc"
     assert store.set_link(9999, "https://x") is None
+
+
+def test_a_crash_mid_write_leaves_the_document_library_readable(tmp_path, monkeypatch):
+    """The index holds Duc's resumes and style samples, and every drafting
+    path reads it. `Path.write_text` truncates before it writes, so a crash
+    in between used to leave a half-written file that `_read_all` cannot
+    parse - losing the whole library, not one update. The write now goes to a
+    sibling temp file and renames, so a failure can only damage the temp.
+    """
+    store = JobDocumentStore(tmp_path / "docs")
+    store.add(label="Resume", kind="resume", text="the original")
+    real_write_text = Path.write_text
+
+    def crash_after_partial_write(self, *args, **kwargs):
+        real_write_text(self, '[{"id": "half', encoding="utf-8")  # what a crash leaves behind
+        raise OSError("simulated crash mid-write")
+
+    monkeypatch.setattr(Path, "write_text", crash_after_partial_write)
+    with pytest.raises(OSError):
+        store.add(label="Second", kind="note", text="never lands")
+    monkeypatch.undo()
+
+    assert [d.label for d in store.list()] == ["Resume"]
