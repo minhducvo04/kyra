@@ -1,4 +1,4 @@
-# Project workflow for Claude sessions (portable — copy into any repo's CLAUDE.md)
+# Project workflow for agent sessions (portable — copy into any repo's AGENTS.md or CLAUDE.md)
 
 > DRAFT 2026-09-05. Generic on purpose; project specifics belong in the repo's own CLAUDE.md sections.
 

@@ -1,5 +1,7 @@
 # Putting Kyra on the internet (plan, 2026-09-08)
 
+> **Status 2026-09-09.** Slices 1 and 2 below are built (see `docs/log/platform-and-deploy.md`). The repo is public since 2026-09-09 after a history rewrite; the checklist that §5 reports missing lives at `data/private_docs/publish-checklist.md` (gitignored, current version v5). Nothing is deployed.
+
 Duc's ask, stated before going to sleep: "connect to website, and prepare to scale (you suggest me) with
 things like cloud, db, deploy, render, docker."
 

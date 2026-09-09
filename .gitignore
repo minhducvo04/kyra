@@ -7,8 +7,12 @@ venv/
 dist/
 build/
 
-# Env / secrets
+# Env / secrets. Every .env variant except the tracked template.
 .env
+.env.*
+!.env.example
+*.pem
+*.p12
 
 # Vector store / data
 /data/
@@ -17,6 +21,9 @@ chroma_db/
 
 # Claude Code handoff drafts - can contain private conversation context
 handoff/
+
+# Throwaway experiments (pyproject excludes it from ruff too)
+scratchpad/
 
 # OS
 .DS_Store
