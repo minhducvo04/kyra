@@ -59,21 +59,31 @@ Two rules that apply to every row: read the count off pytest's **summary line**,
 
 Set effort with `/model` in the Codex TUI, or per profile in `~/.codex/config.toml`; if a key has moved, `codex --help` is the source of truth. Keep the default workspace-write sandbox and approve network per run; never full access in this repo.
 
-## 5. The handoff block
+## 5. The handoff, as a file rather than a copy-paste
 
-Every handoff, in either direction, is one block appended to the plan file (and pasted into the chat), so the receiving agent starts from facts rather than from a summary of a summary:
+Both agents run on the same machine, so a directory is the channel and nothing needs copying between two chats. `data/sessions/<branch>.md` is the thread: one file per branch, because the branch is already the unit of work. It is append-only and gitignored, since a session record names test counts and what a real run wrote.
 
-```
-## Handoff (<agent>, <date> <time>)
-Branch: session/2026-09-09-<topic>   Head: <short sha>
-Done: <the steps of the plan completed, by number>
-Verified: pytest <n> passed / ruff clean / <real run and its proof, or "none yet">
-Not done: <steps left, and why>
-Pollution: <what a real run wrote and that it was removed, or "hermetic only">
-Open for <other agent>: <exactly one of: critique | tests | build | review | nothing>
+Starting work, whichever agent you are:
+
+```bash
+python3 scripts/session_log.py            # this branch's thread, oldest block first
+python3 scripts/session_log.py --list     # every thread, newest first, with what each is open for
 ```
 
-The receiving agent's first action is `git checkout <branch> && git log -3 && python3 -m pytest`, and its first line back is whether those match the block.
+Finishing, before you stop:
+
+```bash
+python3 scripts/session_log.py --write --agent claude --open-for review <<'EOF'
+Done: steps 1 to 3 of the plan.
+Verified: pytest 494 passed, ruff clean, one real Lever form filled headless with fake data.
+Not done: step 4, waiting on a real posting URL.
+Pollution: hermetic only.
+EOF
+```
+
+`--agent` is one of claude, codex, duc. `--open-for` is one of critique, tests, build, review, duc, nothing, and it is validated, because a typo there misroutes the next session silently. The branch, head commit, count of commits ahead of master, working-tree state and the private-path check are measured from git and written into the block for you. Do not type them: a hand-off whose facts are recalled is one the receiver has to re-check anyway, which is the copying problem again in a smaller form.
+
+The receiving agent's first action is to read the thread, then `git checkout <branch> && git log -3 && python3 -m pytest`, and its first line back is whether those match the last block.
 
 ## 6. A slice through the loop
 

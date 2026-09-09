@@ -25,7 +25,7 @@ Kyra is an AI companion: persona-driven dialogue, long-term memory over retrieva
 | `migrations/` | Alembic revisions for the relational stores. |
 | `deploy/` | Terraform for AWS (never applied) and the launchd plist for the 05:00 digest. |
 | `.claude/skills/` | Vendored `SKILL.md` files (MIT, see `ATTRIBUTION.md` there). Plain markdown: any agent can read one and follow it. |
-| `data/` | **Gitignored. All personal and runtime state.** See section 2. |
+| `data/` | **Gitignored. All personal and runtime state.** See section 2. `data/sessions/` holds the agent hand-off threads. |
 | `.env` | **Gitignored. The live Anthropic API key.** Never print it. |
 
 ## 2. Private data: what is here and what must never leave
@@ -63,6 +63,9 @@ Job search, digest, search:
 - `scripts/daily_digest.py [--dry-run|--no-notify|--open|--index|--date YYYY-MM-DD|--search TERM|--rebuild|--no-reindex]`, scheduled at 05:00 by `deploy/com.kyra.daily-digest.plist`. `--dry-run` is read-only.
 - `scripts/search.py --reindex` once, then `scripts/search.py "question" [-k N] [--kind resume] [--private] [--answer] [--rerank llm|cross] [--mode lexical|vector|hybrid] [--explain] [--stats] [--eval]`. Search never reindexes on its own; the digest does at 05:00.
 - Autofill needs `data/applicant_profile.json` (see `profile.py::ApplicantProfile`; `resume_path` must be a real file). It fills and stops; a visible window stays open for Duc to submit.
+
+Agent hand-off (both agents, every session):
+- `python3 scripts/session_log.py` prints this branch's hand-off thread; `--list` shows every thread; `--write --agent <claude|codex|duc> --open-for <critique|tests|build|review|duc|nothing>` appends a block with the body on stdin. Threads live in `data/sessions/<branch>.md`, append-only and gitignored. Details in `docs/agent-workflow.md` section 5.
 
 Training, measurement, maintenance:
 - Router fine-tune: `scripts/router_ft.py gen | build | train | eval` (see `docs/router-finetune.md`); activate an adapter with `KYRA_CLASSIFIER_ADAPTER` in `.env`. Tool-calling distillation: `scripts/tool_ft.py gen | trace | build | train | eval` (`docs/tool-calling-distill.md`, measured and not shipped).
@@ -111,12 +114,12 @@ When adding a new subsystem, follow the same shape: a one-or-two-method ABC, a c
 
 With two agents in the repo, `docs/agent-workflow.md` says who owns each phase, who writes and who runs each kind of test, the handoff block format, and the model per side. The loop below is what each session does inside its phase.
 
-1. **Orient**: `git status`, `git log -5`, and the log file for the subsystem (section 7). Another agent may have worked since you last looked; two sessions building the same slice at once has happened, and it is the merge rule above that made it survivable.
+1. **Orient**: `python3 scripts/session_log.py` for this branch's hand-off thread, then `git status`, `git log -5`, and the log file for the subsystem (section 7). Another agent may have worked since you last looked; two sessions building the same slice at once has happened, and it is the merge rule above that made it survivable.
 2. **Plan**: restate the goal, list assumptions, ask up to five clarifying questions if anything is ambiguous, write `docs/plans/<date>-<topic>.md` with `[step] -> verify: [check]` lines. Skip the file for a trivial change; never skip the restatement.
 3. **Build** on a branch named `session/<date>-<topic>`: one plan section per session; tests first for any hard constraint.
 4. **Verify**: a real run, not just `pytest`.
 5. **Record**: a dated entry at the top of the matching `docs/log/<topic>.md` with the *why*; a row in `docs/industry-standards.md` if a standard changed; a `data/private_docs/needs-your-input.md` entry for anything only Duc can decide; a rule in this file only if it is a standing rule that every future session needs (this file is the rulebook, the log is the history).
-6. **Close**: `ruff check src scripts tests` and `python3 -m pytest` green, `git status --porcelain` clean of private files, commit. Do not push.
+6. **Close**: `ruff check src scripts tests` and `python3 -m pytest` green, `git status --porcelain` clean of private files, commit. Do not push. Then `python3 scripts/session_log.py --write --agent <you> --open-for <phase>` so the other agent picks up from a file rather than from Duc repeating it (`docs/agent-workflow.md` section 5).
 
 ## 7. Read the log before you touch a subsystem
 
@@ -143,6 +146,6 @@ With two agents in the repo, `docs/agent-workflow.md` says who owns each phase, 
 
 **Claude Code.** `CLAUDE.md` imports this file and adds the model/effort table and the skill list. `.claude/launch.json` starts the web UI for the browser preview tool. The session-end line and the global principles live in `~/.claude/CLAUDE.md`. Auto-memory lives outside the repo; durable project facts still go in `docs/log/`, so Codex sees them too.
 
-**Codex.** This file is read automatically from the repo root; there is nothing else to configure in the repo. Work from `~/Projects/kyra` with the virtualenv at `.venv/`. The test suite needs no network; real-run verification does (Anthropic API, job boards, RSS), so approve network per run rather than turning the sandbox off. To apply one of the vendored skills, read `.claude/skills/<name>/SKILL.md` and follow it. Codex has no memory directory: anything worth remembering goes in `docs/log/` or `docs/plans/`. First-session prompt and setup notes: `docs/plans/2026-09-09-codex-onboarding.md`.
+**Codex.** This file is read automatically from the repo root; there is nothing else to configure in the repo. Work from `~/Projects/kyra` with the virtualenv at `.venv/`. The test suite needs no network once the student tokenizer is cached; on a cold cache one tool-fine-tune test skips rather than fails. Real-run verification does need it (Anthropic API, job boards, RSS), so approve network per run rather than turning the sandbox off. To apply one of the vendored skills, read `.claude/skills/<name>/SKILL.md` and follow it. Codex has no memory directory: anything worth remembering goes in `docs/log/` or `docs/plans/`. First-session prompt and setup notes: `docs/plans/2026-09-09-codex-onboarding.md`.
 
 **Both.** Same branch convention, same rules, same log. Never edit `AGENTS.md` and `CLAUDE.md` into disagreement: `CLAUDE.md` holds only what is Claude-specific.
