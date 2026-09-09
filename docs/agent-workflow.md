@@ -10,30 +10,33 @@ Claude Code and Codex both work in this repo. This is the division of labour, th
 
 ## 2. The loop, phase by phase
 
+Duc set these defaults on 2026-09-09: **Codex primarily builds and writes code; Claude Code primarily plans and tests. Both contribute ideas during brainstorming.** Each agent gives its own proposals and tradeoffs, clearly attributed, before the plan settles on an approach. One agent must not invent the other's contribution. These are primary responsibilities, not exclusive abilities; Duc can assign a specific task differently.
+
 | Phase | Owner | Model / effort | Produces | Handoff signal |
 |---|---|---|---|---|
+| **Brainstorm** | Both, with Duc | Each agent's configured model | Separate, attributed ideas, alternatives, and tradeoffs | Claude incorporates both contributions into the plan |
 | **Plan** | Claude Code | Opus 5 / high (run `grill-me` first) | `docs/plans/<date>-<topic>.md` with `[step] -> verify: [check]` lines and explicit assumptions | Plan file committed on `master` or the session branch |
 | **Plan critique** | Codex | default model, reasoning **high** | Comments appended to the plan under `## Critique (Codex)`: missing verify lines, hidden assumptions, cheaper alternatives | Critique section present; Claude Code answers each point inline |
-| **Tests first** | Codex | default model, reasoning **medium** | Failing tests, one per `verify:` line that can be a unit test, in `tests/`; commit named `tests(red): <topic>` | Red commit on the session branch; `pytest` output pasted in the handoff block |
-| **Build** | Claude Code | Sonnet 5 / medium (`ponytail` on; Opus 5 / high only when stuck) | The minimum code that turns the red tests green, matching existing style | Green commit, `ruff` clean, `pytest` count from the summary line |
-| **Real-run verification** | Builder, then confirmed by the other side (section 3) | as above | Proof kept: log line, screenshot, output file, named in the commit message | Entry prepended to `docs/log/verification-history.md` |
+| **Tests first** | Claude Code | Sonnet 5 / medium; Opus 5 / high for difficult test design | Failing tests, one per `verify:` line that can be a unit test, in `tests/`; commit named `tests(red): <topic>` | Red commit on the session branch; `pytest` output pasted in the handoff block |
+| **Build** | Codex | default model, reasoning **medium**; **high** for complex implementation or debugging (`ponytail` on) | The minimum code that turns the red tests green, matching existing style | Green commit, `ruff` clean, `pytest` count from the summary line |
+| **Real-run verification** | Codex verifies its build; Claude Code leads independent testing (section 3) | as above | Proof kept: log line, screenshot, output file, named in the commit message | Entry prepended to `docs/log/verification-history.md` |
 | **Review** | The non-author (Codex reviews Claude's build; Claude reviews Codex's build) | Codex: reasoning **high**. Claude Code: Opus 5 / high with `code-review-and-quality`, `ponytail-review` | Findings as a list in the handoff block, each with file:line; blocking ones fixed by the author before merge | Reviewer writes `Reviewed: <commit>, <n> findings, <m> blocking` in the plan |
 | **Record** | Builder | same model as build | Dated entry at the top of the matching `docs/log/<topic>.md` with the *why*; `docs/industry-standards.md` row if a standard changed; `data/private_docs/needs-your-input.md` for anything only Duc decides | Reviewer confirms the entry says what was verified, not what was hoped |
 | **Merge and push** | Duc | | | Fast-forward or PR; nothing is pushed by an agent |
 
-Default builder is Claude Code because its harness has the browser pane, the iOS/visionOS simulator, and the auto-memory. Codex builds instead when all three hold: the slice is fully specified with red tests already written, it is pure Python or shell (a script, a store, a parser, a CLI), and it needs no simulator. Then the roles flip for that slice and Claude Code reviews.
+Codex is the default builder across subsystems, including implementation, bug fixes, and refactors. Claude owns planning, test design, regression coverage, and independent acceptance testing and review. Codex still writes a regression test before fixing a hard constraint when one is missing and runs the required checks before handoff. Tool access may require Claude to run a browser, simulator, or device check; that does not automatically transfer code ownership. If Claude authors a change, Codex independently reviews it. Keep one writer at a time and identify any ownership transfer in the handoff.
 
 ## 3. Testing assignments
 
 | Kind of test | Who writes it | Who runs it, and when | Where the result goes |
 |---|---|---|---|
-| Hermetic unit and API tests (`pytest`, `tests/conftest.py` temp data dir) | Codex, from the plan's `verify:` lines, before the build | Both, before every commit; CI on push | Count from pytest's summary line in the commit message |
-| Post-condition guards (a check in code for a hard constraint: no invented numbers, no dash, no file in a focus condition, startup imports, PII) | Claude Code during build, as the first thing built for any hard constraint | Both, as part of the suite | The guard's docstring names the failure it was written after |
+| Hermetic unit and API tests (`pytest`, `tests/conftest.py` temp data dir) | Claude Code, from the plan's `verify:` lines, before the build | Both, before every commit; CI on push | Count from pytest's summary line in the commit message |
+| Post-condition guards (a check in code for a hard constraint: no invented numbers, no dash, no file in a focus condition, startup imports, PII) | Claude Code writes the failing test; Codex implements the guard, adding a test first if missing | Both, as part of the suite | The guard's docstring names the failure it was written after |
 | Lint (`ruff check src scripts tests`) | n/a | Both, before every commit | Commit only when clean |
-| Real run: Anthropic API, LaTeX compile, RSS and board fetches, search reindex and eval | Builder | Builder first; the reviewer re-runs the cheap ones (search eval, board watch, `--dry-run` digest) to reproduce the numbers independently | Top of `docs/log/verification-history.md`; numbers in the matching `docs/*.md` eval doc |
-| Real run: browser HUD (`scripts/web_ui.py`) | Claude Code (browser pane) or Codex (browser plugin), whichever built it | The other side reproduces one path end to end | Screenshot or `read_page` output named in the commit |
+| Real run: Anthropic API, LaTeX compile, RSS and board fetches, search reindex and eval | Codex prepares a reproducible run; Claude Code designs independent acceptance checks | Codex verifies the build; Claude independently reproduces the relevant paths | Top of `docs/log/verification-history.md`; numbers in the matching `docs/*.md` eval doc |
+| Real run: browser HUD (`scripts/web_ui.py`) | Claude Code leads acceptance testing; Codex supplies reproduction steps | Codex verifies accessible paths; Claude independently tests the browser flow | Screenshot or `read_page` output named in the commit |
 | Real run: visionOS client | Claude Code only (simulator tool) | Claude Code | `docs/log/visionos.md` |
-| Evals with held-out sets (`router_ft.py eval`, `tool_ft.py eval`, `search.py --eval`, `focus_report.py`) | Held-out cases are handwritten by the builder and committed **before** any data is generated; the reviewer adds at least three cases the builder did not see | Builder runs; reviewer re-runs on a fresh index or a second seed | The eval doc under `docs/`, with the noise floor stated |
+| Evals with held-out sets (`router_ft.py eval`, `tool_ft.py eval`, `search.py --eval`, `focus_report.py`) | Claude Code writes held-out cases **before** any data is generated and adds at least three independent cases Codex did not see | Codex runs the eval; Claude re-runs on a fresh index or a second seed | The eval doc under `docs/`, with the noise floor stated |
 | Test-pollution cleanup (`data/*.db`, `data/memory_db`, `data/router.log`, `data/memory_notes/`) | n/a | Whoever ran the real run, immediately after; the reviewer checks `git status` and the store counts | Named in the verification entry |
 | Private-data check before commit (`git status --porcelain`: nothing under `data/`, no `.env*` but the example, no personal-document extension) | n/a | Both, every commit | Silent when clean; a hit is a blocking review finding |
 
@@ -46,15 +49,15 @@ Two rules that apply to every row: read the count off pytest's **summary line**,
 | Task | Model | Effort |
 |---|---|---|
 | Plan, design, audits, hard debugging, prompt work needing real-run verification, review of a risky diff | Opus 5 | high |
-| Implementing a specified slice, wiring, docs, refactors covered by tests | Sonnet 5 | medium |
+| Writing specified tests, regression coverage, routine verification, plans and docs | Sonnet 5 | medium |
 | Trivial edits, questions answerable from one file | Sonnet 5 | low |
 
 **Codex** (the configured default model; `gpt-6-astra` at the time of writing, visible in the banner of every `codex exec` run)
 
 | Task | Reasoning effort |
 |---|---|
-| Plan critique, code review, security review of anything touching auth, autofill or the API key | high |
-| Writing red tests from a plan, building a fully specified pure-Python slice, re-running evals | medium |
+| Complex implementation, difficult debugging, plan critique, independent review | high |
+| Building specified features, fixes and refactors; regression tests and routine verification | medium |
 | Trivial edits, one-file questions | low |
 
 Set effort with `/model` in the Codex TUI, or per profile in `~/.codex/config.toml`; if a key has moved, `codex --help` is the source of truth. Keep the default workspace-write sandbox and approve network per run; never full access in this repo.
@@ -73,13 +76,13 @@ python3 scripts/session_log.py --list     # every thread, newest first, with wha
 Finishing, before you stop:
 
 ```bash
-python3 scripts/session_log.py --write --agent claude --open-for review \
-    --next "wire the engine into apply_pipeline" --suggest "Sonnet 5 / medium" <<'EOF'
+python3 scripts/session_log.py --write --agent codex --open-for review \
+    --next "independently test and review the implementation" --suggest "Claude Code Opus 5 / high" <<'EOF'
 Done: steps 1 to 3 of the plan.
 Verified: pytest 494 passed, ruff clean, one real Lever form filled headless with fake data.
 Not done: step 4, waiting on a real posting URL.
 Pollution: hermetic only.
-To Codex: the required-field union lives in `_is_required`; reading one board's marking alone
+To Claude: the required-field union lives in `_is_required`; reading one board's marking alone
 calls every field on the other two optional.
 EOF
 ```
@@ -92,10 +95,10 @@ The receiving agent's first action is to read the thread, then `git checkout <br
 
 ## 6. A slice through the loop
 
-1. Duc asks for a Lever engine for the digest's `needs_attention` reasons.
-2. Claude Code (Opus 5 / high) grills the ask, writes `docs/plans/2026-09-10-lever-reasons.md` with four steps and their `verify:` lines, commits it.
-3. Codex (high) appends a critique: step 3 has no verify line for the empty-profile case. Claude Code adds it.
-4. Codex (medium) writes three failing tests on `session/2026-09-10-lever-reasons`, commits `tests(red): lever reasons`, posts a handoff block: `Open for Claude Code: build`.
-5. Claude Code (Sonnet 5 / medium) makes them green, runs a real Lever form headless with placeholder data, records the proof, prepends the verification entry, posts a handoff: `Open for Codex: review`.
-6. Codex (high) reviews, finds one blocking issue (a required question silently skipped), Claude Code fixes it, Codex re-reviews and writes `Reviewed: <sha>, 2 findings, 0 blocking`.
-7. Claude Code writes the `docs/log/autofill-and-boards.md` entry. Duc merges and pushes.
+1. Duc asks for a Lever engine for the digest's `needs_attention` reasons. Claude and Codex each contribute ideas and tradeoffs.
+2. Claude Code (Opus 5 / high) clarifies the requirements and writes `docs/plans/2026-09-10-lever-reasons.md` with verification criteria.
+3. Codex (high) critiques feasibility and missing edge cases; Claude updates the plan.
+4. Claude Code writes failing acceptance and regression tests on `session/2026-09-10-lever-reasons`, commits `tests(red): lever reasons`, and hands the branch to Codex with `--open-for build`.
+5. Codex (medium, high if needed) implements the feature, runs the tests and a real verification path, records evidence, and hands it to Claude with `--open-for review`.
+6. Claude independently tests and reviews the implementation. Codex fixes any blocking findings; Claude re-tests and records `Reviewed: <commit>, <n> findings, <m> blocking`.
+7. Codex records implementation decisions; Claude records independent verification results. Duc merges and pushes.

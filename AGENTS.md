@@ -112,6 +112,8 @@ When adding a new subsystem, follow the same shape: a one-or-two-method ABC, a c
 
 ## 6. Session workflow
 
+**Role ownership (Duc's decision, 2026-09-09): Codex primarily builds and writes code; Claude Code primarily plans, writes tests, and independently tests and reviews the implementation. Both agents contribute their own ideas during brainstorming, with attribution so Duc can compare them.** The builder still runs checks and verifies the change before handing it over; neither agent reviews its own work. Specific assignments from Duc override these defaults.
+
 With two agents in the repo, `docs/agent-workflow.md` says who owns each phase, who writes and who runs each kind of test, the handoff block format, and the model per side. The loop below is what each session does inside its phase.
 
 1. **Orient**: `python3 scripts/session_log.py` for this branch's hand-off thread, then `git status`, `git log -5`, and the log file for the subsystem (section 7). Another agent may have worked since you last looked; two sessions building the same slice at once has happened, and it is the merge rule above that made it survivable.
