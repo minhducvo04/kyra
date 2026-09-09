@@ -24,8 +24,9 @@ flatter the decision.
 Everything follows one shape on purpose: a small interface, a swappable concrete backend. Memory,
 speech, listening, models, tools, job boards, search and job queues are each an abstract base class
 with a real implementation behind it, so "how would you extend this" always has an answer that is
-not a rewrite. [CLAUDE.md](CLAUDE.md) is the engineering log, and it records the bugs and the
-reversals as carefully as the wins.
+not a rewrite. [docs/log/](docs/log/README.md) is the engineering log, one file per subsystem, and it
+records the bugs and the reversals as carefully as the wins. [AGENTS.md](AGENTS.md) is the instruction
+file every coding agent (Claude Code, Codex) reads before touching the repo.
 
 ## Running it
 
@@ -83,19 +84,21 @@ LaTeX toolchain skip cleanly when one is absent. Both commands run in CI.
 ## Layout
 
 ```
+AGENTS.md        rules, commands, architecture and workflow for any agent or reader (CLAUDE.md imports it)
 src/companion/   the library: models, memory, voice, router, tools, search, job pipeline
 scripts/         one thin CLI per entry point, each over a module in src/
 web/             the browser HUD
 apple/           visionOS client (SwiftUI, hand-written xcodeproj)
-docs/            design, benchmarks, evaluations, and dated plans
+docs/            design, benchmarks, evaluations, dated plans; docs/log/ is the engineering log
 deploy/          Terraform for the container shape on AWS, never applied
 tests/           493 tests plus the handwritten held-out sets the evals score against
+data/            gitignored: conversations, resumes, profile, databases, model weights
 ```
 
 ## Boundaries that are deliberate
 
 Some things are missing by decision rather than by backlog, and the reasons are in
-[CLAUDE.md](CLAUDE.md):
+[docs/log/](docs/log/README.md):
 
 - Job application autofill fills a form and stops. A human reviews and submits.
 - Nothing automates LinkedIn. Its terms forbid it, so outreach drafting hands over a clipboard.

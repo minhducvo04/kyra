@@ -46,4 +46,4 @@ All nine are distributed under the MIT License:
 > OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Copyright lines verified against each project's own `LICENSE` on 2026-09-08. This repo's own license
-is a separate question and is still open — see `data/private_docs/needs-your-input.md`.
+is MIT (`LICENSE` at the repo root, added 2026-09-08).

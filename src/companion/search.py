@@ -472,9 +472,9 @@ def default_sources() -> list[Source]:
     at code, and code chunking is a separate problem (see the plan).
     """
     return [
-        FileSource(PROJECT_ROOT / "docs", ["*.md", "templates/*.md"], kind="doc"),
+        FileSource(PROJECT_ROOT / "docs", ["*.md", "templates/*.md", "log/*.md"], kind="doc"),
         FileSource(PROJECT_ROOT / "docs" / "plans", ["*.md"], kind="plan"),
-        FileSource(PROJECT_ROOT, ["CLAUDE.md", "README.md"], kind="doc", owns_root=False),
+        FileSource(PROJECT_ROOT, ["AGENTS.md", "CLAUDE.md", "README.md"], kind="doc", owns_root=False),
         FileSource(DATA_DIR / "memory_notes", ["*.md"], kind="memory_note"),
         FileSource(DATA_DIR / "private_docs", ["*.md", "*.txt"], kind="private", sensitive=True),
         FileSource(DATA_DIR / "resumes", ["*.tex"], kind="resume"),

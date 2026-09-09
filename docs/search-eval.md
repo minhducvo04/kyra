@@ -104,3 +104,24 @@ It is not enough to rank the top three configurations, tune fusion weights, or j
 reranker fine-tune. Growing it - especially with queries whose answers live in the stores,
 digests and conversation log, which are thinly covered - is the prerequisite for any finer
 decision.
+
+## Re-measured 2026-09-09, after `CLAUDE.md` was split into `docs/log/`
+
+Same 26 queries, same code, the index rebuilt over the new files (`docs/log/*.md` and `AGENTS.md` are
+indexed now; the eight test cases whose passage moved name the log file that holds it).
+
+| Configuration | Recall@5 | MRR | misses |
+|---|---|---|---|
+| lexical only | 88.5% | 0.594 | 3 (unchanged: hedge fund, Orion, ICPC) |
+| vector only | 73.1% | 0.580 | 7 (was 8) |
+| hybrid (RRF, k=60) | 76.9% | 0.649 | 6 (was 5) |
+
+The one new hybrid miss is `RECENCY_WEIGHT`. Its defining passage (the memory-store decision) now sits
+alone in `docs/log/memory-and-llm.md`, at lexical rank 5 and hybrid rank 9, while chunks of this file
+and `docs/log/search.md` that merely *mention* the identifier as an example outrank it. Before the
+split all three passages were in one file, so a hit on the mention counted as a hit on the definition
+and the eval could not tell them apart. The split made the test stricter, not the index worse. Left
+alone on purpose: tuning RRF weights against 26 queries is fitting the test set (the standing caveat
+above), and the LLM reranker is the tool for ordering. MRR moved for the same reason: several
+expected sources are now specific files rather than one 200 KB catch-all.
+
