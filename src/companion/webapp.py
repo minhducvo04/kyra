@@ -17,11 +17,12 @@ import threading
 import time
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
-from functools import cached_property
+from functools import cache, cached_property
 from pathlib import Path
+from uuid import UUID
 
 from anthropic import Anthropic
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -34,6 +35,7 @@ from pydantic import BaseModel
 
 from companion import webauth
 from companion.apply_pipeline import ApplyError, engine_for_url, run_apply_pipeline
+from companion.checkpoints import CheckpointConflict, CheckpointDraft, CheckpointStore, DbCheckpointStore
 from companion.config import require_api_key
 from companion.conversation import ConversationManager
 from companion.db import engine_for_store
@@ -64,7 +66,7 @@ from companion.job_autofill import GreenhouseAutofillEngine, default_engines, re
 from companion.job_documents import JobDocumentStore
 from companion.job_posting_fetch import fetch_posting as _fetch_posting
 from companion.jobs import DbJobQueue, Handler, start_inline_worker
-from companion.learning import LearningStore
+from companion.learning import LearningRequestConflict, LearningStore
 from companion.llm import AnthropicLLM, TurnCancelled, build_llm, voice_backends
 from companion.memory import ChromaMemoryStore
 from companion.memory_notes import SUGGESTED_CATEGORIES, MarkdownMemoryNotesStore
@@ -1946,6 +1948,38 @@ def get_science(per_source: int = 2) -> dict:
     return _science_tool.run(per_source=per_source)
 
 
+def _checkpoint_access(request: Request) -> None:
+    settings = get_settings()
+    if not settings.api_token and not (
+        settings.trust_loopback and _client_host(request) in {"127.0.0.1", "::1"}
+    ):
+        raise ApiError(503, "setup_required", "Configure KYRA_API_TOKEN on the Mac before accessing checkpoints remotely.")
+
+
+_checkpoint_init_lock = threading.Lock()
+
+
+@cache
+def _checkpoint_store() -> CheckpointStore:
+    # functools.cache can execute concurrent misses. Serialize schema creation
+    # on the single-process Mac server; deployed schemas are migrated before serving.
+    with _checkpoint_init_lock:
+        return DbCheckpointStore()
+
+
+@app.get("/api/checkpoints", dependencies=[Depends(_checkpoint_access)])
+def list_checkpoints() -> dict:
+    return {"checkpoints": [asdict(item) for item in _checkpoint_store().list()]}
+
+
+@app.post("/api/checkpoints/{checkpoint_id}", dependencies=[Depends(_checkpoint_access)])
+def save_checkpoint(checkpoint_id: UUID, body: CheckpointDraft) -> dict:
+    try:
+        return asdict(_checkpoint_store().save(checkpoint_id, body))
+    except CheckpointConflict as exc:
+        raise ApiError(409, "revision_conflict", str(exc)) from exc
+
+
 @app.get("/api/learning/due")
 def learning_due() -> dict:
     return {"due": [asdict(i) for i in _learning_store.due()]}
@@ -1955,11 +1989,15 @@ class AddLearningItemIn(BaseModel):
     topic: str
     summary: str
     key_takeaway: str
+    request_id: UUID | None = None
 
 
 @app.post("/api/learning")
 def add_learning_item(body: AddLearningItemIn) -> dict:
-    return asdict(_learning_store.add(body.topic, body.summary, body.key_takeaway))
+    try:
+        return asdict(_learning_store.add(body.topic, body.summary, body.key_takeaway, request_id=body.request_id))
+    except LearningRequestConflict as exc:
+        raise ApiError(409, "request_id_conflict", str(exc)) from exc
 
 
 class MarkReviewedIn(BaseModel):

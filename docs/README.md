@@ -41,6 +41,7 @@ Start with `../AGENTS.md` (rules, commands, architecture) and `../README.md` (th
 | `plans/2026-09-07-mass-apply.md` | Slices 1 to 3 built (Greenhouse, Ashby, Lever, LinkedIn hand-off, Workday fetch). |
 | `plans/2026-09-07-semantic-search.md` | Slices 1 to 4 built. |
 | `plans/2026-09-07-visionos.md` | Client builds and talks to the Mac; presence orb and Today tab built. |
+| `plans/2026-09-09-vision-workspace-learning.md` | Workspace checkpoints and shared-space queue lab built; native tests, simulator and live HTTP verified; physical-device check remains. |
 | `plans/2026-09-08-ambient-assistant.md` | Concept and research only. |
 | `plans/2026-09-08-attention-environment.md` | Slices 0 to 4 built (focus blocks); 5 to 7 open. |
 | `plans/2026-09-08-going-public.md` | Auth boundary, `/healthz`, `render.yaml` built; repo public since 2026-09-09; no deploy yet. |

@@ -13,6 +13,11 @@
 		A1000000000000000000104 /* PresenceOrb.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000004 /* PresenceOrb.swift */; };
 		A1000000000000000000105 /* SpeechPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000005 /* SpeechPlayer.swift */; };
 		A1000000000000000000107 /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000007 /* TodayView.swift */; };
+		A1000000000000000000108 /* QueueSimulation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000008 /* QueueSimulation.swift */; };
+		A1000000000000000000109 /* WorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000009 /* WorkspaceView.swift */; };
+		A1000000000000000000110 /* LearningLabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000010 /* LearningLabView.swift */; };
+		A1000000000000000000111 /* WorkspaceState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000011 /* WorkspaceState.swift */; };
+		A1000000000000000000112 /* LearningLab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000012 /* LearningLab.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,6 +28,11 @@
 		A1000000000000000000004 /* PresenceOrb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceOrb.swift; sourceTree = "<group>"; };
 		A1000000000000000000005 /* SpeechPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechPlayer.swift; sourceTree = "<group>"; };
 		A1000000000000000000007 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
+		A1000000000000000000008 /* QueueSimulation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueSimulation.swift; sourceTree = "<group>"; };
+		A1000000000000000000009 /* WorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceView.swift; sourceTree = "<group>"; };
+		A1000000000000000000010 /* LearningLabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningLabView.swift; sourceTree = "<group>"; };
+		A1000000000000000000011 /* WorkspaceState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceState.swift; sourceTree = "<group>"; };
+		A1000000000000000000012 /* LearningLab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningLab.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +63,11 @@
 				A1000000000000000000004 /* PresenceOrb.swift */,
 				A1000000000000000000005 /* SpeechPlayer.swift */,
 				A1000000000000000000007 /* TodayView.swift */,
+				A1000000000000000000012 /* LearningLab.swift */,
+				A1000000000000000000011 /* WorkspaceState.swift */,
+				A1000000000000000000010 /* LearningLabView.swift */,
+				A1000000000000000000009 /* WorkspaceView.swift */,
+				A1000000000000000000008 /* QueueSimulation.swift */,
 			);
 			path = KyraVision;
 			sourceTree = "<group>";
@@ -139,6 +154,11 @@
 				A1000000000000000000104 /* PresenceOrb.swift in Sources */,
 				A1000000000000000000105 /* SpeechPlayer.swift in Sources */,
 				A1000000000000000000107 /* TodayView.swift in Sources */,
+				A1000000000000000000112 /* LearningLab.swift in Sources */,
+				A1000000000000000000111 /* WorkspaceState.swift in Sources */,
+				A1000000000000000000110 /* LearningLabView.swift in Sources */,
+				A1000000000000000000109 /* WorkspaceView.swift in Sources */,
+				A1000000000000000000108 /* QueueSimulation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
