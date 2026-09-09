@@ -19,7 +19,7 @@ Start on Opus for the plan, switch to Sonnet to build, switch back only when stu
 - `grill-me` / `grilling` before any non-trivial build; `interview-me` when an ask is ambiguous.
 - `test-driven-development` and `code-review-and-quality` during build and review.
 - `ponytail` on build sessions (minimal code); `ponytail-review` to hunt over-engineering in a diff.
-- `domain-modeling` maintains `CONTEXT.md` (shared vocabulary) when terms get introduced.
+- `domain-modeling` maintains `CONTEXT.md` (shared vocabulary) when terms get introduced. No `CONTEXT.md` exists yet; the skill would create it.
 
 ## Tooling
 

@@ -272,7 +272,13 @@ def test_row_token_lengths_measures_real_rows(schemas):
         {"name": "list_reminders", "args": {}, "result": default_listings(FIXED_TODAY)["list_reminders"]},
         {"name": "complete_reminder", "args": {"id": 3}, "result": {"ok": True}},
     ], "Ticked it off."), to_openai_tools(schemas))
-    lengths = row_token_lengths(short + long)
+    try:
+        lengths = row_token_lengths(short + long)
+    except OSError as exc:
+        # transformers is installed but the student's tokenizer is neither cached nor
+        # reachable - a sandboxed agent run, or a fresh machine. Nothing to measure, so
+        # skip like the LaTeX-backed tests do rather than failing on the environment.
+        pytest.skip(f"student tokenizer unavailable: {exc}")
     assert len(lengths) == 4
     assert all(n > 1500 for n in lengths)  # the tool schemas alone are ~2k tokens
     assert lengths[-1] > lengths[0]  # a two-call trace's final row is the longest

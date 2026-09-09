@@ -4,6 +4,8 @@ Every dated decision, bug, reversal and verification in this project, one file p
 
 How to use it: find your subsystem in the table, read that file before changing anything, and add a new entry at the **top** of it when you learn something (dated, with the *why*, and what was verified for real). `grep -rn "phrase" docs/log/` or `python3 scripts/search.py "question"` finds an entry; the log is indexed.
 
+The table lists the topic files; this index is not one of them.
+
 | File | Covers |
 |---|---|
 | `router.md` | The per-turn router, the classifier, fine-tune rounds 1 to 5, tool-calling distillation, when a retrain is needed. |
