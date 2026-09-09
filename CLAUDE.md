@@ -12,7 +12,7 @@
 | Implementing a specified feature, wiring, docs, refactors covered by tests | Sonnet 5 | medium |
 | Trivial edits, questions answerable from one file | Sonnet 5 | low |
 
-Start on Opus for the plan, switch to Sonnet to build, switch back only when stuck. Global principles and the session-end line (`Finished: ... Next: ... Suggested: ...`) come from `~/.claude/CLAUDE.md`; the portable source for both halves is `docs/templates/PROJECT-WORKFLOW.md`.
+Start on Opus for the plan, switch to Sonnet to build, switch back only when stuck. Which phases are Claude Code's and which are Codex's: `docs/agent-workflow.md`. Global principles and the session-end line (`Finished: ... Next: ... Suggested: ...`) come from `~/.claude/CLAUDE.md`; the portable source for both halves is `docs/templates/PROJECT-WORKFLOW.md`.
 
 ## Skills in use (vendored under `.claude/skills/`, see `ATTRIBUTION.md` there)
 

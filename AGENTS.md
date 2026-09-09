@@ -109,6 +109,8 @@ When adding a new subsystem, follow the same shape: a one-or-two-method ABC, a c
 
 ## 6. Session workflow
 
+With two agents in the repo, `docs/agent-workflow.md` says who owns each phase, who writes and who runs each kind of test, the handoff block format, and the model per side. The loop below is what each session does inside its phase.
+
 1. **Orient**: `git status`, `git log -5`, and the log file for the subsystem (section 7). Another agent may have worked since you last looked; two sessions building the same slice at once has happened, and it is the merge rule above that made it survivable.
 2. **Plan**: restate the goal, list assumptions, ask up to five clarifying questions if anything is ambiguous, write `docs/plans/<date>-<topic>.md` with `[step] -> verify: [check]` lines. Skip the file for a trivial change; never skip the restatement.
 3. **Build** on a branch named `session/<date>-<topic>`: one plan section per session; tests first for any hard constraint.
