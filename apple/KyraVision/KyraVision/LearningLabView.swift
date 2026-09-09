@@ -6,6 +6,7 @@ struct LearningLabView: View {
     let client: KyraClient
     @Bindable var lab: LearningLab
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
     @State private var confirmDiscard = false
 
     var body: some View {
@@ -15,7 +16,7 @@ struct LearningLabView: View {
                 Text("What happens when a server goes offline?").font(.title2)
                 Text("One shared queue, three servers, ten seconds. Each active server completes up to two requests per second.")
                     .foregroundStyle(.secondary)
-                Button("Open spatial lab", systemImage: "cube.transparent") { openWindow(id: "queue-lab") }
+                Button("Open spatial lab", systemImage: "cube.transparent") { openWindow(id: "queue-lab", value: "shared") }
                     .buttonStyle(.borderedProminent)
 
                 VStack(alignment: .leading, spacing: 14) {
@@ -90,7 +91,9 @@ struct LearningLabView: View {
                 lab.toggle(2)
                 lab.prediction = 10
                 lab.run()
-                openWindow(id: "queue-lab")
+                // Remove restored smoke windows before opening the keyed volume.
+                dismissWindow(id: "queue-lab")
+                openWindow(id: "queue-lab", value: "shared")
             }
         }
         #endif
