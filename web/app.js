@@ -426,6 +426,7 @@ async function send() {
   }
   setThinking(false);
   saveTranscript();
+  focusSync();
   input.focus();
 }
 
@@ -712,6 +713,7 @@ async function sendVoiceBlob(blob) {
     input.disabled = false;
     sendBtn.disabled = false;
     setMicState(handsFreeActive ? "listening" : "idle");
+    focusSync();
   }
 }
 
@@ -1272,6 +1274,8 @@ fitCopy.addEventListener("click", async () => {
 
 const applyUrls = document.getElementById("apply-urls");
 const applyCoverLetter = document.getElementById("apply-cover-letter");
+const applySourceUrl = document.getElementById("apply-source-url");
+const applyRetailor = document.getElementById("apply-retailor");
 const applyRunBtn = document.getElementById("apply-run");
 const applyJobs = document.getElementById("apply-jobs");
 
@@ -1359,10 +1363,14 @@ applyRunBtn.addEventListener("click", async () => {
   try {
     const data = await readJson(await fetch("/api/jobs/apply", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls, cover_letter: applyCoverLetter.value }),
+      body: JSON.stringify({
+        urls, cover_letter: applyCoverLetter.value, source_url: applySourceUrl.value.trim(),
+        retailor: applyRetailor.checked,
+      }),
     }));
     data.jobs.forEach(applyCard);
     applyUrls.value = "";
+    applySourceUrl.value = "";
   } catch (err) {
     const p = document.createElement("p"); p.className = "jobs-warnings"; p.textContent = `couldn't queue — ${err.message}`;
     applyJobs.prepend(p);
@@ -2004,6 +2012,14 @@ async function loadMemoryNotes() {
   try {
     const data = await readJson(await fetch("/api/memory-notes"));
     renderMemoryNotes(data.notes || []);
+    // What the layer costs, since it is paid on every single turn. Flagged past
+    // ~2k tokens: at that point it is the largest thing in the prompt and the
+    // "small curated set" the design assumes has stopped being small.
+    const weight = document.getElementById("memnote-weight");
+    const heavy = data.approx_tokens > 2000;
+    weight.textContent = `${(data.notes || []).length} notes · ~${data.approx_tokens} tokens on every turn`
+      + (heavy ? " — worth pruning" : "");
+    weight.style.color = heavy ? "var(--fit-medium)" : "";
   } catch (err) {
     memnoteList.textContent = `couldn't load — ${err.message}`;
   }
@@ -2508,3 +2524,619 @@ searchQuery.addEventListener("keydown", (e) => {
 searchSensitive.addEventListener("change", () => {
   if (searchQuery.value.trim()) runSearch();
 });
+
+/* ---------------- focus blocks ----------------
+   Plan and the evidence for every default: docs/plans/2026-09-08-attention-environment.md.
+
+   Two things about this code are deliberate and easy to "fix" wrongly.
+
+   1. All the audio is synthesised here from oscillators and filters. There is no
+      track list and no fetch of media, because the strongest finding in the review
+      was that lyrics and speech reliably hurt verbal work - so the catalogue is
+      built so that a song cannot be added without rewriting this file.
+   2. The gain comes from the server, not from a slider. GAIN_CEILING is mirrored
+      below only as a second fence; the plan the server sends is the authority. A
+      focus layer that competes with thinking is the failure mode, so louder is not
+      a feature request.
+
+   The condition is not displayed while the block runs: the server strips the name
+   from the payload, and nothing here reconstructs it from the spec. */
+
+const FOCUS_GAIN_CEILING = 0.30;   // mirrors companion/focus.py; the server value still wins
+const PROBE_SECONDS = 60;
+const PROBE_MIN_WAIT_MS = 1500;
+const PROBE_MAX_WAIT_MS = 4500;
+const PROBE_LAPSE_MS = 500;
+const PROBE_ANTICIPATION_MS = 100;
+// A dot nobody answers is a lapse, not a reason to wait. Without this the probe
+// hangs forever on an unanswered trial - found on the first real run, where the
+// end-of-block probe stalled with "0s left" and the block was therefore never
+// recorded at all. PVT convention caps an unanswered trial rather than dropping it.
+const PROBE_TIMEOUT_MS = 3000;
+
+const focusToggle = document.getElementById("focus-toggle");
+const focusPanel = document.getElementById("focus-panel");
+const focusClose = document.getElementById("focus-close");
+const focusChip = document.getElementById("focus-chip");
+const focusIdleView = document.getElementById("focus-idle");
+const focusRunningView = document.getElementById("focus-running");
+const focusProbeView = document.getElementById("focus-probe");
+const focusResultBox = document.getElementById("focus-result");
+const focusRemaining = document.getElementById("focus-remaining");
+const focusTaskLine = document.getElementById("focus-task-line");
+const focusNextBreak = document.getElementById("focus-next-break");
+const focusTarget = document.getElementById("focus-target");
+const focusProbeProgress = document.getElementById("focus-probe-progress");
+
+let focusState = null;      // { id, plan, startedAt, task }
+let focusTicker = null;
+let focusBreakTimers = [];
+let focusRating = null;
+
+/* -- the audio layer ---------------------------------------------------- */
+
+const focusAudio = (() => {
+  let nodes = [];
+  let master = null;
+
+  function ctx() {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  // Pink noise by Paul Kellett's filter, applied while filling one looping
+  // buffer. Pink rather than white: it is the 1/f family the meta-analysed
+  // studies used and it is judged less aversive at the same level.
+  function pinkBuffer(ac, seconds) {
+    const buf = ac.createBuffer(1, ac.sampleRate * seconds, ac.sampleRate);
+    const out = buf.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+    for (let i = 0; i < out.length; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.99886 * b0 + white * 0.0555179;
+      b1 = 0.99332 * b1 + white * 0.0750759;
+      b2 = 0.96900 * b2 + white * 0.1538520;
+      b3 = 0.86650 * b3 + white * 0.3104856;
+      b4 = 0.55000 * b4 + white * 0.5329522;
+      b5 = -0.7616 * b5 - white * 0.0168980;
+      out[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+      b6 = white * 0.115926;
+    }
+    return buf;
+  }
+
+  function build(ac, spec) {
+    const made = [];
+    if (spec.kind === "noise") {
+      const src = ac.createBufferSource();
+      src.buffer = pinkBuffer(ac, 4);
+      src.loop = true;
+      const lp = ac.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 5000;   // takes the hiss off the top without making it a rumble
+      src.connect(lp).connect(master);
+      src.start();
+      made.push(src, lp);
+    } else if (spec.kind === "modulated_pad") {
+      // The Brain.fm mechanism in two nodes: a soft pad whose amplitude is
+      // modulated at mod_hz. The pad is a root plus a fifth through a lowpass,
+      // so it reads as a texture rather than as a note being held.
+      const depth = ac.createGain();
+      depth.gain.value = 1 - (spec.depth ?? 0.6);
+      const lfo = ac.createOscillator();
+      const lfoGain = ac.createGain();
+      lfo.frequency.value = spec.mod_hz ?? 16;
+      lfoGain.gain.value = spec.depth ?? 0.6;
+      lfo.connect(lfoGain).connect(depth.gain);
+      lfo.start();
+      const lp = ac.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 900;
+      for (const ratio of [1, 1.5]) {
+        const osc = ac.createOscillator();
+        osc.type = "triangle";
+        osc.frequency.value = (spec.carrier_hz ?? 220) * ratio;
+        const trim = ac.createGain();
+        trim.gain.value = ratio === 1 ? 0.6 : 0.25;
+        osc.connect(trim).connect(lp);
+        osc.start();
+        made.push(osc, trim);
+      }
+      lp.connect(depth).connect(master);
+      made.push(lfo, lfoGain, lp, depth);
+    } else if (spec.kind === "binaural") {
+      // Two carriers a beat apart, one per ear. Needs headphones to exist at
+      // all, which is why the panel asks for them on every block rather than
+      // only on this one - saying it here would unblind the arm.
+      const merger = ac.createChannelMerger(2);
+      [spec.carrier_hz ?? 340, (spec.carrier_hz ?? 340) + (spec.beat_hz ?? 16)].forEach((f, i) => {
+        const osc = ac.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = f;
+        osc.connect(merger, 0, i);
+        osc.start();
+        made.push(osc);
+      });
+      merger.connect(master);
+      made.push(merger);
+    }
+    return made;
+  }
+
+  return {
+    async start(plan) {
+      this.stop(0);
+      if (!plan || plan.spec?.kind === "silence" || !plan.gain) return;
+      const ac = ctx();
+      if (ac.state === "suspended") await ac.resume().catch(() => {});
+      master = ac.createGain();
+      master.gain.setValueAtTime(0.0001, ac.currentTime);
+      const target = Math.min(plan.gain, FOCUS_GAIN_CEILING);
+      master.gain.exponentialRampToValueAtTime(target, ac.currentTime + (plan.fade_seconds || 3));
+      master.connect(ac.destination);
+      nodes = build(ac, plan.spec || {});
+    },
+    // Always a fade. An abrupt stop is its own startle, which is the same
+    // reason the health plan's sleep sound may never just cut out.
+    stop(fadeSeconds = 3) {
+      if (!master) { nodes = []; return; }
+      const ac = ctx();
+      const dying = master, doomed = nodes;
+      nodes = []; master = null;
+      try {
+        dying.gain.cancelScheduledValues(ac.currentTime);
+        dying.gain.setValueAtTime(Math.max(dying.gain.value, 0.0001), ac.currentTime);
+        dying.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + Math.max(fadeSeconds, 0.05));
+      } catch (_) { /* a context that never started */ }
+      setTimeout(() => {
+        for (const n of doomed) { try { n.stop && n.stop(); } catch (_) {} try { n.disconnect(); } catch (_) {} }
+        try { dying.disconnect(); } catch (_) {}
+      }, Math.max(fadeSeconds, 0.05) * 1000 + 120);
+    },
+    get playing() { return master !== null; },
+  };
+})();
+
+/* -- the reaction-time probe (a short PVT) ------------------------------- */
+
+function runProbe(phase) {
+  return new Promise((resolve) => {
+    // Measured, not assumed: in a hidden tab this browser clamps a setTimeout
+    // nested inside a setInterval to ~1000 ms, which turned a scripted 250 ms
+    // response into a stored 1000 ms during verification. The probe's own maths
+    // was right both times - the environment was not. So a probe that starts
+    // hidden is refused out loud rather than saved as a number about Duc.
+    if (document.hidden) {
+      addLine("system", "Probe skipped - this tab is in the background, where timing is not measurable.");
+      return resolve(null);
+    }
+    const rts = [];
+    let falseStarts = 0, lit = false, onset = 0, waitTimer = null, endTimer = null, done = false;
+    document.getElementById("focus-probe-head").textContent =
+      phase === "start" ? "PROBE — BEFORE THE BLOCK" : "PROBE — AFTER THE BLOCK";
+    focusProbeView.hidden = false;
+    focusIdleView.hidden = true;
+    focusRunningView.hidden = true;
+    const deadline = performance.now() + PROBE_SECONDS * 1000;
+
+    function paint() {
+      const left = Math.max(0, Math.ceil((deadline - performance.now()) / 1000));
+      focusProbeProgress.textContent = `${left}s left · ${rts.length} responses`;
+    }
+    function armNext() {
+      if (done) return;
+      lit = false;
+      focusTarget.dataset.lit = "false";
+      paint();
+      if (performance.now() >= deadline) return finish();
+      const wait = PROBE_MIN_WAIT_MS + Math.random() * (PROBE_MAX_WAIT_MS - PROBE_MIN_WAIT_MS);
+      waitTimer = setTimeout(() => {
+        if (done) return;
+        lit = true;
+        onset = performance.now();
+        focusTarget.dataset.lit = "true";
+      }, wait);
+    }
+    function respond() {
+      if (done) return;
+      if (!lit) {
+        // Pressing before the dot is a false start, not a fast trial. Counting
+        // it as a response is how a PVT flatters an impatient participant.
+        falseStarts++;
+        focusTarget.dataset.lit = "early";
+        clearTimeout(waitTimer);
+        setTimeout(armNext, 600);
+        return;
+      }
+      const rt = performance.now() - onset;
+      if (rt >= PROBE_ANTICIPATION_MS) rts.push(rt);
+      else falseStarts++;
+      armNext();
+    }
+    function onKey(e) {
+      if (e.code === "Space" || e.key === " ") { e.preventDefault(); respond(); }
+    }
+    function finish(skipped = false) {
+      if (done) return;
+      done = true;
+      clearTimeout(waitTimer); clearInterval(endTimer);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("visibilitychange", onHide);
+      focusTarget.removeEventListener("click", respond);
+      skipBtn.removeEventListener("click", onSkip);
+      focusTarget.dataset.lit = "false";
+      focusProbeView.hidden = true;
+      if (skipped || rts.length === 0) return resolve(null);
+      const sorted = [...rts].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+      resolve({
+        median_ms: Math.round(median * 10) / 10,
+        lapses: rts.filter((r) => r > PROBE_LAPSE_MS).length,
+        trials: rts.length,
+        false_starts: falseStarts,
+      });
+    }
+    // Timers stay accurate in a background tab in this browser, but a probe run
+    // while Duc is looking at something else measures nothing about him. Discarded
+    // rather than saved, so a stray number cannot enter the experiment.
+    function onHide() {
+      if (!document.hidden) return;
+      addLine("system", "Probe discarded - the tab lost focus, so the timing would not have been yours.");
+      finish(true);
+    }
+    document.addEventListener("visibilitychange", onHide);
+    const skipBtn = document.getElementById("focus-probe-skip");
+    const onSkip = () => finish(true);
+    skipBtn.addEventListener("click", onSkip);
+    document.addEventListener("keydown", onKey);
+    focusTarget.addEventListener("click", respond);
+    endTimer = setInterval(() => {
+      paint();
+      // An unanswered dot times out as a lapse and the run moves on, so the probe
+      // can never stall mid-run and can never outlive its deadline by more than
+      // one timeout.
+      if (lit && performance.now() - onset > PROBE_TIMEOUT_MS) {
+        rts.push(PROBE_TIMEOUT_MS);
+        armNext();
+        return;
+      }
+      if (performance.now() >= deadline && !lit) finish();
+    }, 250);
+    armNext();
+  });
+}
+
+async function sendProbe(id, phase, result) {
+  if (!result) return;
+  try {
+    await readJson(await fetch("/api/focus/probe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, phase, median_ms: result.median_ms, lapses: result.lapses }),
+    }));
+  } catch (e) {
+    addLine("system", `probe not saved: ${e.message}`);
+  }
+}
+
+/* -- the block lifecycle ------------------------------------------------ */
+
+function focusClearTimers() {
+  clearInterval(focusTicker); focusTicker = null;
+  focusBreakTimers.forEach(clearTimeout);
+  focusBreakTimers = [];
+}
+
+function focusPaint() {
+  if (!focusState) return;
+  const elapsedMin = (Date.now() - focusState.startedAt) / 60000;
+  const left = Math.max(0, focusState.plan.minutes - elapsedMin);
+  const mm = String(Math.floor(left)).padStart(2, "0");
+  const ss = String(Math.floor((left % 1) * 60)).padStart(2, "0");
+  focusRemaining.textContent = `${mm}:${ss}`;
+  focusChip.textContent = `FOCUS ${mm}:${ss}`;
+  const nextBreak = (focusState.plan.break_offsets || []).find((b) => b > elapsedMin);
+  focusNextBreak.textContent = nextBreak
+    ? `next break cue in ${Math.ceil(nextBreak - elapsedMin)} min`
+    : "no more break cues this block";
+  if (left <= 0) focusReachedEnd();
+}
+
+function focusReachedEnd() {
+  focusClearTimers();
+  setPresence("idle", "block over — rate it in FOCUS");
+  addLine("system", "Focus block finished. Rate it in the FOCUS panel to record the result.");
+  earcon("listening");
+  focusNotify("Focus block finished", "Rate it in the FOCUS panel to record the result.");
+}
+
+// One guarded helper for both cues. A browser that denies notifications, or one
+// that needs a service worker for them, falls through to the in-page cue that
+// has already fired - so this can only ever add reach, never replace it.
+function focusNotify(title, body) {
+  if (!window.Notification || Notification.permission !== "granted") return;
+  try { new Notification(title, { body, tag: "kyra-focus" }); } catch (_) { /* in-page cue stands */ }
+}
+
+function focusScheduleBreaks() {
+  const elapsedMin = (Date.now() - focusState.startedAt) / 60000;
+  for (const at of focusState.plan.break_offsets || []) {
+    const inMs = (at - elapsedMin) * 60000;
+    if (inMs <= 0) continue;
+    focusBreakTimers.push(setTimeout(() => {
+      // Twenty seconds of looking away is the whole intervention: the
+      // micro-break meta-analysis and Apple's headset guidance agree on the
+      // cadence, and neither needs Kyra to say a paragraph about it.
+      earcon("listening");
+      setPresence(presence, "break cue — look 20 feet away for 20 seconds");
+      addLine("system", `Break cue at ${at} minutes. Look away for 20 seconds.`);
+      // The break is the best-supported intervention on the whole page, and a cue
+      // Duc cannot see because he is in another tab is not a cue. Notifications are
+      // only requested once he has actually started a block, never on page load.
+      focusNotify("Look away for 20 seconds", `${at} minutes in.`);
+    }, inMs));
+  }
+}
+
+function focusShowRunning(payload) {
+  focusState = {
+    id: payload.session.id,
+    plan: payload.plan,
+    startedAt: Date.parse(payload.session.started_at),
+    task: payload.session.task,
+  };
+  focusRating = null;
+  document.querySelectorAll(".focus-rate-btn").forEach((b) => b.classList.remove("is-active"));
+  document.getElementById("focus-note").value = "";
+  focusIdleView.hidden = true;
+  focusProbeView.hidden = true;
+  focusRunningView.hidden = false;
+  focusResultBox.hidden = true;
+  focusTaskLine.textContent = focusState.task || "(no task named)";
+  focusChip.hidden = false;
+  document.body.dataset.focus = "running";
+  focusClearTimers();
+  focusPaint();
+  focusTicker = setInterval(focusPaint, 1000);
+  focusScheduleBreaks();
+}
+
+function focusShowIdle(completed) {
+  focusClearTimers();
+  focusState = null;
+  focusIdleView.hidden = false;
+  focusRunningView.hidden = true;
+  focusProbeView.hidden = true;
+  focusChip.hidden = true;
+  delete document.body.dataset.focus;
+  if (typeof completed === "number") {
+    document.getElementById("focus-start").textContent =
+      completed ? `Start block (${completed} done)` : "Start block";
+  }
+}
+
+function focusApplyEvening(evening) {
+  // Only ever set from the server's own clock, so "evening" means Duc's
+  // evening. The tokens it swaps in are strictly dimmer and warmer.
+  if (evening) document.body.dataset.focusEvening = "true";
+  else delete document.body.dataset.focusEvening;
+}
+
+async function focusStart() {
+  const minutes = Number(document.getElementById("focus-minutes").value);
+  const task = document.getElementById("focus-task").value.trim();
+  const wantProbe = document.getElementById("focus-probe-on").checked;
+  const startBtn = document.getElementById("focus-start");
+  startBtn.disabled = true;
+  focusResultBox.hidden = true;
+  // Asked here rather than on load: a permission prompt makes sense the moment
+  // Duc opts into being interrupted, and nowhere else.
+  if (window.Notification && Notification.permission === "default") {
+    Notification.requestPermission().catch(() => {});
+  }
+  try {
+    const payload = await readJson(await fetch("/api/focus/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ minutes, task }),
+    }));
+    focusApplyEvening(payload.plan.evening);
+    if (wantProbe) {
+      const before = await runProbe("start");
+      await sendProbe(payload.session.id, "start", before);
+    }
+    focusShowRunning(payload);
+    await focusAudio.start(payload.plan);
+    addLine("system", `Focus block started: ${minutes} minutes${task ? ` on ${task}` : ""}.`);
+  } catch (e) {
+    addLine("system", `could not start a block: ${e.message}`);
+    focusShowIdle();
+  } finally {
+    startBtn.disabled = false;
+  }
+}
+
+async function focusEnd() {
+  const endBtn = document.getElementById("focus-end");
+  const id = focusState?.id;
+  const wantProbe = document.getElementById("focus-probe-on").checked;
+  endBtn.disabled = true;
+  focusAudio.stop(focusState?.plan?.fade_seconds ?? 3);
+  focusClearTimers();
+  try {
+    if (wantProbe && id) {
+      const after = await runProbe("end");
+      await sendProbe(id, "end", after);
+    }
+    const out = await readJson(await fetch("/api/focus/end", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rating: focusRating, note: document.getElementById("focus-note").value.trim() }),
+    }));
+    focusShowIdle();
+    const delta = out.probe_delta_ms;
+    focusResultBox.hidden = false;
+    focusResultBox.innerHTML = "";
+    const heading = document.createElement("div");
+    heading.innerHTML = `Block over. Sound condition was <strong>${out.condition}</strong>.`;
+    focusResultBox.appendChild(heading);
+    if (delta !== null && delta !== undefined) {
+      const line = document.createElement("div");
+      line.textContent = delta > 0
+        ? `Reaction time ${Math.round(delta)} ms slower by the end.`
+        : `Reaction time ${Math.abs(Math.round(delta))} ms faster by the end.`;
+      focusResultBox.appendChild(line);
+    }
+    const caveat = document.createElement("div");
+    caveat.className = "focus-note";
+    caveat.textContent = "One block says nothing. The report needs about eight per condition.";
+    focusResultBox.appendChild(caveat);
+    loadFocusHistory();
+  } catch (e) {
+    addLine("system", `could not end the block: ${e.message}`);
+    focusShowIdle();
+  } finally {
+    endBtn.disabled = false;
+  }
+}
+
+async function loadFocusHistory() {
+  const list = document.getElementById("focus-history-list");
+  list.textContent = "loading…";
+  try {
+    const data = await readJson(await fetch("/api/focus/history"));
+    list.textContent = "";
+    if (!data.sessions.length) { list.textContent = "no finished blocks yet"; return; }
+    for (const s of data.sessions) {
+      const row = document.createElement("div");
+      row.className = "jobs-tracker-item";
+      const when = new Date(s.started_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      const delta = (s.probe_end_ms != null && s.probe_start_ms != null)
+        ? `${s.probe_end_ms - s.probe_start_ms > 0 ? "+" : ""}${Math.round(s.probe_end_ms - s.probe_start_ms)} ms`
+        : "no probe";
+      const head = document.createElement("div");
+      head.innerHTML = `<strong>${s.condition}</strong> · ${s.planned_minutes} min · ${delta}`;
+      const sub = document.createElement("div");
+      sub.className = "focus-note";
+      sub.textContent = `${when}${s.task ? ` · ${s.task}` : ""}${s.rating ? ` · rated ${s.rating}/5` : ""}${s.note ? ` · ${s.note}` : ""}`;
+      row.append(head, sub);
+      list.appendChild(row);
+    }
+  } catch (e) {
+    list.textContent = `could not load history: ${e.message}`;
+  }
+}
+
+document.getElementById("focus-about").innerHTML = `
+  <p>What this does, and why each part is here. Full review and sources:
+  <code>docs/plans/2026-09-08-attention-environment.md</code>.</p>
+  <h4>The defaults are removals</h4>
+  <ul>
+    <li>No lyrics and no speech, ever. Every sound is synthesised here, so there is nowhere to put a track.</li>
+    <li>The volume comes from the server and is capped. Louder is not a setting.</li>
+    <li>Sound always fades in and out.</li>
+    <li>A break cue at least every 25 minutes, for the eyes and for vigour.</li>
+    <li>After 21:00 the interface only gets dimmer and warmer, never brighter.</li>
+  </ul>
+  <h4>The additions are an experiment</h4>
+  <ul>
+    <li>Four sound conditions, assigned in a balanced shuffled order, hidden until each block ends.</li>
+    <li>A 60-second reaction-time probe at both ends, plus your own rating.</li>
+    <li><code>scripts/focus_report.py</code> reads them back per condition, with the noise floor stated.</li>
+  </ul>
+  <p class="focus-note">Nothing here claims a benefit. Broadband noise helps listeners with attention difficulties
+  and measurably hurts everyone else, so the population result cannot answer this for you. The report can.</p>
+`;
+
+/* -- wiring -------------------------------------------------------------- */
+
+function openFocusPanel() {
+  focusPanel.classList.add("is-open");
+  focusPanel.setAttribute("aria-hidden", "false");
+  focusToggle.classList.add("is-active");
+}
+function closeFocusPanel() {
+  focusPanel.classList.remove("is-open");
+  focusPanel.setAttribute("aria-hidden", "true");
+  focusToggle.classList.remove("is-active");
+}
+focusToggle.addEventListener("click", () => {
+  focusPanel.classList.contains("is-open") ? closeFocusPanel() : openFocusPanel();
+});
+focusClose.addEventListener("click", closeFocusPanel);
+focusChip.addEventListener("click", openFocusPanel);
+
+document.querySelectorAll("#focus-panel .jobs-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll("#focus-panel .jobs-tab").forEach((t) => t.classList.toggle("is-active", t === tab));
+    document.querySelectorAll("#focus-panel .jobs-tab-panel").forEach((p) => {
+      p.classList.toggle("is-active", p.dataset.focusTabPanel === tab.dataset.focusTab);
+    });
+    if (tab.dataset.focusTab === "history") loadFocusHistory();
+  });
+});
+
+document.getElementById("focus-start").addEventListener("click", focusStart);
+document.getElementById("focus-end").addEventListener("click", focusEnd);
+document.getElementById("focus-history-refresh").addEventListener("click", loadFocusHistory);
+document.querySelectorAll(".focus-rate-btn").forEach((b) => {
+  b.addEventListener("click", () => {
+    focusRating = Number(b.dataset.rating);
+    document.querySelectorAll(".focus-rate-btn").forEach((o) => o.classList.toggle("is-active", o === b));
+  });
+});
+
+// A block can also be started or ended by talking to Kyra - "start a 50 minute
+// block" goes through start_focus_block on the tool path, which the browser has
+// no other way to learn about. Without this the two front doors disagree: the
+// server has Duc in a block while the HUD sits idle with no sound, no clock and
+// no break cue. One cheap GET after each turn, and the server stays the source
+// of truth about whether he is working.
+async function focusSync() {
+  try {
+    const data = await readJson(await fetch("/api/focus/active"));
+    focusApplyEvening(data.evening ?? data.plan?.evening);
+    const runningHere = focusState !== null;
+    if (data.running && !runningHere) {
+      focusShowRunning(data);
+      // The turn itself was the user gesture, so starting audio here is allowed.
+      await focusAudio.start(data.plan);
+    } else if (!data.running && runningHere) {
+      focusAudio.stop(3);
+      focusShowIdle(data.completed_blocks);
+    }
+  } catch (_) {
+    // server unreachable - leave the browser as it is rather than guessing
+  }
+}
+
+// Resume after a reload: the block is on the server, so the tab is not the
+// source of truth about whether Duc is working. Audio does not restart on its
+// own (an autoplay policy would block it silently); the chip offers it back.
+async function focusRestore() {
+  try {
+    const data = await readJson(await fetch("/api/focus/active"));
+    focusApplyEvening(data.evening ?? data.plan?.evening);
+    if (!data.running) { focusShowIdle(data.completed_blocks); return; }
+    focusShowRunning(data);
+    focusChip.textContent = "FOCUS — click to resume sound";
+    const resume = async () => {
+      focusChip.removeEventListener("click", resume);
+      await focusAudio.start(data.plan);
+    };
+    focusChip.addEventListener("click", resume);
+  } catch (_) {
+    // server not reachable yet - the panel still opens, the block is still there
+  }
+}
+focusRestore();
+
+// Wind-down must arrive on its own: without this the evening theme only applied
+// when Duc happened to send a turn, so an evening spent reading would stay on the
+// daytime palette - which is the one thing the evening rule exists to prevent. The
+// hour lives in companion/focus.py and is reported by /api/focus/active, so this
+// asks rather than duplicating the constant. Slow on purpose; it is a theme, not a
+// countdown, and the same call keeps the block state in step with the other front
+// doors for free.
+setInterval(focusSync, 5 * 60 * 1000);

@@ -16,6 +16,7 @@ import secrets
 import threading
 import time
 from dataclasses import asdict, replace
+from datetime import UTC, datetime
 from functools import cached_property
 from pathlib import Path
 
@@ -39,6 +40,14 @@ from companion.db import engine_for_store
 from companion.default_tools import default_tool_registry
 from companion.doc_text import UnsupportedDocumentType, extract_text
 from companion.errors import ApiError, install_error_handlers
+from companion.focus import (
+    FocusBlockRunning,
+    FocusPlan,
+    FocusStore,
+    NoActiveFocusBlock,
+    ScheduledPlanner,
+    theme_for,
+)
 from companion.github_profile import extract_username as extract_github_username
 from companion.github_profile import fetch_github_projects
 from companion.job_applications import (
@@ -56,7 +65,7 @@ from companion.job_documents import JobDocumentStore
 from companion.job_posting_fetch import fetch_posting as _fetch_posting
 from companion.jobs import DbJobQueue, Handler, start_inline_worker
 from companion.learning import LearningStore
-from companion.llm import AnthropicLLM, LazyBackends, TurnCancelled, build_llm
+from companion.llm import AnthropicLLM, TurnCancelled, build_llm, voice_backends
 from companion.memory import ChromaMemoryStore
 from companion.memory_notes import SUGGESTED_CATEGORIES, MarkdownMemoryNotesStore
 from companion.news import TechNewsTool
@@ -151,7 +160,7 @@ app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 logger = logging.getLogger(__name__)
 
 _claude = build_llm("claude")
-_backends = LazyBackends(claude=_claude)
+_backends = voice_backends(_claude)  # + a `voice` entry when KYRA_VOICE_MODEL is set
 _registry = default_tool_registry()
 _router = TurnRouter(_registry)
 _current_backend = "auto"  # "claude" | "local" | "auto" - auto (the router) is the default now that it exists
@@ -505,6 +514,11 @@ def correction(body: CorrectionIn) -> dict:
     return {"saved": True, "category": "corrections"}
 
 
+# Measured against the real API on 2026-09-08: 6,797 characters of real system
+# prompt came to 2,386 tokens. Re-measure if the notes' shape changes a lot.
+CHARS_PER_TOKEN = 2.85
+
+
 class MemoryNoteIn(BaseModel):
     category: str = "general"
     note: str
@@ -528,9 +542,25 @@ def list_memory_notes() -> dict:
     being able to throw one away, is a real control rather than a nicety.
     """
     notes = _memory_notes.list_notes()
+    # How heavy the layer has become. It is rendered in full into every system
+    # prompt, and was measured at about 65% of one (docs/voice-latency.md); the
+    # design rests on the set staying small, and nothing said when it had stopped
+    # being small.
+    #
+    # Characters are exact. The token figure is an estimate, but not the usual
+    # chars/4 rule: a real prompt measured against the API was 6,797 characters
+    # for 2,386 tokens, so this content runs about 2.85 characters per token -
+    # dated bullets with markdown are denser than the prose that rule assumes,
+    # and chars/4 understated it by a third. Estimated rather than counted
+    # because a count_tokens call per page load is a network round trip to
+    # answer a question that only needs a sense of scale.
+    rendered = _memory_notes.render()
+    chars = 0 if rendered == "(no saved notes yet)" else len(rendered)
     return {
         "notes": [asdict(n) for n in notes],
         "categories": sorted({n.category for n in notes}) or SUGGESTED_CATEGORIES,
+        "rendered_chars": chars,
+        "approx_tokens": round(chars / CHARS_PER_TOKEN),
     }
 
 
@@ -1171,7 +1201,8 @@ def _run_apply_job(payload: dict, on_progress) -> dict:
             payload["url"], store=_job_store, resume_llm=_resume_llm, draft_llm=_draft_llm,
             base_latex=_apply_base_latex(), profile=load_profile(), engines=_autofill_engines, extra_facts=extra_facts,
             posting_text=payload.get("posting_text", ""), company=payload.get("company", ""), role=payload.get("role", ""),
-            cover_letter=payload.get("cover_letter", "auto"), fetch=_fetch_posting, on_progress=on_progress,
+            source_url=payload.get("source_url", ""), cover_letter=payload.get("cover_letter", "auto"),
+            retailor=payload.get("retailor", False), fetch=_fetch_posting, on_progress=on_progress,
         )
     except ApplyError as e:
         raise ApiError(400, "apply_failed", str(e)) from e
@@ -1247,6 +1278,10 @@ class ApplyIn(BaseModel):
     posting_text: str = ""  # for a single non-board URL (LinkedIn, a company site) - pasted text
     company: str = ""
     role: str = ""
+    source_url: str = ""  # where the one posting was found (a LinkedIn listing); recorded, never read
+    # An application that already has a tailored resume reuses it (apply_pipeline). Set this
+    # to spend a fresh multi-minute loop anyway - after the base .tex has changed, say.
+    retailor: bool = False
 
 
 @app.post("/api/jobs/apply")
@@ -1260,11 +1295,14 @@ def enqueue_apply_jobs(body: ApplyIn) -> dict:
         raise ApiError(400, "bad_cover_letter", "cover_letter must be auto, always or never")
     if body.posting_text and len(urls) > 1:
         raise ApiError(400, "text_needs_one_url", "pasted posting text applies to exactly one URL")
+    if body.source_url.strip() and len(urls) > 1:
+        raise ApiError(400, "source_needs_one_url", "a source (LinkedIn) link belongs to exactly one posting URL")
     _apply_base_latex()  # fail now, not inside every queued job
     ids = [
         _queue.enqueue("apply", {
             "url": u, "cover_letter": body.cover_letter, "posting_text": body.posting_text,
-            "company": body.company, "role": body.role,
+            "company": body.company, "role": body.role, "source_url": body.source_url.strip(),
+            "retailor": body.retailor,
         })
         for u in urls
     ]
@@ -1734,6 +1772,139 @@ def copy_outreach(contact_id: int, body: OutreachCopyIn) -> dict:
 @app.post("/api/outreach/{contact_id}/status")
 def set_outreach_status(contact_id: int, body: OutreachStatusIn) -> dict:
     return _outreach("update_outreach_status", id=contact_id, status=body.status)
+
+
+# Focus blocks (plan: docs/plans/2026-09-08-attention-environment.md).
+#
+# These go straight to the store and the planner rather than through _registry.run,
+# unlike the outreach tab: there, the logic that matters lives in the tools (a draft
+# reads the application's status). Here the logic lives in FocusStore and
+# FocusPlanner, and the tools are thin wrappers over the same two objects - so both
+# front doors already share one implementation. The stores also share one engine
+# (db.engine_for_store caches per URL) and hold no in-memory state, so the tool path
+# and the HTTP path cannot disagree about what is running.
+#
+# The one thing the HTTP layer has that the tool path does not is the synthesis spec:
+# the browser cannot make a sound without it. That is why Duc is blind by convention
+# and not by construction, and why the panel does not name the arm until the block ends.
+_focus_store = FocusStore()
+_focus_planner = ScheduledPlanner()
+
+
+class FocusStartIn(BaseModel):
+    minutes: int = 50
+    task: str = ""
+
+
+class FocusEndIn(BaseModel):
+    rating: int | None = None
+    note: str = ""
+
+
+class FocusProbeIn(BaseModel):
+    id: int
+    phase: str
+    median_ms: float
+    lapses: int
+
+
+def _plan_for(session) -> FocusPlan:
+    """Rebuild the plan for a running block, so a browser reload resumes the same
+    sound rather than silently switching arm mid-block."""
+    return _focus_planner.plan(
+        now=datetime.now().astimezone(),
+        completed=0,
+        minutes=session.planned_minutes,
+        condition=session.condition,
+    )
+
+
+def _focus_payload(session) -> dict:
+    """The blind, made structural rather than left to the panel's manners.
+
+    The synthesis spec has to travel - the browser is what makes the sound - but
+    the arm's *name* does not, so it is stripped from both the plan and the
+    session while the block is running and returned only by /api/focus/end. A
+    determined look at the spec still says "noise" or "binaural", so this is a
+    real blind against reading the UI and a weak one against reading devtools;
+    focus_report.py states that caveat next to its numbers.
+    """
+    plan = _plan_for(session)
+    started = datetime.fromisoformat(session.started_at)
+    elapsed = (datetime.now(UTC) - started).total_seconds() / 60
+    running = session.ended_at is None
+    plan_out, session_out = plan.to_dict(), asdict(session)
+    if running:
+        plan_out.pop("condition", None)
+        session_out.pop("condition", None)
+    return {
+        "running": running,
+        "session": session_out,
+        "plan": plan_out,
+        "elapsed_minutes": round(elapsed, 2),
+        "remaining_minutes": round(max(session.planned_minutes - elapsed, 0), 2),
+    }
+
+
+@app.post("/api/focus/start")
+def focus_start(body: FocusStartIn) -> dict:
+    try:
+        plan = _focus_planner.plan(
+            now=datetime.now().astimezone(),
+            completed=_focus_store.completed_count(),
+            minutes=body.minutes,
+        )
+        session = _focus_store.start(condition=plan.condition, minutes=plan.minutes, task=body.task)
+    except FocusBlockRunning as e:
+        raise ApiError(409, "focus_running", str(e)) from e
+    except ValueError as e:
+        raise ApiError(400, "focus_invalid", str(e)) from e
+    return _focus_payload(session)
+
+
+@app.post("/api/focus/end")
+def focus_end(body: FocusEndIn) -> dict:
+    session = _focus_store.active()
+    if session is None:
+        raise ApiError(404, "focus_not_running", "no focus block is running")
+    try:
+        ended = _focus_store.end(session.id, rating=body.rating, note=body.note)
+    except ValueError as e:
+        raise ApiError(400, "focus_invalid", str(e)) from e
+    except NoActiveFocusBlock as e:
+        raise ApiError(404, "focus_not_running", str(e)) from e
+    # Unblinding happens here and only here.
+    return {"session": asdict(ended), "condition": ended.condition, "probe_delta_ms": ended.probe_delta_ms}
+
+
+@app.get("/api/focus/active")
+def focus_active() -> dict:
+    session = _focus_store.active()
+    if session is None:
+        return {
+            "running": False,
+            "completed_blocks": _focus_store.completed_count(),
+            "evening": theme_for(datetime.now().astimezone()).evening,
+        }
+    return _focus_payload(session) | {"completed_blocks": _focus_store.completed_count()}
+
+
+@app.post("/api/focus/probe")
+def focus_probe(body: FocusProbeIn) -> dict:
+    try:
+        session = _focus_store.record_probe(
+            body.id, phase=body.phase, median_ms=body.median_ms, lapses=body.lapses
+        )
+    except ValueError as e:
+        raise ApiError(400, "focus_invalid", str(e)) from e
+    except KeyError as e:
+        raise ApiError(404, "not_found", f"no focus block with id {body.id}") from e
+    return {"session": asdict(session)}
+
+
+@app.get("/api/focus/history")
+def focus_history(limit: int = 50) -> dict:
+    return {"sessions": [asdict(s) for s in _focus_store.list(limit=limit)]}
 
 
 @app.get("/api/reminders")

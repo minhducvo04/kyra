@@ -32,7 +32,7 @@ from companion.conversation import ConversationManager
 from companion.default_tools import default_tool_registry
 from companion.keybindings import Keybindings, read_key
 from companion.listening import PushToTalkListener, VoiceActivityListener
-from companion.llm import LazyBackends, build_llm
+from companion.llm import build_llm, voice_backends
 from companion.logging_setup import configure_logging
 from companion.memory import ChromaMemoryStore
 from companion.persona import KYRA
@@ -96,7 +96,7 @@ def main() -> None:
     if args.backend == "auto":
         registry = default_tool_registry()
         router = TurnRouter(registry)
-        backends = LazyBackends(claude=claude)
+        backends = voice_backends(claude)  # + a `voice` entry when KYRA_VOICE_MODEL is set
     elif args.backend == "local":
         conversation.llm = build_llm("local")
 

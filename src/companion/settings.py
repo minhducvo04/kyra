@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", validation_alias="KYRA_LOG_LEVEL")
     classifier_adapter: str = Field(default="", validation_alias="KYRA_CLASSIFIER_ADAPTER")  # "repo:adapter_dir"
     stt_model: str = Field(default="small", validation_alias="KYRA_STT_MODEL")
+    # A second Claude model for SPOKEN text turns only (needs-your-input #24, measured in
+    # docs/voice-latency.md: claude-haiku-4-5 reaches its first token ~3x sooner than
+    # sonnet-5 on the same prompt). Unset, every turn keeps the default model. Never
+    # applied to tool turns - Claude stays the Agent Specialist on the tool loop by
+    # measurement (docs/tool-calling-distill.md) - or to turns the router sends local.
+    voice_model: str = Field(default="", validation_alias="KYRA_VOICE_MODEL")
     ptt_key: str | None = Field(default=None, validation_alias="KYRA_PTT_KEY")
     interrupt_key: str | None = Field(default=None, validation_alias="KYRA_INTERRUPT_KEY")
     # Slice 2 switches the SQLite stores to this when it points at Postgres.

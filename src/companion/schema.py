@@ -6,7 +6,7 @@ Timestamps stay ISO-8601 strings (as v1 wrote them) rather than
 TIMESTAMP columns - changing that is a data migration, tracked for a
 later slice. Alembic (migrations/) owns schema changes from here on.
 """
-from sqlalchemy import CheckConstraint, Column, Integer, MetaData, String, Table, Text
+from sqlalchemy import CheckConstraint, Column, Float, Integer, MetaData, String, Table, Text
 
 metadata = MetaData()
 
@@ -89,4 +89,29 @@ outreach_contacts = Table(
     Column("follow_up_at", String(64)),
     Column("created_at", String(64), nullable=False),
     Column("updated_at", String(64), nullable=False),
+)
+
+
+# Focus blocks (plan: docs/plans/2026-09-08-attention-environment.md). One row per
+# block, carrying the assigned audio condition and the two reaction-time probes, so
+# scripts/focus_report.py can ask which condition Duc actually performs better under.
+# No biometric column by design: health data stays on the Apple devices (health plan),
+# and everything here is either chosen by the planner or typed by Duc.
+focus_sessions = Table(
+    "focus_sessions", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("condition", String(32), nullable=False),
+    Column("task", Text, nullable=False, server_default=""),
+    Column("planned_minutes", Integer, nullable=False),
+    Column("started_at", String(64), nullable=False),
+    Column("ended_at", String(64)),
+    # A block Duc walked away from: reaped on the next read, never counted in the
+    # experiment, so a closed tab cannot silently become a data point.
+    Column("abandoned", Integer, nullable=False, server_default="0"),
+    Column("probe_start_ms", Float),
+    Column("probe_start_lapses", Integer),
+    Column("probe_end_ms", Float),
+    Column("probe_end_lapses", Integer),
+    Column("rating", Integer),
+    Column("note", Text),
 )

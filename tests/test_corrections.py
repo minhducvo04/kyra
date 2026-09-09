@@ -78,3 +78,23 @@ def test_deleting_a_note_removes_it_from_what_the_model_sees(client):
 def test_deleting_something_that_is_not_there_is_a_404(client):
     res = client.post("/api/memory-notes/delete", json={"category": "people", "text": "never existed"})
     assert res.status_code == 404
+
+
+def test_notes_report_their_weight_so_growth_is_visible(client):
+    """The notes go into every system prompt in full and were measured at ~65%
+    of it (docs/voice-latency.md). The design rests on the set staying small,
+    and nothing told Duc when it had stopped being small."""
+    client.post("/api/memory-notes", json={"category": "people", "note": "x" * 400})
+    body = client.get("/api/memory-notes").json()
+    assert body["rendered_chars"] >= 400
+    # Estimated, but calibrated on a real measured prompt (2.85 chars/token for
+    # this content) rather than the chars/4 rule, which understated it by a third.
+    assert body["approx_tokens"] == round(body["rendered_chars"] / 2.85)
+
+
+def test_an_empty_note_set_weighs_nothing(client, tmp_path, monkeypatch):
+    from companion.memory_notes import MarkdownMemoryNotesStore
+
+    monkeypatch.setattr(webapp, "_memory_notes", MarkdownMemoryNotesStore(tmp_path / "empty"))
+    body = client.get("/api/memory-notes").json()
+    assert body["notes"] == [] and body["rendered_chars"] == 0 and body["approx_tokens"] == 0

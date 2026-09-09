@@ -92,8 +92,8 @@ one question an hour.
 3. **Shorten spoken replies.** 189 characters became 11.2s of speech. The spoken register exists
    (`voice_text.SPOKEN_REGISTER`) but asks for shape, not length. This does not change time-to-first-word, but
    it is the difference between a conversation and a lecture.
-4. **A faster model for short conversational turns.** The LLM is 37% of the loop. Nothing here is measured yet,
-   so this is a hypothesis, not a plan.
+4. **A faster model for short conversational turns.** The LLM is 37% of the loop. **Measured 2026-09-08,
+   and the plumbing is built** - see "A faster model for spoken turns" below.
 
 Together 1 and 2 would put the first word around **2.4s**, which is the range where a voice assistant stops
 feeling like a request and starts feeling like a reply.
@@ -140,3 +140,38 @@ smaller model, and doing that without losing accuracy means a real streaming app
 committing words that agree across passes), not just sending chunks earlier. That is a real build with real
 accuracy risk, and it wants a baseline recorded through Duc's actual microphone first - synthetic speech
 cannot stand in for the thing being optimised.
+
+
+## A faster model for spoken turns (2026-09-08): built, measured, off by default
+
+`KYRA_VOICE_MODEL` names a second Claude model used for **spoken text turns only**. Unset - the default -
+nothing anywhere changes. The substitution lives in `route_and_answer_verbose`, in the `text` branch, and is
+skipped when the router picks `local`. It can never reach a tool turn: Claude stays the Agent Specialist on
+measurement (`docs/tool-calling-distill.md`), and a naive swap at the backend layer would have moved tool
+calling too, which is why `llm.voice_backends()` adds a separate `voice` entry rather than replacing `claude`.
+
+Three real conversational turns, the two models alternating on each turn so API load hits both equally, run
+through the real `route_and_answer_verbose` with the real memory notes in the prompt:
+
+| | first token (median) | whole reply (median) | reply length (median) |
+|---|---|---|---|
+| claude-sonnet-5 | 4.14s | 6.68s | 472 chars |
+| claude-haiku-4-5 | 0.62s | 1.39s | 234 chars |
+
+Read the ratio, not the absolutes: an earlier pair on the same code put Sonnet at 1.92s, so the API's own load
+moves these by more than a second. Across both batches Haiku reached its first token **3x to 6x sooner** and
+wrote **about half as much**, and the shorter reply shortens synthesis too, so the saving compounds through
+the rest of the loop.
+
+**The reason it is off by default is not latency, it is one honesty tell.** Asked what to focus on, Sonnet
+said plainly that it had nothing pulled up and then reasoned from what it knew. Haiku opened by announcing it
+was looking something up - on the text path, where it has no tools and looked nothing up - and then produced
+the same facts from the same prompt. Nothing it stated was false; the narration of an action it never took is
+the tell, and it is the class of thing this project measures rather than eyeballs. Three turns is not a
+verdict on a personality (the STT benchmark on the same day is the cautionary tale: `base` looked free until
+noise showed 2.8x the errors), so the switch exists and the decision to use it is Duc's.
+
+**Checked while measuring, and it is not a problem:** both models write em-dashes into spoken replies, and
+`spoken_text()` does not strip them. Synthesised and transcribed back, the em-dash is a slight pause and not a
+spoken word - 4.24s against 4.13s for the same sentence with a comma, and the transcript reads the same. The
+standing no-em-dash rule is about outbound written material, and this is audio to Duc, so nothing to fix.

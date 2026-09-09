@@ -268,6 +268,12 @@ def route_and_answer_verbose(
     if decision.path == "tool":
         reply = conversation.handle_turn_with_tools(user_input, backends["claude"], registry)
     else:
-        conversation.llm = backends[decision.backend]
+        name = decision.backend
+        # A spoken Claude turn may use the faster model configured by KYRA_VOICE_MODEL
+        # (llm.voice_backends). Text path only: the tool branch above is untouched on
+        # purpose, and a local turn stays local.
+        if register == "voice" and name == "claude" and "voice" in backends:
+            name = "voice"
+        conversation.llm = backends[name]
         reply = conversation.handle_turn(user_input, on_token=on_token, register=register)  # tool turns never stream
     return reply, decision

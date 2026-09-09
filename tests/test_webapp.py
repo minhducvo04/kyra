@@ -255,3 +255,19 @@ def test_apply_jobs_validation(client, monkeypatch):
     assert client.post("/api/jobs/apply", json={"urls": ["https://x", "https://y"], "posting_text": "t"}).json()["error"]["code"] == "text_needs_one_url"
     monkeypatch.setattr(webapp.get_settings(), "resume_base_tex", "/nope/missing.tex")
     assert client.post("/api/jobs/apply", json={"urls": ["https://x"]}).json()["error"]["code"] == "no_base_resume"
+
+
+def test_apply_source_url_belongs_to_exactly_one_posting(client, monkeypatch):
+    """The LinkedIn link is where one job was found; it cannot describe a batch."""
+    monkeypatch.setattr(webapp, "_apply_base_latex", lambda: ONE_PAGE)
+    res = client.post("/api/jobs/apply", json={
+        "urls": ["https://job-boards.greenhouse.io/a/jobs/1", "https://job-boards.greenhouse.io/b/jobs/2"],
+        "source_url": "https://www.linkedin.com/jobs/view/1/",
+    })
+    assert res.status_code == 400 and res.json()["error"]["code"] == "source_needs_one_url"
+    res = client.post("/api/jobs/apply", json={
+        "urls": ["https://job-boards.greenhouse.io/a/jobs/1"], "source_url": "https://www.linkedin.com/jobs/view/1/",
+    })
+    assert res.status_code == 200 and len(res.json()["jobs"]) == 1
+    job = webapp._queue.get(res.json()["jobs"][0]["id"])
+    assert job.payload["source_url"] == "https://www.linkedin.com/jobs/view/1/"
