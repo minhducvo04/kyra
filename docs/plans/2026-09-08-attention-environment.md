@@ -120,6 +120,57 @@ a vendor on the author list drops it a tier. Effect sizes are Hedges' g or Cohen
 12. HRV as a stress and focus proxy is established enough to log alongside sessions; nothing on this page should
     be *driven* by it yet. It needs the Watch decision (#21), and the plan below works without it.
 
+### Interventions worn on the body: Pulsetto and the tVNS category (researched 2026-09-08, Duc's ask)
+
+Compared against the Garmin vívosmart 5 on Duc's four criteria, which first requires saying that **they are not
+the same kind of object**. The band is a sensor: it measures and answers to nothing. Pulsetto is an intervention:
+it **has no sensors at all** and changes state without measuring it. On "the data it gives" it scores zero, and
+that is a category fact, not a defect. They could be bought together; one does not replace the other.
+
+**What it is.** A neck collar delivering transcutaneous vagus nerve stimulation (tVNS) in **4 to 10 minute
+sessions**, not worn all day. Conductive gel required for every session.
+
+**Price** - and it is the more expensive of the two, three ways over. Device $224 (Lite) or $269 (FIT) at sale
+prices, list $524/$619. **Gel is a consumable**: about $81-$102 a year. **Premium is $45/quarter (~$129/yr)** and
+holds the personalised protocols and the Stress Resilience Score. Realistic first year **$280 bare to $500 loaded**,
+against the vívosmart 5's **$150, once, forever**. Over three years: roughly **$500-$1,000 against $150**.
+
+**Data, accuracy, frequency - the decisive column, and it inverts.** Pulsetto has no sensors, so it **reads**
+biometrics rather than producing them, via Spike API from Apple Health, Garmin, Oura, WHOOP, Fitbit and Health
+Connect. Read-only. **Which produces a concrete trap for the pairing Duc is actually considering:** on iOS the
+HRV pipeline runs through HealthKit, and (per the correction in the health plan) **a Garmin writes no HRV to
+HealthKit**, so a Pulsetto reading Apple Health beside a vívosmart 5 finds no HRV at all and its whole
+"see what the session did to you" feature has nothing to work with. Linking Garmin directly through Spike may
+work, because Spike is a company and can hold the Garmin Health API partner access that Garmin **denies Duc as an
+individual** - which is the same closed door from the other side, and worth confirming before buying rather than
+after.
+
+**Evidence.** Weakest of anything researched for either plan. Pulsetto has **not been evaluated in a peer-reviewed
+clinical trial**; the vendor's own figures (-45% GAD-7, -41% PSQI, cortisol) are **exploratory pilot data, n = 40,
+no placebo control**, and their site says so. Innerbody's independent test rates it **3.6/10** and finds the only
+favourable research comes from thesis candidates Pulsetto funded, with pulse parameters that differ from the one
+FDA-cleared device (gammaCore, and that is cleared for migraine, not stress). Wikipedia's article on the category
+records Pulsetto using imagery from unrelated studies in its marketing. The underlying mechanism is real and
+well-studied; **this device at these parameters is not**.
+
+If the category is wanted anyway, the two with actual evidence are **Nurosym** (~£349, CE-marked as a medical
+device, HRV endpoints against placebo) and **Apollo Neuro** ($349, vibration rather than current, a published
+double-blind placebo-controlled crossover trial from Pittsburgh with an HRV endpoint). Both cost more than
+Pulsetto and both more than double the band.
+
+**API**: none, from any of them. Pulsetto's own integration is one-way inbound.
+
+**Comfort and fashion**: not comparable and not competing. It is worn for minutes, not days, so it is never seen
+next to the traditional watch. Innerbody's two testers split on fit, one finding it poor on a 14-inch neck and
+needing constant repositioning - which the 30-day money-back window is the answer to.
+
+**Verdict.** It does not compete with the vívosmart 5 and should not be bought instead of it. As an addition it is
+**exactly the shape this plan's section 2 distrusts**: vendor-funded, single-source, sold as science. And the
+protocol to settle it already exists here - a 60 s reaction-time probe at both ends of a block, one self-report,
+condition blinded, eight blocks per arm. **If Duc wants it, buy it inside the 30-day return window and run it as a
+fifth arm rather than believing the box.** That is a cheaper answer than $500 a year, and it is the only one that
+is about him.
+
 ### The conclusion the evidence forces
 
 Almost everything that reliably helps is a **removal**: no lyrics, no speech, no evening blue, no peripheral
@@ -224,7 +275,9 @@ Slices 0 to 4 need no purchase and no headset; slice 2 is the demo that works on
    condition is hidden from you during the block and shown afterwards. If you would rather not be blind, say so;
    the report then carries a bias note.
 4. **The Watch** (still open from #21) turns HRV into a logged signal per block. Not required for slices 0 to 7.
-5. **Saturday's scope.** The ambient plan's hackathon loop is slices 1, 2 and 5 with one HomeKit scene. If the
+5. **Pulsetto or the tVNS category** (see section 2). Recommended: **no**, and certainly not instead of the band.
+   If wanted, buy inside the 30-day return window and run it blinded as a fifth arm of the audio experiment.
+6. **Saturday's scope.** The ambient plan's hackathon loop is slices 1, 2 and 5 with one HomeKit scene. If the
    headset has not arrived, slice 2 on the HUD is the demo and the loop still closes.
 
 ## 7. What not to build, and why, so it is not re-litigated
