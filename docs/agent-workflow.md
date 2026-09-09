@@ -64,7 +64,7 @@ Set effort with `/model` in the Codex TUI, or per profile in `~/.codex/config.to
 
 ## 5. The handoff, as a file rather than a copy-paste
 
-Both agents run on the same machine, so a directory is the channel and nothing needs copying between two chats. `data/sessions/<branch>.md` is the thread: one file per branch, because the branch is already the unit of work. It is append-only and gitignored, since a session record names test counts and what a real run wrote.
+Both agents run on the same machine, so a directory is the channel and nothing needs copying between two chats. `data/sessions/<encoded-branch>.md` is the thread: one file per branch, because the branch is already the unit of work. The filename percent-encodes characters such as `/`, so two valid branch names cannot collide and no name can escape the directory. It is append-only and gitignored, since a session record names test counts and what a real run wrote.
 
 Starting work, whichever agent you are:
 

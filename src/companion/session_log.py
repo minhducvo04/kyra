@@ -10,7 +10,8 @@ thread per branch, because the branch is already the unit of work: the same
 slice appends, a different slice gets its own file. Records live under
 `DATA_DIR` and are therefore gitignored - a session record names branches, test
 counts and sometimes what a real run wrote, none of which belongs in a public
-repo.
+repo. The branch is percent-encoded in the filename so the mapping is safe and
+collision-free.
 
 Append-only, like `memory_notes`: an agent adds a block and never edits an
 earlier one, so the thread reads as what actually happened rather than as a
@@ -41,13 +42,15 @@ def slug(branch: str) -> str:
 
     Branch names legitimately contain slashes (`session/2026-09-09-topic`), and
     git permits enough besides that a name could otherwise climb out of the
-    directory. Everything outside the safe set becomes an underscore.
+    directory. Percent-encoding every byte outside the filename-safe set is
+    injective: unlike replacing characters with underscores, two branch names
+    can never map to one thread.
     """
-    cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", branch).strip("._-")
-    return cleaned or "unnamed"
+    safe = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"
+    return "".join(chr(byte) if byte in safe else f"%{byte:02X}" for byte in branch.encode()) or "unnamed"
 
 
-def _git(*args: str, cwd: Path | None = None) -> str:
+def _git(*args: str, cwd: Path | None = None, strip: bool = True) -> str:
     try:
         out = subprocess.run(
             ["git", *args], cwd=str(cwd or PROJECT_ROOT),
@@ -55,7 +58,28 @@ def _git(*args: str, cwd: Path | None = None) -> str:
         )
     except (OSError, subprocess.SubprocessError):
         return ""
-    return out.stdout.strip() if out.returncode == 0 else ""
+    if out.returncode != 0:
+        return ""
+    return out.stdout.strip() if strip else out.stdout
+
+
+def _status_paths(cwd: Path | None = None) -> list[list[str]]:
+    """Changed paths grouped by porcelain entry, including both sides of a rename."""
+    records = _git("status", "--porcelain=v1", "-z", cwd=cwd, strip=False).rstrip("\0").split("\0")
+    if records == [""]:
+        return []
+    entries = []
+    i = 0
+    while i < len(records):
+        record = records[i]
+        status = record[:2]
+        paths = [record[3:]]
+        if "R" in status or "C" in status:
+            i += 1
+            paths.append(records[i])
+        entries.append(paths)
+        i += 1
+    return entries
 
 
 def current_branch(cwd: Path | None = None) -> str:
@@ -68,9 +92,11 @@ def facts(cwd: Path | None = None, base: str = "master") -> dict[str, str]:
     head = _git("rev-parse", "--short", "HEAD", cwd=cwd) or "unknown"
     subject = _git("log", "-1", "--format=%s", cwd=cwd)
     ahead = _git("rev-list", "--count", f"{base}..HEAD", cwd=cwd)
-    porcelain = _git("status", "--porcelain", cwd=cwd)
-    dirty = [line[3:] for line in porcelain.splitlines() if line.strip()]
-    private = [p for p in dirty if p.startswith(("data/", ".env")) and p != ".env.example"]
+    dirty = _status_paths(cwd)
+    private = [
+        path for paths in dirty for path in paths
+        if path.startswith(("data/", ".env")) and path != ".env.example"
+    ]
     return {
         "branch": branch,
         "head": head,
