@@ -14,6 +14,9 @@ import hashlib
 import os
 import plistlib
 import sqlite3
+import stat
+import subprocess
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -177,3 +180,112 @@ def test_launchd_plist_takes_the_snapshot_before_the_five_oclock_digest():
     assert (PROJECT_ROOT / "scripts" / "snapshot_data.py").exists()
     assert job["StartCalendarInterval"] == {"Hour": 4, "Minute": 30}
     assert "/data/" in job["StandardOutPath"] and "/data/" in job["StandardErrorPath"]
+
+
+def test_failed_copy_does_not_publish_or_rotate(tmp_path, monkeypatch):
+    live, root = tmp_path / "data", tmp_path / "snapshots"
+    make_live(live)
+    first = snapshot.take_snapshot(live, root)
+    (live / "new.txt").write_text("new")
+
+    def fail(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(snapshot.shutil, "copy2", fail)
+    with pytest.raises(OSError, match="disk full"):
+        snapshot.take_snapshot(live, root, keep=1)
+    assert snapshot.list_snapshots(root) == [first]
+
+
+def test_snapshot_refuses_symlinks_and_nested_destination(tmp_path):
+    live = tmp_path / "data"
+    make_live(live)
+    with pytest.raises(ValueError):
+        snapshot.take_snapshot(live, live / "snapshots")
+    (live / "outside").symlink_to(tmp_path / "elsewhere")
+    with pytest.raises(snapshot.SnapshotRefused):
+        snapshot.take_snapshot(live, tmp_path / "snapshots")
+
+
+def test_restore_refuses_even_an_empty_existing_directory(tmp_path):
+    live = tmp_path / "data"
+    make_live(live)
+    taken = snapshot.take_snapshot(live, tmp_path / "snapshots")
+    into = tmp_path / "empty"
+    into.mkdir()
+    with pytest.raises(ValueError):
+        snapshot.restore_snapshot(taken, into)
+
+
+def test_snapshot_collision_never_replaces_a_previous_copy(tmp_path):
+    live, root = tmp_path / "data", tmp_path / "snapshots"
+    make_live(live)
+    now = datetime(2026, 9, 10)
+    first = snapshot.take_snapshot(live, root, now=now)
+    before = tree(first)
+    with pytest.raises(snapshot.SnapshotRefused):
+        snapshot.take_snapshot(live, root, now=now)
+    assert tree(first) == before
+
+
+def test_changed_content_with_preserved_size_and_mtime_is_not_hardlinked(tmp_path):
+    live, root = tmp_path / "data", tmp_path / "snapshots"
+    live.mkdir()
+    source = live / "notes.txt"
+    source.write_text("AAAA")
+    original = source.stat()
+    first = snapshot.take_snapshot(live, root)
+    source.write_text("BBBB")
+    os.utime(source, ns=(original.st_atime_ns, original.st_mtime_ns))
+    second = snapshot.take_snapshot(live, root)
+    assert (first / "notes.txt").read_text() == "AAAA"
+    assert (second / "notes.txt").read_text() == "BBBB"
+    assert (first / "notes.txt").stat().st_ino != (second / "notes.txt").stat().st_ino
+
+
+def test_restore_cli_refuses_a_new_directory_inside_live_data(tmp_path):
+    live = tmp_path / "data"
+    make_live(live)
+    taken = snapshot.take_snapshot(live, tmp_path / "snapshots")
+    before = tree(live)
+    result = subprocess.run([
+        sys.executable, str(PROJECT_ROOT / "scripts/snapshot_data.py"),
+        "--restore", str(taken), "--into", str(live / "restored"), "--data-dir", str(live),
+    ], text=True, capture_output=True)
+    assert result.returncode != 0
+    assert "live data" in result.stderr
+    assert tree(live) == before
+
+
+def test_restore_refuses_to_write_inside_another_snapshot(tmp_path):
+    live, root = tmp_path / "data", tmp_path / "snapshots"
+    make_live(live)
+    first = snapshot.take_snapshot(live, root)
+    second = snapshot.take_snapshot(live, root)
+    before = tree(first)
+    with pytest.raises(ValueError):
+        snapshot.restore_snapshot(second, first / "restored")
+    assert tree(first) == before
+
+
+@pytest.mark.skipif(not hasattr(os, "chflags"), reason="BSD file flags require macOS/BSD")
+def test_protected_live_file_can_be_snapshotted_restored_and_rotated(tmp_path):
+    live, root = tmp_path / "data", tmp_path / "snapshots"
+    live.mkdir()
+    source = live / "notes.txt"
+    source.write_text("keep these notes")
+    os.chflags(source, stat.UF_IMMUTABLE)
+    try:
+        first = snapshot.take_snapshot(live, root, keep=1)
+        second = snapshot.take_snapshot(live, root, keep=1)
+        restored = snapshot.restore_snapshot(second, tmp_path / "restored")
+        assert source.stat().st_flags & stat.UF_IMMUTABLE
+        assert not (second / "notes.txt").stat().st_flags & stat.UF_IMMUTABLE
+        assert not (restored / "notes.txt").stat().st_flags & stat.UF_IMMUTABLE
+        assert snapshot.list_snapshots(root) == [second]
+        assert not first.exists()
+    finally:
+        os.chflags(source, 0)
+        for path in root.rglob("*"):
+            if path.is_file():
+                os.chflags(path, 0)

@@ -4,8 +4,10 @@ Duc's ask: a hook so that neither agent, nor he, accidentally deletes the databa
 
 Owner split under the roles set today: this plan and the failing tests are Claude Code's; the implementation is Codex's.
 
-**Status:** deferred. No hook is installed in Claude Code or Codex. The shared instructions and
-skills setup is complete without hooks. If this plan resumes, verify each harness against its
+**Status:** snapshot slice implemented and live backup/restore verified on 2026-09-10;
+scheduled-job verification and merge are pending. Hook and filesystem-lock slices remain
+deferred. No hook is installed in Claude Code or Codex. The shared instructions and
+skills setup is complete without hooks. If the hook slice resumes, verify each harness against its
 current official documentation before assuming one event schema or one response format works in
 both; binary inspection alone is not a supported integration contract.
 
@@ -40,16 +42,51 @@ each harness.
 
 ## 2. Slice 1: a snapshot of the 5 MB that cannot be regenerated
 
-- [ ] `scripts/snapshot_data.py`, logic in `src/companion/snapshot.py`. Copies the irreplaceable set (the table in section 0, never `bench_hf`, `local_llm_models`, `router_ft/adapters`, `search_index`, all of which are regenerable and are 170 GB together) into `~/kyra-snapshots/<date-time>/`, hardlinking unchanged files against the previous snapshot so a daily copy costs kilobytes.
+- [x] `scripts/snapshot_data.py`, logic in `src/companion/snapshot.py`. Copies retained data into `~/kyra-snapshots/<date-time>/`, excluding top-level regenerable directories: `bench_hf`, `local_llm_models`, `router_ft`, `search_index`, `generated_resumes`, `voice_models`, and `tool_ft`. Unchanged ordinary files share hardlinks with the previous snapshot; databases always get a fresh backup.
       -> verify: two consecutive snapshots of unchanged data occupy one copy on disk (`du -sh` of the second is near zero), and both restore identically.
-- [ ] SQLite files are copied with `.backup` through `sqlite3`, never `cp`, because a plain copy of a database being written is a corrupt database.
+- [x] SQLite files are recognized by their header and copied with Python's `sqlite3.Connection.backup()`, never a plain file copy, so committed WAL rows are included. Database sidecars are omitted.
       -> verify: snapshot a store while a writer holds it open, then open the copy and read the row count.
-- [ ] Keep the last 30, delete older. Refuse to delete when the newest snapshot is smaller than half the live set, since that means the live set was already lost and the snapshots are now the only copy.
+- [x] Keep the last 30, delete older only after publishing a completed copy. Refuse to publish or rotate when the captured live set is smaller than half the newest snapshot, since that may mean the live set was already lost and the snapshots are now the only copy. This corrects the reversed comparison in the original plan, following Claude's regression and handoff.
       -> verify: a test where the live data is emptied asserts rotation refuses and says why.
-- [ ] `--restore <snapshot>` writes into a **new** directory and never over `data/`, printing the `rsync`-style command to move it into place. A restore that overwrites is the same failure it exists to fix.
+- [x] `--restore <snapshot> --into <new-directory>` writes into a **new** directory and never over existing live data, printing an `rsync -avn` dry-run command for manual inspection. Restored files are independent copies, not hardlinks to snapshots.
       -> verify: restoring into a temp dir leaves the live `data/` byte-identical.
 - [ ] launchd plist beside `deploy/com.kyra.daily-digest.plist`, at 04:30 so it precedes the 05:00 digest.
       -> verify: `launchctl kickstart -k` produces a real snapshot rather than waiting for tomorrow.
+
+Implementation verification (2026-09-10): 11 snapshot tests pass, including Claude's
+seven and four failure/destination checks. Full snapshot-worktree suite: 548 passed,
+1 existing optional tokenizer skip; ruff and plist syntax clean. Two live snapshots
+captured 339 files. The first used 44 MB; the second added 1.2 MB for eight fresh
+SQLite copies and shared 331 unchanged files. All eight databases passed integrity
+checks. Both temporary restores matched every captured file's SHA-256 and used
+independent inodes; temporary restores were removed. Evidence lives at
+`data/verifications/2026-09-10-snapshot/`. A root lock prevents overlapping runs;
+partial copies are hidden until complete, and symlinks are refused. This is a
+per-database consistent backup, not a transaction across stores or Chroma's SQLite
+and separate index files. Same-disk storage still does not cover disk failure.
+
+Review follow-up: independent review reproduced changed bytes retaining the same
+size/mtime, restore destinations nested within live data or saved snapshots, and
+macOS `uchg` flags preventing later hardlinks/rotation. Each received a failing
+regression before its fix. Hardlink reuse now also requires equal SHA-256; the CLI
+refuses restores under live data, restore refuses all snapshot storage, and copied
+files have BSD flags cleared without changing live-file protection. Fifteen
+focused tests pass, including a real macOS protected-file snapshot/restore/rotation
+check. A repeated live run after content verification captured 341 files, shared
+333, freshly backed up eight databases, and restored every file identically twice.
+Evidence: `data/verifications/2026-09-10-snapshot/real-run-after-review.json`.
+
+Reviewed (independent Codex reviewer, 2026-09-10): implementation diff over
+`b360a99`, approve, zero remaining blockers. Independently reran the 15 snapshot
+tests, lint, plist validation, preserved-metadata content reproduction, restore
+isolation, and macOS immutable-file rotation/restore. Nonblocking suggestions:
+preserve harmless BSD flags instead of clearing all flags on copies, and assert
+the plist's existing `Umask=63` in its test. Both are deferred; backup content and
+live-file protection are verified.
+
+Final premerge suite after all review fixes: **552 passed, 1 existing optional
+tokenizer skip in 66.67s**, ruff clean. This worktree does not yet contain the
+eleven wake-up tests already merged on master.
 
 ## 3. Slice 2: one guard script, two registrations
 
