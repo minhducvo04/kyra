@@ -1,5 +1,12 @@
 # Verification history
 
+## 2026-09-10: independent review and cloud request proof complete
+
+The client implementation at a79117f received independent review approval, with a detached rerun of all 565 tests and clean ruff. After the deployment maintainer updated the single-IP allowlist for the current network, an independent GET /api/backend at 07:20 UTC returned HTTP 200 and backend auto. Its unique verification marker matched a 200 OK access event in /kyra/api from the new task. The earlier connection blocker is resolved. Exact event metadata and response are retained privately in `data/verifications/2026-09-10-overnight-codex/cloud-access-proof.json`.
+
+The overnight build/review/proof loop is complete. Initiatives remain unmerged and undeployed; human integration still needs to reconcile the Alembic heads before migration. No infrastructure was changed by this verification, and no chat or database fixtures were created. HTTPS and CI variable choices remain owner follow-ups.
+
+
 ## 2026-09-10: CPU image deployed; external probe blocked by allowlist
 
 The logging-enabled CPU image from 727711a completed deployment for API and worker, with one running task each and no pending tasks. The API task runs the expected new image digest and its load-balancer target is healthy. The final GET /api/backend access-log check remains unproven: the verification client now uses an address outside the configured single-IP allowlist, and both connection probes timed out. No access rule or infrastructure was changed by this check. Private evidence is in `data/verifications/2026-09-10-overnight-codex/cloud-access-proof.json`. Resume the probe after the client network or authorized allowlist changes; do not treat the timeout as an unhealthy application.
