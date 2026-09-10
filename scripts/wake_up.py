@@ -8,6 +8,7 @@ The native window opens automatically, even without Kyra's web server.
 Stop (or Escape) ends this wake-up and its speech. Snooze is ten minutes,
 with a quiet window that can also be stopped. The Mac must remain running
 and logged in; this does not power on a shut-down Mac or survive a reboot.
+Idle system sleep is prevented, but the display may sleep until you interact.
 """
 import argparse
 import logging
@@ -20,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from companion.wake_up import MacWakeUpAlarm, _stop
+from companion.wake_up import MacWakeUpAlarm, stop_child
 
 
 def main() -> None:
@@ -55,7 +56,7 @@ def main() -> None:
     except RuntimeError as exc:
         parser.exit(1, f"{exc}\n")
     finally:
-        _stop(awake)
+        stop_child(awake)
 
 
 if __name__ == "__main__":

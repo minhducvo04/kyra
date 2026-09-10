@@ -26,3 +26,13 @@ Reviewed: 94f77f1, 6 findings, 0 blocking.
 4. `src/companion/wake_up.py:85` polls at 0.1 s for the whole wait, which can be hours; a longer sleep while `until` is far away costs nothing. Nit.
 5. `tests/test_wake_up.py` had no case for a future `--at`: quiet waiting window, then an audible ring on `due`. Added `test_scheduled_wake_up_waits_silently_then_rings_aloud`; it fails if the waiting window stops being silent or the ring inherits the deadline.
 6. `scripts/wake_up.py:44` a SIGTERM arriving inside the cleanup `finally` raises a second KeyboardInterrupt and can skip the later `_stop`; the caffeinate child still dies through `-w`. Edge case, non-blocking.
+
+## Review follow-up (Codex, 2026-09-10)
+
+- Address findings 2 to 4: document display sleep, expose `stop_child`, and poll scheduled/snoozed waits once per second, capped at the remaining deadline -> verified: new polling regression failed before the change; 11 focused tests pass; `--help` includes the display caveat.
+- Run a real scheduled preview and cancel it after the deadline -> verified: transition observed 0.019 s after due, SIGTERM exited 0 in 0.009 s, no owned children survived; proof at `data/verifications/2026-09-10-wake-up-controls/nits-native-deadline.json`. Native AppleScript required execution outside the sandbox.
+- Full checks -> verified: 548 passed, 1 existing optional tokenizer skip in 65.38 s; ruff clean.
+
+Findings 1 and 6 retain Claude's disposition. Duc's remaining acceptance is
+`scripts/wake_up.py --preview`: click Snooze 10 min, Wake now, then Stop before
+merging. No button acceptance or merge is claimed by this follow-up.

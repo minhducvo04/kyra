@@ -26,7 +26,7 @@ _DIALOG = '''on run argv
 end run'''
 
 
-def _stop(child: subprocess.Popen | None) -> None:
+def stop_child(child: subprocess.Popen | None) -> None:
     """Reap only our own child, never every `say` process on the Mac."""
     if child is None:
         return
@@ -83,13 +83,14 @@ class MacWakeUpAlarm(WakeUpAlarm):
                     if dialog.returncode != 0 or output.strip() not in {"stop", "snooze", "due"}:
                         raise RuntimeError(f"Could not show wake-up controls: {error.strip() or 'dialog closed'}")
                     return output.strip()
-                if until is not None and time.time() >= until:
+                remaining = until - time.time() if until is not None else None
+                if remaining is not None and remaining <= 0:
                     return "due"
                 if not silent and time.monotonic() >= next_speech and (speech is None or speech.poll() is not None):
-                    _stop(speech)
+                    stop_child(speech)
                     speech = subprocess.Popen(["/usr/bin/say", "-r", "150", "--", message])
                     next_speech = time.monotonic() + 30
-                time.sleep(0.1)
+                time.sleep(min(1.0, remaining) if remaining is not None else 0.1)
         finally:
-            _stop(speech)
-            _stop(dialog)
+            stop_child(speech)
+            stop_child(dialog)

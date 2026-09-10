@@ -130,6 +130,25 @@ def test_expired_wait_closes_dialog_without_speech(monkeypatch):
     assert dialog.terminated
 
 
+def test_wait_polls_once_per_second_without_overshooting_deadline(monkeypatch):
+    dialog = Child()
+    now = 1000.0
+    sleeps = []
+
+    def sleep(seconds):
+        nonlocal now
+        assert seconds == min(1.0, 1002.25 - now)
+        sleeps.append(seconds)
+        now += seconds
+
+    monkeypatch.setattr(wake_up.subprocess, "Popen", lambda *a, **k: dialog)
+    monkeypatch.setattr(wake_up.time, "time", lambda: now)
+    monkeypatch.setattr(wake_up.time, "sleep", sleep)
+    assert wake_up.MacWakeUpAlarm()._show("Time to get up", until=1002.25, silent=True) == "due"
+    assert sleeps == [1.0, 1.0, 0.25]
+    assert dialog.terminated
+
+
 def test_unresponsive_owned_child_is_killed_and_reaped():
     class StuckChild(Child):
         killed = False
@@ -142,7 +161,7 @@ def test_unresponsive_owned_child_is_killed_and_reaped():
             self.killed = True
 
     child = StuckChild()
-    wake_up._stop(child)
+    wake_up.stop_child(child)
     assert child.terminated and child.killed
 
 
