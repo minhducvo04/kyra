@@ -4,8 +4,9 @@ Duc's ask: a hook so that neither agent, nor he, accidentally deletes the databa
 
 Owner split under the roles set today: this plan and the failing tests are Claude Code's; the implementation is Codex's.
 
-**Status:** snapshot slice implemented and live backup/restore verified on 2026-09-10;
-scheduled-job verification and merge are pending. Hook and filesystem-lock slices remain
+**Status:** snapshot slice implemented, independently approved, and live backup/restore
+and 04:30 launchd kickstart verified on 2026-09-10. Merge and switching the installed
+job from the reviewed worktree to the main entry point are pending. Hook and filesystem-lock slices remain
 deferred. No hook is installed in Claude Code or Codex. The shared instructions and
 skills setup is complete without hooks. If the hook slice resumes, verify each harness against its
 current official documentation before assuming one event schema or one response format works in
@@ -50,7 +51,7 @@ each harness.
       -> verify: a test where the live data is emptied asserts rotation refuses and says why.
 - [x] `--restore <snapshot> --into <new-directory>` writes into a **new** directory and never over existing live data, printing an `rsync -avn` dry-run command for manual inspection. Restored files are independent copies, not hardlinks to snapshots.
       -> verify: restoring into a temp dir leaves the live `data/` byte-identical.
-- [ ] launchd plist beside `deploy/com.kyra.daily-digest.plist`, at 04:30 so it precedes the 05:00 digest.
+- [x] launchd plist beside `deploy/com.kyra.daily-digest.plist`, at 04:30 so it precedes the 05:00 digest.
       -> verify: `launchctl kickstart -k` produces a real snapshot rather than waiting for tomorrow.
 
 Implementation verification (2026-09-10): 11 snapshot tests pass, including Claude's
@@ -87,6 +88,15 @@ live-file protection are verified.
 Final premerge suite after all review fixes: **552 passed, 1 existing optional
 tokenizer skip in 66.67s**, ruff clean. This worktree does not yet contain the
 eleven wake-up tests already merged on master.
+
+Scheduled-job verification: installed `com.kyra.snapshot` with `Umask=63`,
+kickstarted it, observed exit 0, and restored its 345 captured files identically;
+all eight SQLite copies passed integrity checks. Evidence:
+`data/verifications/2026-09-10-snapshot/launchd-worktree.json`. Another agent owns
+an in-progress initiatives merge in the shared checkout, so the installed job
+temporarily uses this reviewed worktree with `KYRA_DATA_DIR` set to the main data
+directory. After merging, install the tracked plist unchanged and repeat kickstart
+to verify the main entry point. No other agent's merge was altered.
 
 ## 3. Slice 2: one guard script, two registrations
 
