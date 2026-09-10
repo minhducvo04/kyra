@@ -1,5 +1,19 @@
 # Verification history
 
+## 2026-09-10: integrated image deployed and exercised on AWS
+
+Final post-cleanup checks: API and worker each have one running task, zero pending tasks and a completed deployment on the expected digest. Health, backend and the empty initiatives endpoint returned 200. The deployed JavaScript and stylesheet match the reviewed source byte-for-byte; a unique final backend request matched its 200 OK CloudWatch event. The full Python suite passed 618 tests in 20.70s and lint remained clean.
+
+Deployed runtime source `7da40d2` from the previously tested linux/amd64 image, using the existing API and worker capacity. ECR commit tag and running tasks use digest `sha256:467700a373d8e075d6f63e9d4addbe198f5471a3975d30991ea102d29170fe6d`. The prior image and task definitions were recorded privately for rollback.
+
+Before rollout, a one-shot task made an exclusive compressed row backup on the existing EFS storage, then upgraded the deployed database from `b721d430a9ef` to `d210a93e7b61`. It exited 0 and verified that every pre-existing row was unchanged. Existing RDS point-in-time recovery was available; no new RDS snapshot or permanent application capacity was added. The migration task definition was deregistered after use.
+
+Real requests through the deployed API proved a hosted tool turn saving a fictional reminder to RDS and a sourced suggestion containing its exact evidence. The daily generator made one hosted call, reused its cache on the same and next unchanged day, and left files unchanged for read-only preview. Live endpoints preserved the same reminder receipt on acceptance retry, retained a dismissal reason, rejected a stale checkpoint with 409, and returned the same learning item on retry. An empty fixture source plus absent container git evidence abstained without another provider call.
+
+Verification removed its database rows, four memory records and two routing log entries, checked original rows and memory IDs, and confirmed notes unchanged. An API-only restart on the same image clears the verification conversation from process memory. The temporary verification directory was removed; the private pre-migration backup is deliberately retained for recovery. Proof lives under gitignored `data/verifications/2026-09-10-aws-integration/`.
+
+The existing IP allowlist and optional-token configuration were preserved. External health, backend and initiatives requests returned 200; remote checkpoint access correctly returned 503 until an API token is configured, while its loopback path passed verification. HTTPS, API-token setup, CI variables and a cloud daily scheduler were not added. The daily pipeline was exercised explicitly, not claimed to be scheduled in the cloud. No Git push occurred.
+
 ## 2026-09-10: combined local integration verified
 
 **618 Python tests passed in 20.13s**, ruff clean; **13 Swift tests passed**, and the generic visionOS Simulator build succeeded. The actual combined Swift client ran against a separate local uvicorn process using fictional scratch data: initiative evidence decoding, accept/retry with one reminder receipt, dismiss reason, reminders, checkpoint save/replay/list/conflict, and learning save/retry/due all passed. Unauthenticated API access returned 401. The same native transport passed against the freshly built linux/amd64 image after its real `alembic upgrade head` reached `d210a93e7b61`; `/healthz` returned 200 and the API gate returned 401 without a token.
