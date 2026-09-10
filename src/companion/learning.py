@@ -17,15 +17,19 @@ resets back to the 1-day step rather than advancing. Reward system starts
 as a plain streak count Kyra can mention conversationally, deliberately
 not gamified further yet (see the roadmap doc for why).
 """
+import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from uuid import UUID
 
 from sqlalchemy import Engine, insert, select, update
+from sqlalchemy.exc import IntegrityError
 
 from companion.db import engine_for_store
 from companion.paths import DATA_DIR
 from companion.schema import learning_items as T
+from companion.schema import learning_requests as R
 from companion.schema import learning_streak as S
 from companion.tools import Tool
 
@@ -48,6 +52,10 @@ class LearningItem:
     review_count: int
 
 
+class LearningRequestConflict(ValueError):
+    """A save request key was reused with different content."""
+
+
 class LearningStore:
     def __init__(self, path: Path | str | None = None, *, engine: Engine | None = None):
         self._engine = engine or engine_for_store(DB_PATH, path)
@@ -55,18 +63,40 @@ class LearningStore:
             if conn.execute(select(S.c.id).where(S.c.id == 0)).first() is None:
                 conn.execute(insert(S).values(id=0, streak_days=0))
 
-    def add(self, topic: str, summary: str, key_takeaway: str) -> LearningItem:
+    def add(self, topic: str, summary: str, key_takeaway: str, *, request_id: UUID | None = None) -> LearningItem:
+        request_key = str(UUID(str(request_id))) if request_id is not None else None
+        receipt = select(R.c.result).where(R.c.request_id == request_key)
+
+        def replay(raw: str) -> LearningItem:
+            item = LearningItem(**json.loads(raw))
+            if (item.topic, item.summary, item.key_takeaway) != (topic, summary, key_takeaway):
+                raise LearningRequestConflict("This request_id was already used for different learning content.")
+            return item
+
         now = datetime.now(UTC)
         next_review = (now + timedelta(days=REVIEW_INTERVALS_DAYS[0])).isoformat()
-        with self._engine.begin() as conn:
-            res = conn.execute(insert(T).values(
-                topic=topic, summary=summary, key_takeaway=key_takeaway,
-                created_at=now.isoformat(), next_review_at=next_review, review_count=0,
-            ))
-        return LearningItem(
-            id=res.inserted_primary_key[0], topic=topic, summary=summary, key_takeaway=key_takeaway,
-            created_at=now.isoformat(), next_review_at=next_review, review_count=0,
-        )
+        try:
+            with self._engine.begin() as conn:
+                if request_key is not None:
+                    saved = conn.scalar(receipt)
+                    if saved is not None:
+                        return replay(saved)
+                values = dict(topic=topic, summary=summary, key_takeaway=key_takeaway,
+                              created_at=now.isoformat(), next_review_at=next_review, review_count=0)
+                res = conn.execute(insert(T).values(**values))
+                item = LearningItem(id=res.inserted_primary_key[0], **values)
+                if request_key is not None:
+                    conn.execute(insert(R).values(request_id=request_key, result=json.dumps(asdict(item))))
+            return item
+        except IntegrityError:
+            # A competing request rolls back its item insert along with its receipt.
+            if request_key is None:
+                raise
+            with self._engine.connect() as conn:
+                saved = conn.scalar(receipt)
+            if saved is None:
+                raise
+            return replay(saved)
 
     def due(self) -> list[LearningItem]:
         now = datetime.now(UTC).isoformat()

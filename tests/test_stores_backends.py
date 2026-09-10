@@ -53,6 +53,48 @@ def test_learning_on_backend(engine):
     assert store.mark_reviewed(item.id, True)["streak_days"] == 1
 
 
+@pytest.mark.parametrize("same_payload", [True, False])
+def test_checkpoint_and_learning_save_races_on_backend(engine, same_payload):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from uuid import uuid4
+
+    from sqlalchemy import func, select
+
+    from companion.checkpoints import CheckpointConflict, CheckpointDraft, DbCheckpointStore
+    from companion.learning import LearningRequestConflict
+    from companion.schema import learning_items
+
+    checkpoints = [DbCheckpointStore(engine=engine), DbCheckpointStore(engine=engine)]
+    learning = [LearningStore(engine=engine), LearningStore(engine=engine)]
+    checkpoint_id, request_id = uuid4(), uuid4()
+    barrier = Barrier(2)
+
+    def save(i):
+        topic = "Same" if same_payload else str(i)
+        draft = CheckpointDraft(revision=0, task=topic, last_result="", next_action="Run", references="")
+        barrier.wait()
+        try:
+            checkpoint = checkpoints[i].save(checkpoint_id, draft)
+        except CheckpointConflict:
+            checkpoint = None
+        try:
+            item = learning[i].add(topic, "Summary", "Takeaway", request_id=request_id)
+        except LearningRequestConflict:
+            item = None
+        return checkpoint, item
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(save, range(2)))
+    for index in (0, 1):
+        saved = [result[index] for result in results if result[index] is not None]
+        assert len(saved) == (2 if same_payload else 1)
+        assert all(result == saved[0] for result in saved)
+    assert len(checkpoints[0].list()) == 1
+    with engine.connect() as conn:
+        assert conn.scalar(select(func.count()).select_from(learning_items)) == 1
+
+
 def test_job_applications_on_backend(engine):
     store = JobApplicationStore(engine=engine)
     a = store.add("Stripe", "SDE", link="https://x", notes="n")

@@ -15,6 +15,14 @@ Anthropic key never leave it - and this is a third front door alongside the web 
   failed - and the same words on screen, so both front doors describe her identically.
 - **A Today tab**: the reminders and due reviews from the morning digest, the two parts you act on rather
   than read.
+- **Workspace: "Where was I?"** Save a task, last result, next action and reference text on the Mac.
+  Select a saved task to resume its context. Edits require Save; references never open or fetch automatically.
+  Concurrent edits report a conflict; keep the draft as a new checkpoint or explicitly discard and reload.
+- **Learn: a spatial queue lab.** Enable or disable three servers, choose 0 to 10 arrivals per second,
+  predict the final waiting count and run ten deterministic ticks. Open the optional volume beside the
+  main window to inspect the servers and backlog. Save an editable takeaway for tomorrow's review.
+  Save or explicitly discard an unsaved lesson before changing the experiment. Failed saves preserve
+  their payload and original connection for retries without duplicates.
 
 ## What does not work yet
 
@@ -22,8 +30,15 @@ Anthropic key never leave it - and this is a third front door alongside the web 
   `prep/visionos-on-device-voice`, with `KyraVision/DEVICE-SETUP.md` next to it. It is unmerged because
   `SFSpeechRecognizer` does not run in the visionOS simulator and the simulator has no microphone, so it
   cannot be verified until the hardware exists. It does compile for the real device SDK.
-- Anything spatial - a volume, an immersive space, the room-aware presence. See
+- Room-aware presence, immersion and ambient sensing. The queue volume uses Shared Space and needs no
+  room, gaze or camera access. See
   `docs/plans/2026-09-08-ambient-assistant.md` for where that goes.
+
+The new Workspace and Learn features have a simulator build, rendered screenshots, native state tests
+and real Swift-client HTTP verification. Physical-device readability, hand targeting and comfort still
+need a headset session. The queue model deliberately omits network delays, in-flight work and failures
+during a run: arrivals enter one FIFO queue first, then enabled servers in numbered order complete up to
+two requests each. Remaining work waits; nothing is dropped. Rendering never advances simulation time.
 
 ## Running it in the simulator
 
@@ -47,7 +62,7 @@ simulator shares the Mac's network, so no token is needed, because the server on
 that are not the machine itself. From the real headset it is the Mac's LAN address and a token; see
 `DEVICE-SETUP.md` on the prep branch.
 
-## The two launch arguments
+## Launch arguments
 
 They exist because the simulator gives a script no way to type into an app, so without them nothing past the
 first screen can be checked unattended. Both land in `UserDefaults`' argument domain and need no `Info.plist`
@@ -60,6 +75,33 @@ xcrun simctl launch booted com.kyra.KyraVision --args -kyra.ask "what is due tod
 ```bash
 xcrun simctl launch booted com.kyra.KyraVision --args -kyra.tab today
 ```
+
+`-kyra.tab workspace` and `-kyra.tab learn` open the new tabs. A Debug build also accepts
+`-kyra.lab.demo YES` together with the Learn tab: it runs a fixed, local two-server example and opens the
+volume for screenshot checks. This fixture never saves a checkpoint or lesson and is absent from Release.
+
+## Native checks and private storage
+
+```bash
+swift test --package-path apple
+xcodebuild -project apple/KyraVision/KyraVision.xcodeproj -scheme KyraVision \
+  -destination 'generic/platform=visionOS Simulator' CODE_SIGNING_ALLOWED=NO build
+```
+
+Both commands run in the `visionos` CI job. The Swift package tests the real simulation and draft/retry
+state without launching the UI. Unsaved drafts survive tab changes but are not durable across app
+termination; press Save before closing the app. A lost connection after a save must be reconciled with
+the original server before editing that payload.
+
+Checkpoint revisions are append-only in `data/checkpoints.db`; only the latest revision is listed.
+Learning receipts live alongside the existing items in `data/learning.db`. Both honor `KYRA_DATA_DIR`
+and `DATABASE_URL`, and `data/` remains fully gitignored. Replacing text does not erase earlier revisions.
+Migration `b721d430a9ef` adds tables without changing existing learning rows and tolerates tables already
+created by app startup. For a deployed database, run `alembic upgrade head` before serving traffic.
+
+Remote checkpoint access requires `KYRA_API_TOKEN`; if none is configured, that route refuses non-loopback
+callers. Existing routes keep their previous optional-token policy. Set the token before binding to the
+LAN. Plain HTTP is intended for a trusted local network; use HTTPS for a remote server.
 
 ## The project file is hand-written
 

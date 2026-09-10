@@ -10,9 +10,8 @@ import Observation
 ///
 /// Two things make it work over the Wi-Fi rather than over localhost: the
 /// server must be started with `KYRA_HOST=0.0.0.0`, and `KYRA_API_TOKEN` must
-/// be set and entered here. Without the token the server refuses any non-
-/// loopback caller (webapp.py's `_require_api_token`), which is the only
-/// boundary in front of the API today.
+/// be set and entered here. Checkpoint routes refuse remote access without
+/// a configured token; older routes retain the server's optional-token policy.
 struct ChatOut: Codable, Sendable {
     var reply: String
     var backend: String
@@ -48,42 +47,15 @@ struct Reminder: Codable, Sendable, Identifiable {
     var day: String? { dueAt.map { String($0.prefix(10)) } }
 }
 
-struct LearningItem: Codable, Sendable, Identifiable {
-    let id: Int
-    let topic: String
-    let summary: String
-    let keyTakeaway: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id, topic, summary
-        case keyTakeaway = "key_takeaway"
-    }
-}
-
 struct AudioClip: Codable, Sendable {
     let b64: String
     let text: String
 }
 
-enum KyraError: LocalizedError {
-    case badURL
-    case unauthorized
-    case server(Int)
-    case stream(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .badURL: "That does not look like a URL. Try http://192.168.1.x:8420"
-        case .unauthorized: "The server rejected the token. Check KYRA_API_TOKEN in .env."
-        case .server(let code): "The Mac answered \(code)."
-        case .stream(let message): message
-        }
-    }
-}
-
 @Observable
 @MainActor
-final class KyraClient {
+final class KyraClient: WorkspaceAPI, LessonAPI {
+    var connection: KyraConnection { KyraConnection(url: baseURL, token: token) }
     /// The Mac's address on the LAN, e.g. http://192.168.1.20:8420. Bonjour
     /// discovery is a later slice; typing it once is enough to get going.
     var baseURL: String {
@@ -252,6 +224,38 @@ final class KyraClient {
         try Self.check(response)
     }
 
+    func checkpoints() async throws -> [TaskCheckpoint] {
+        let (data, response) = try await Self.session.data(for: try request("/api/checkpoints"))
+        try Self.check(response, data: data)
+        struct Out: Decodable { let checkpoints: [TaskCheckpoint] }
+        return try JSONDecoder().decode(Out.self, from: data).checkpoints
+    }
+
+    func saveCheckpoint(_ checkpoint: TaskCheckpoint) async throws -> TaskCheckpoint {
+        struct Draft: Encodable {
+            let revision: Int
+            let task: String
+            let last_result: String
+            let next_action: String
+            let references: String
+        }
+        let body = try JSONEncoder().encode(Draft(revision: checkpoint.revision, task: checkpoint.task,
+            last_result: checkpoint.lastResult, next_action: checkpoint.nextAction, references: checkpoint.references))
+        let (data, response) = try await Self.session.data(for: try request("/api/checkpoints/\(checkpoint.id)", body: body))
+        try Self.check(response, data: data)
+        return try JSONDecoder().decode(TaskCheckpoint.self, from: data)
+    }
+
+    func saveLesson(requestID: UUID, summary: String, takeaway: String) async throws -> LearningItem {
+        let body = try JSONEncoder().encode([
+            "request_id": requestID.uuidString.lowercased(), "topic": "Queue capacity and server failures",
+            "summary": summary, "key_takeaway": takeaway
+        ])
+        let (data, response) = try await Self.session.data(for: try request("/api/learning", body: body))
+        try Self.check(response, data: data)
+        return try JSONDecoder().decode(LearningItem.self, from: data)
+    }
+
     /// Stop a reply that is still being generated. The server keeps running the
     /// turn otherwise, and would record the whole thing as if it had been heard.
     func cancel() async {
@@ -259,9 +263,16 @@ final class KyraClient {
         _ = try? await Self.session.data(for: request)
     }
 
-    private static func check(_ response: URLResponse) throws {
+    private static func check(_ response: URLResponse, data: Data? = nil) throws {
         guard let http = response as? HTTPURLResponse else { return }
         if http.statusCode == 401 { throw KyraError.unauthorized }
+        if http.statusCode != 200, let data {
+            struct Failure: Decodable { struct Detail: Decodable { let message: String }; let error: Detail }
+            if let failure = try? JSONDecoder().decode(Failure.self, from: data) {
+                throw KyraError.rejected(http.statusCode, failure.error.message)
+            }
+            if http.statusCode == 422 { throw KyraError.rejected(422, "Check the field lengths and required values, then try again.") }
+        }
         if http.statusCode != 200 { throw KyraError.server(http.statusCode) }
     }
 }

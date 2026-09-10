@@ -6,6 +6,17 @@ on:
   pull_request:
 
 jobs:
+  visionos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native simulation and retry-state tests
+        run: swift test --package-path apple
+      - name: Build Vision Pro client (no simulator runtime needed)
+        run: >-
+          xcodebuild -project apple/KyraVision/KyraVision.xcodeproj -scheme KyraVision
+          -destination 'generic/platform=visionOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
   test:
     runs-on: ubuntu-latest
     services:

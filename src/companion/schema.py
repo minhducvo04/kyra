@@ -38,6 +38,26 @@ learning_streak = Table(
     CheckConstraint("id = 0", name="single_row"),
 )
 
+# Request receipts live beside learning_items, so both inserts commit or neither does.
+learning_requests = Table(
+    "learning_requests", metadata,
+    Column("request_id", String(36), primary_key=True),
+    Column("result", Text, nullable=False),
+)
+
+# Retain committed revisions to replay a lost response even after another edit.
+checkpoint_revisions = Table(
+    "checkpoint_revisions", metadata,
+    Column("id", String(36), primary_key=True),
+    Column("revision", Integer, primary_key=True),
+    Column("task", Text, nullable=False),
+    Column("last_result", Text, nullable=False),
+    Column("next_action", Text, nullable=False),
+    Column("references", Text, nullable=False),
+    Column("updated_at", String(64), nullable=False),
+    CheckConstraint("revision > 0", name="positive_checkpoint_revision"),
+)
+
 job_applications = Table(
     "job_applications", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
