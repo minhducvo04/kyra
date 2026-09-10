@@ -1,5 +1,16 @@
 # Verification history
 
+## 2026-09-10: Today and HUD, with compatibility checks
+
+The client branch passed 565 pytest tests in 18.97 s and ruff. Real Swift transport requests decoded sources, recovered the same acceptance receipt on retry, and persisted dismissal feedback. The visionOS simulator build succeeded and displayed three fixture proposals. An older-server simulation kept its existing reminder visible while explaining the missing suggestions feature. A separate preview bundle preserved the installed application and was removed afterward.
+
+A real browser verified exact escaped evidence, retained rows after a network failure, successful retry and dismissal, and a phone-width layout. Screenshots cover Today, the older-server state, the HUD at two widths and the generated digest. The digest footer now accurately allows for model use. The hosted proposal check also exposed an unsupported progress assumption in a rationale: cited-ID membership is verified, factual entailment is not. Read the evidence before accepting.
+
+Cloud fixture cleanup completed and the API rolling restart finished on the same image, clearing transient conversation history. API and worker each have one running task, none pending. Claude owns the subsequent CPU-image/access-log update. Initiatives remain local branches pending human integration; no model feature was deployed by this client work.
+
+Private proof directory: `data/verifications/2026-09-10-overnight-codex/`. Scratch servers, stores, the preview application and the temporary PostgreSQL container were removed.
+
+
 ## 2026-09-10: daily initiatives and deployed sandbox
 
 - Section-one review branch: 546 tests passed; real hosted selection and proposal preserved the exact source quote.

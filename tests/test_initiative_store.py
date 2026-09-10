@@ -91,6 +91,7 @@ def test_digest_round_trip_and_html_escape(tmp_path):
     assert restored.initiatives == data.initiatives
     assert 'Kyra suggests' in render_markdown(restored)
     assert '&lt;script&gt;bad&lt;/script&gt;' in render_html(restored)
+    assert 'no LLM call' not in render_html(restored)
     assert data.action_count == 0
 
 

@@ -608,8 +608,8 @@ def render_html(data: DigestData, *, prev_day: str | None = None, next_day: str 
         )
 
     parts.append(
-        f'<footer>Generated {_e(d.generated_at.strftime("%H:%M"))} · no LLM call, '
-        f"straight from Kyra's stores and the official RSS feeds<br>"
+        f'<footer>Generated {_e(d.generated_at.strftime("%H:%M"))} · '
+        f"records from Kyra's stores and official RSS feeds; suggestions may use a model<br>"
         f"Rebuild any time with <code>python3 scripts/daily_digest.py --open</code></footer>"
     )
     parts.append("</div></body></html>")

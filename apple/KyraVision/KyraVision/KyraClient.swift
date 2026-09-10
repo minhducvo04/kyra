@@ -65,6 +65,31 @@ struct AudioClip: Codable, Sendable {
     let text: String
 }
 
+struct InitiativeEvidence: Codable, Sendable, Identifiable {
+    let id: String
+    let source: String
+    let quote: String
+    let when: String
+}
+
+struct InitiativeProposal: Codable, Sendable, Identifiable {
+    let id: String
+    let title: String
+    let why: String
+    let firstStep: String
+    let minutes: Int
+    let evidence: [InitiativeEvidence]
+    let status: String
+    let reason: String?
+    let reminderID: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, why, minutes, evidence, status, reason
+        case firstStep = "first_step"
+        case reminderID = "reminder_id"
+    }
+}
+
 enum KyraError: LocalizedError {
     case badURL
     case unauthorized
@@ -239,6 +264,26 @@ final class KyraClient {
         try Self.check(response)
         struct Out: Codable { let due: [LearningItem] }
         return try JSONDecoder().decode(Out.self, from: data).due
+    }
+
+    func initiatives() async throws -> [InitiativeProposal] {
+        let (data, response) = try await Self.session.data(for: try request("/api/initiatives"))
+        try Self.check(response)
+        struct Out: Codable { let initiatives: [InitiativeProposal] }
+        return try JSONDecoder().decode(Out.self, from: data).initiatives
+    }
+
+    func acceptInitiative(_ id: String) async throws -> InitiativeProposal {
+        let (data, response) = try await Self.session.data(for: try request("/api/initiatives/\(id)/accept", body: Data("{}".utf8)))
+        try Self.check(response)
+        return try JSONDecoder().decode(InitiativeProposal.self, from: data)
+    }
+
+    func dismissInitiative(_ id: String, reason: String?) async throws -> InitiativeProposal {
+        let body = try JSONEncoder().encode(reason.map { ["reason": $0] } ?? [:])
+        let (data, response) = try await Self.session.data(for: try request("/api/initiatives/\(id)/dismiss", body: body))
+        try Self.check(response)
+        return try JSONDecoder().decode(InitiativeProposal.self, from: data)
     }
 
     func completeReminder(_ id: Int) async throws {
