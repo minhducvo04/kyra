@@ -63,6 +63,7 @@ Job search, digest, search:
 - `scripts/daily_digest.py [--dry-run|--no-notify|--open|--index|--date YYYY-MM-DD|--search TERM|--rebuild|--no-reindex]`, scheduled at 05:00 by `deploy/com.kyra.daily-digest.plist`. `--dry-run` is read-only.
 - `scripts/search.py --reindex` once, then `scripts/search.py "question" [-k N] [--kind resume] [--private] [--answer] [--rerank llm|cross] [--mode lexical|vector|hybrid] [--explain] [--stats] [--eval]`. Search never reindexes on its own; the digest does at 05:00.
 - Autofill needs `data/applicant_profile.json` (see `profile.py::ApplicantProfile`; `resume_path` must be a real file). It fills and stops; a visible window stays open for Duc to submit.
+- Local proactive wake-ups: `.venv/bin/python scripts/wake_up.py --message "Time to get up." [--at "2030-01-01T07:00:00-05:00"]`; `--preview` opens silent controls. Stop/Escape ends this wake-up; Snooze waits ten minutes with a cancellable window. Use this entry point for audible wake-ups, never an ad hoc `say` loop or notification-only alarm. The Mac must be running and logged in; this process does not survive reboot. See `docs/log/voice.md`.
 
 Agent hand-off (both agents, every session):
 - `python3 scripts/session_log.py` prints this branch's hand-off thread; `--list` shows every thread; `--write --agent <claude|codex|duc> --open-for <critique|tests|build|review|duc|nothing> --next "..." --suggest "..."` appends a block with the body on stdin. Threads live in `data/sessions/<branch>.md`, append-only and gitignored. Details in `docs/agent-workflow.md` section 5.
