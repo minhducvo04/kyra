@@ -1,5 +1,14 @@
 # The daily digest
 
+## 2026-09-10: daily proposals with explicit acceptance
+
+The daily run now caches one attempt per day under a shared POSIX lock, reuses unchanged evidence on later days, and supports read-only previews. An interrupted provider call leaves a pending marker instead of silently spending again. A snapshot row serializes publication, including empty days, so historical runs cannot restore stale proposals. Exact evidence stays with each proposal. The digest renders proposed items only and does not count them as committed actions.
+
+Acceptance claims the proposal, then creates an undated reminder with a unique receipt in the same reminder transaction. A lost response can resume from accepting; dismissal cannot win after that claim. Accepted and dismissed identities remain retired when the same cached proposal returns. GET lists proposals and pending acceptances for retry; POST accept returns the original receipt and POST dismiss retains its optional reason. The session-thread source remains dependent on the unmerged shared-agent branch.
+
+Verified: 565 pytest tests passed, ruff clean, real hosted daily generation and tool proposals, cache reuse, empty-source abstention, real HTTP acceptance retry and conflicts. PostgreSQL 16 handled eight simultaneous accepts with one reminder. Fictional scratch state and the temporary database container were removed. Proof: `data/verifications/2026-09-10-overnight-codex/`.
+
+
 `digest.py` and `scripts/daily_digest.py`: the 05:00 page, the JSON archive, the notification, the Applications section.
 
 Entries below were moved verbatim from `CLAUDE.md` on 2026-09-09 (original order kept, newest work is usually nearer the top of each section). Add new entries at the top of this file, dated, with the *why*.

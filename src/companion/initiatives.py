@@ -246,3 +246,48 @@ def render_suggestions(result: dict) -> str:
         lines.extend(f"- {e['source']} ({e['when']}): {e['quote']}" for e in item["evidence"])
         sections.append("\n".join(lines))
     return "Suggestions for you to consider:\n\n" + "\n\n".join(sections)
+
+
+def run_daily(day, *, llm, sources, cache_dir: Path, write: bool = True) -> list[Initiative]:
+    """One daily snapshot. POSIX lock serializes callers sharing this cache directory."""
+    import fcntl
+
+    from companion.paths import write_json
+
+    cache_dir = Path(cache_dir)
+    target = cache_dir / f'{day.isoformat()}.json'
+
+    def read(path):
+        raw = json.loads(path.read_text())
+        if raw.get('pending'):
+            raise RuntimeError('Daily proposal generation was interrupted; inspect the cache before retrying')
+        return raw
+
+    def items(raw):
+        return [Initiative(**row) for row in raw['initiatives']]
+
+    if not write:
+        return items(read(target)) if target.exists() else []
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    with (cache_dir / '.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if target.exists():
+            return items(read(target))
+        evidence = {}
+        for source in sources:
+            for item in source.collect():
+                if item.id in evidence and evidence[item.id] != item:
+                    raise ValueError('Conflicting initiative evidence ids')
+                evidence[item.id] = item
+        bundle = [asdict(evidence[key]) for key in sorted(evidence)]
+        digest = _id('bundle', json.dumps(bundle, sort_keys=True))
+        previous = sorted(p for p in cache_dir.glob('????-??-??.json') if p.stem < day.isoformat())
+        prior = read(previous[-1]) if previous else None
+        if prior and prior['bundle_hash'] == digest:
+            result = items(prior)
+        else:
+            # Persist the attempt before spending a call: a crash never silently spends another.
+            write_json(target, {'pending': True})
+            result = guard(propose(list(evidence.values()), llm), list(evidence.values()))
+        write_json(target, {'bundle_hash': digest, 'evidence': bundle, 'initiatives': [asdict(i) for i in result]})
+        return result

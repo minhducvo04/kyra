@@ -115,3 +115,28 @@ focus_sessions = Table(
     Column("rating", Integer),
     Column("note", Text),
 )
+
+# A receipt and its reminder commit together, even when initiatives use another database.
+initiative_reminder_receipts = Table(
+    "initiative_reminder_receipts", metadata,
+    Column("initiative_id", String(64), primary_key=True),
+    Column("reminder_id", Integer, nullable=False),
+)
+
+initiatives = Table(
+    "initiatives", metadata,
+    Column("id", String(64), primary_key=True),
+    Column("payload", Text, nullable=False),
+    Column("status", String(16), nullable=False),
+    Column("reason", Text),
+    Column("reminder_id", Integer),
+    Column("last_seen", String(10), nullable=False),
+    CheckConstraint("status IN ('proposed', 'accepting', 'accepted', 'dismissed', 'expired')", name="initiative_status"),
+)
+
+# One row serializes daily publication, including an empty day.
+initiative_snapshot = Table(
+    "initiative_snapshot", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("day", String(10), nullable=False),
+)

@@ -1,5 +1,12 @@
 # Platform, configuration and deployment
 
+## 2026-09-10: proposal transactions and independent cloud checks
+
+The initiatives branch adds proposal, daily-snapshot and reminder-receipt tables. Migration c910a21d8f04 follows master head 95948f84f255 and tolerates tables created by startup. It was verified on SQLite both before and after create_all and on local PostgreSQL after create_all. Do not apply it directly to the separate workspace migration head; human branch integration needs an Alembic merge revision first. No deployed schema was modified for initiatives.
+
+Independent sandbox verification reached GET /api/backend and three POST /api/chat/stream turns: plain text, add_reminder, list_reminders. ECS Exec confirmed the fixture in the relational database. Cleanup removed one new reminder and six new memory records by snapshot difference, restored three routing log lines, and verified notes unchanged. Existing records were preserved. Request-level CloudWatch proof remains unavailable: the running server suppresses access logs with uvicorn log_level=warning. The initiatives tool is absent from the deployed image and was verified locally instead.
+
+
 `settings.py`, `errors.py`, `db.py`/`schema.py`/Alembic, `jobs.py`, `webauth.py`, the container, `deploy/aws`, `render.yaml`, startup cost, the repo move.
 
 Entries below were moved verbatim from `CLAUDE.md` on 2026-09-09 (original order kept, newest work is usually nearer the top of each section). Add new entries at the top of this file, dated, with the *why*.

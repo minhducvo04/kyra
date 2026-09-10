@@ -1,5 +1,17 @@
 # Verification history
 
+## 2026-09-10: daily initiatives and deployed sandbox
+
+- Section-one review branch: 546 tests passed; real hosted selection and proposal preserved the exact source quote.
+- Daily branch: 565 tests passed in 19.24 s; ruff clean. The full suite used the existing Hugging Face cache with offline mode enabled, without changing the tokenizer test.
+- Real hosted daily generation produced sourced proposals. Same-day and unchanged next-day runs reused that one call. A separate real tool proposal succeeded; removing the fixture in a directory without git evidence produced abstention without a model call.
+- A real loopback HTTP server returned the saved evidence, the same receipt for repeated accepts, a conflict for dismissing an accepted item, and not-found for a missing ID. Scratch state was removed.
+- Local PostgreSQL 16: eight simultaneous accepts created one reminder; startup-created tables upgraded to c910a21d8f04; an older daily run could not restore proposals after an empty day. Temporary container removed.
+- Deployed API: backend JSON, plain chat, add/list reminder all passed. ECS Exec verified the fixture row. One reminder, six memory records and three router log entries were cleaned; original rows and notes preserved. Access-log evidence in CloudWatch is still missing because the deployed log level suppresses it. Initiatives are not deployed.
+
+Evidence retained privately at `data/verifications/2026-09-10-overnight-codex/`; no private documents or credentials were copied into tracked files.
+
+
 - **Initiatives review follow-through (2026-09-10)**: four new regressions failed first; 546 tests passed in 21.06s, ruff clean after import cleanup. A real hosted tool-selection plus proposal call returned suggestions with exact fictional evidence through the generic terminal interface. Proof: `data/verifications/2026-09-10-overnight-codex/review-real.json`, `review-red.log`, `review-pytest.log`. Independent deployed GET /api/backend returned JSON; access-log proof remains unavailable because the server uses warning log level. No cloud chat/tool claim is made in this entry.
 
 What was verified for real (real API call, real compile, real browser, real device), and when. Moved verbatim from `CLAUDE.md`'s "Verified vs. not" section on 2026-09-09. **Prepend** a dated block after each substantive session: what ran for real, the `pytest` count read from the summary line (not the dots), `ruff` status, and what was deliberately not done.

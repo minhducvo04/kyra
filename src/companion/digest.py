@@ -72,6 +72,7 @@ class DigestData:
     waiting: list[JobApplication] = field(default_factory=list)
     needs_attention: list[JobApplication] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    initiatives: list[dict] = field(default_factory=list)
 
     @property
     def new_postings(self) -> int:
@@ -219,6 +220,12 @@ def render_markdown(data: DigestData) -> str:
     """The archive format - unchanged from the digest's first version, so
     older files in data/digests/ still read the same way."""
     lines = [f"# Kyra daily digest — {data.generated_at.strftime('%A, %B %-d, %Y')}", ""]
+    if data.initiatives:
+        lines.append("## Kyra suggests")
+        for item in data.initiatives:
+            lines += [f"- {item['title']} ({item['minutes']} minutes)", f"  {item['first_step']}", f"  Why: {item['why']}"]
+            lines += [f"  Source: {e['source']} ({e['when']}): {e['quote']}" for e in item['evidence']]
+        lines.append("")
     lines.append(f"## Due now ({len(data.due_reminders)})")
     lines += [f"- [ ] {r.text} (due {r.due_at})" for r in data.due_reminders] or ["- nothing due"]
     lines.append("")
@@ -445,6 +452,13 @@ def render_html(data: DigestData, *, prev_day: str | None = None, next_day: str 
     newer neighbouring days, so the archive is walkable without going
     back to the index every time.
     """
+    suggestions = ""
+    if data.initiatives:
+        rows = []
+        for item in data.initiatives:
+            evidence = ''.join(f"<li>{html.escape(e['source'])} ({html.escape(e['when'])}): {html.escape(e['quote'])}</li>" for e in item['evidence'])
+            rows.append(f"<article class='card'><h3>{html.escape(item['title'])}</h3><p>{html.escape(item['first_step'])}</p><p>{html.escape(item['why'])} ({item['minutes']} minutes)</p><ul>{evidence}</ul></article>")
+        suggestions = '<section id="suggestions"><h2>Kyra suggests</h2>' + ''.join(rows) + '</section>'
     d = data
     date_long = d.generated_at.strftime("%A, %B %-d, %Y")
 
@@ -473,6 +487,7 @@ def render_html(data: DigestData, *, prev_day: str | None = None, next_day: str 
         '<div class="wrap"><header class="top"><div class="brand">Kyra · morning digest</div>',
         f"<h1>{_e(date_long)}</h1><nav>{nav_html}</nav>",
         f'<div class="days">{"".join(days)}</div></header>',
+        suggestions,
     ]
 
     # ---- Action items: everything that wants a decision today.
@@ -633,6 +648,7 @@ def to_json(data: DigestData) -> dict:
         "waiting": [asdict(a) for a in data.waiting],
         "needs_attention": [asdict(a) for a in data.needs_attention],
         "warnings": list(data.warnings),
+        "initiatives": data.initiatives,
     }
 
 
@@ -659,6 +675,7 @@ def from_json(raw: dict) -> DigestData:
         news=[NewsItem(**n) for n in raw.get("news", [])],
         report=report,
         warnings=raw.get("warnings", []),
+        initiatives=raw.get("initiatives", []),
     )
 
 

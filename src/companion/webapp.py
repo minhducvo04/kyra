@@ -30,7 +30,7 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from companion import webauth
 from companion.apply_pipeline import ApplyError, engine_for_url, run_apply_pipeline
@@ -1972,3 +1972,40 @@ def mark_learning_reviewed(item_id: int, body: MarkReviewedIn) -> dict:
     if not result:
         raise ApiError(404, "not_found", f"no learning item with id {item_id}")
     return result
+
+
+# Lazy factory: listing an empty installation must not create a store.
+def initiative_store():
+    from companion.initiative_store import DbInitiativeStore
+    return DbInitiativeStore()
+
+
+@app.get('/api/initiatives')
+def list_initiatives():
+    from companion.initiative_digest import existing_store
+    store = existing_store()
+    return {'initiatives': store.list() if store is not None else []}
+
+
+class DismissInitiativeIn(BaseModel):
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+@app.post('/api/initiatives/{initiative_id}/accept')
+def accept_initiative(initiative_id: str):
+    try:
+        return initiative_store().accept(initiative_id)
+    except KeyError:
+        raise ApiError(404, 'not_found', 'Initiative not found') from None
+    except ValueError as exc:
+        raise ApiError(409, 'initiative_conflict', str(exc)) from None
+
+
+@app.post('/api/initiatives/{initiative_id}/dismiss')
+def dismiss_initiative(initiative_id: str, body: DismissInitiativeIn):
+    try:
+        return initiative_store().dismiss(initiative_id, body.reason)
+    except KeyError:
+        raise ApiError(404, 'not_found', 'Initiative not found') from None
+    except ValueError as exc:
+        raise ApiError(409, 'initiative_conflict', str(exc)) from None
