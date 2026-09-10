@@ -144,3 +144,17 @@ def test_unresponsive_owned_child_is_killed_and_reaped():
     child = StuckChild()
     wake_up._stop(child)
     assert child.terminated and child.killed
+
+
+def test_scheduled_wake_up_waits_silently_then_rings_aloud(monkeypatch):
+    """A future --at shows a quiet waiting window; the deadline (or Wake now) rings with speech."""
+    dialogs = []
+
+    def show(self, message, *, until=None, silent=False):
+        dialogs.append((until, silent))
+        return "due" if len(dialogs) == 1 else "stop"
+
+    monkeypatch.setattr(wake_up.time, "time", lambda: 2000)
+    monkeypatch.setattr(wake_up.MacWakeUpAlarm, "_show", show)
+    wake_up.MacWakeUpAlarm().run("Time to get up", at=datetime.fromtimestamp(3000, UTC))
+    assert dialogs == [(3000, True), (None, False)]

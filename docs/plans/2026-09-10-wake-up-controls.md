@@ -15,3 +15,14 @@ targets became zero-second sleeps. The old process has already finished.
 Assumptions: Stop ends this wake-up only; Snooze delays it ten minutes; a scheduled
 time must include a timezone; this local process requires a running, logged-in Mac.
 Do not change output volume. The existing daily digest schedule is separate.
+
+## Review (Claude Code, 2026-09-10)
+
+Reviewed: 94f77f1, 6 findings, 0 blocking.
+
+1. `src/companion/wake_up.py:53` Snooze, Wake now and Stop were never clicked by a pointer: the harness has no Accessibility permission (System Events refuses with -1719/-1728), which only Duc can grant. Verified for real instead: the scheduled window closes itself at the deadline and the ringing window replaces it (`data/verifications/2026-09-10-wake-up-controls/independent-deadline.json`). One preview at 11:06 returned Stop after 8 s without any automation, so a human click of Stop has happened at least once.
+2. `scripts/wake_up.py:50` `caffeinate -i` prevents idle sleep only; the legacy script used `-dimsu`. The display may be dark when a ring starts, so the first thing Duc gets is speech, and the window is there when he touches the keyboard. Acceptable, worth a sentence in the docstring. Non-blocking.
+3. `scripts/wake_up.py:24` imports the private `_stop`; either make it public or let the script rely on `caffeinate -w`. Nit.
+4. `src/companion/wake_up.py:85` polls at 0.1 s for the whole wait, which can be hours; a longer sleep while `until` is far away costs nothing. Nit.
+5. `tests/test_wake_up.py` had no case for a future `--at`: quiet waiting window, then an audible ring on `due`. Added `test_scheduled_wake_up_waits_silently_then_rings_aloud`; it fails if the waiting window stops being silent or the ring inherits the deadline.
+6. `scripts/wake_up.py:44` a SIGTERM arriving inside the cleanup `finally` raises a second KeyboardInterrupt and can skip the later `_stop`; the caffeinate child still dies through `-w`. Edge case, non-blocking.
