@@ -1,5 +1,11 @@
 # Verification history
 
+## 2026-09-10: snapshot merged and main scheduled entry point verified
+
+Merged Claude's completed integration into the snapshot branch, preserving both sides of two log conflicts, then fast-forwarded local master to `e441bbf`. Enumerated 61 parent/file comparisons: no additions from either parent were lost. Combined suite: **643 passed, 1 skipped in 67.69s**; existing optional tokenizer skip, ruff and plist syntax clean. The main tree matches the verified branch.
+
+Replaced the temporary worktree LaunchAgent with the tracked main-checkout plist byte-for-byte. Its 04:30 schedule and umask 077 remain active. A real `launchctl kickstart -k` exited 0 and captured 348 files; all eight SQLite copies passed integrity checks, and every restored file matched its snapshot by SHA-256 with independent inodes. The temporary restore was removed. Evidence: `data/verifications/2026-09-10-snapshot/launchd-main.json`, `merge-preservation.json`, and `pytest-integrated.log`. Snapshot code was not pushed. The merge-watching heartbeat is no longer needed.
+
 ## 2026-09-10: integrated image deployed and exercised on AWS
 
 Final post-cleanup checks: API and worker each have one running task, zero pending tasks and a completed deployment on the expected digest. Health, backend and the empty initiatives endpoint returned 200. The deployed JavaScript and stylesheet match the reviewed source byte-for-byte; a unique final backend request matched its 200 OK CloudWatch event. The full Python suite passed 618 tests in 20.70s and lint remained clean.

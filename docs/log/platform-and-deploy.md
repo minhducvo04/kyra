@@ -1,5 +1,9 @@
 # Platform, configuration and deployment
 
+## 2026-09-10: snapshot slice complete on local master
+
+After Claude finished the initiatives merge, the reviewed snapshot slice was integrated and local master advanced to `e441bbf`. The installed `com.kyra.snapshot` plist now exactly matches `deploy/com.kyra.snapshot.plist` and runs `scripts/snapshot_data.py` from the main checkout, rather than the temporary worktree. A 04:30 local-time schedule and umask 077 protect copies under `~/kyra-snapshots`; this remains same-disk recovery, not off-machine protection. Kickstart exited 0, eight SQLite integrity checks passed, and all 348 captured files restored identically into a temporary directory, subsequently removed. Evidence: `data/verifications/2026-09-10-snapshot/launchd-main.json`. Combined Python suite: 643 passed, 1 existing optional tokenizer skip; ruff clean. No snapshot push, hook installation, or filesystem-lock rollout.
+
 ## 2026-09-10: integrated image deployed and exercised on AWS
 
 Final post-cleanup checks: API and worker each have one running task, zero pending tasks and a completed deployment on the expected digest. Health, backend and the empty initiatives endpoint returned 200. The deployed JavaScript and stylesheet match the reviewed source byte-for-byte; a unique final backend request matched its 200 OK CloudWatch event. The full Python suite passed 618 tests in 20.70s and lint remained clean.

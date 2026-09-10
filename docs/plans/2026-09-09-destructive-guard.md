@@ -4,9 +4,9 @@ Duc's ask: a hook so that neither agent, nor he, accidentally deletes the databa
 
 Owner split under the roles set today: this plan and the failing tests are Claude Code's; the implementation is Codex's.
 
-**Status:** snapshot slice implemented, independently approved, and live backup/restore
-and 04:30 launchd kickstart verified on 2026-09-10. Merge and switching the installed
-job from the reviewed worktree to the main entry point are pending. Hook and filesystem-lock slices remain
+**Status:** snapshot slice complete on 2026-09-10: independently approved, merged
+locally at `e441bbf`, and verified through the installed main-entry-point 04:30
+launchd job and isolated restore. Hook and filesystem-lock slices remain
 deferred. No hook is installed in Claude Code or Codex. The shared instructions and
 skills setup is complete without hooks. If the hook slice resumes, verify each harness against its
 current official documentation before assuming one event schema or one response format works in
