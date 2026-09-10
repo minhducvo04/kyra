@@ -6,6 +6,8 @@ Entries below were moved verbatim from `CLAUDE.md` on 2026-09-09 (original order
 
 ## Entries
 
+- **Terminal tools use the shared Tool interface (2026-09-10)**: `terminal` and `render_result` replace the initiatives-specific import in the model loop. Sibling calls are still prevented, now with explicit disclosure. Source errors propagate instead of appearing as abstention. A different terminal tool and a failing source are covered by regressions that failed before the change.
+
 - **Suggestion results terminate the tool loop (2026-09-09)**: when a response requests
   `suggest_initiatives`, `AnthropicLLM.respond_with_tools()` invokes it once and renders the result with its
   evidence directly. Other tool calls in that response and later tool rounds cannot execute. An empty or

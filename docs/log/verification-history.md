@@ -1,5 +1,7 @@
 # Verification history
 
+- **Initiatives review follow-through (2026-09-10)**: four new regressions failed first; 546 tests passed in 21.06s, ruff clean after import cleanup. A real hosted tool-selection plus proposal call returned suggestions with exact fictional evidence through the generic terminal interface. Proof: `data/verifications/2026-09-10-overnight-codex/review-real.json`, `review-red.log`, `review-pytest.log`. Independent deployed GET /api/backend returned JSON; access-log proof remains unavailable because the server uses warning log level. No cloud chat/tool claim is made in this entry.
+
 What was verified for real (real API call, real compile, real browser, real device), and when. Moved verbatim from `CLAUDE.md`'s "Verified vs. not" section on 2026-09-09. **Prepend** a dated block after each substantive session: what ran for real, the `pytest` count read from the summary line (not the dots), `ruff` status, and what was deliberately not done.
 
 ## Entries (newest first)

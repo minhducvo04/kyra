@@ -5,6 +5,7 @@ import pytest
 
 from companion.initiatives import SuggestInitiativesTool
 from companion.llm import AnthropicLLM
+from companion.tools import Tool, ToolRegistry
 from tests.fakes import ScriptedLLM
 from tests.test_initiatives import BUNDLE, _reply, _Source
 
@@ -24,8 +25,9 @@ class _Client:
         return next(self.responses)
 
 
-class _Registry:
+class _Registry(ToolRegistry):
     def __init__(self, marker, suggestions):
+        super().__init__([suggestions] if suggestions else [])
         self.marker = marker
         self.suggestions = suggestions
 
@@ -97,6 +99,33 @@ def test_a_failed_source_cannot_fall_through_to_an_action(tmp_path):
     proposals = ScriptedLLM([])
     marker = tmp_path / "must-not-exist"
     suggestions = SuggestInitiativesTool([BrokenSource([])], proposals)
-    reply = AnthropicLLM(client).respond_with_tools("sys", [], "any ideas?", _Registry(marker, suggestions))
+    with pytest.raises(ValueError, match="bad stored data"):
+        AnthropicLLM(client).respond_with_tools("sys", [], "any ideas?", _Registry(marker, suggestions))
     assert not marker.exists() and proposals.calls == []
-    assert "could not" in reply.lower()
+
+
+def test_suppressed_calls_are_disclosed(tmp_path):
+    client = _Client([SimpleNamespace(stop_reason="tool_use", content=[
+        _call("do_work"), _call("suggest_initiatives"),
+    ])])
+    suggestions = SuggestInitiativesTool([_Source([])], ScriptedLLM([]))
+    reply = AnthropicLLM(client).respond_with_tools("sys", [], "ideas and work", _Registry(tmp_path / "action", suggestions))
+    assert "not executed" in reply.lower() and "do_work" in reply
+
+
+def test_terminal_policy_is_generic_and_preserves_rendered_result():
+    class FinalTool(Tool):
+        name = "show_report"
+        description = "A final report"
+        input_schema = {}
+        terminal = True
+
+        def run(self):
+            return {"report": "exact evidence"}
+
+        def render_result(self, result):
+            return result["report"]
+
+    client = _Client([SimpleNamespace(stop_reason="tool_use", content=[_call("show_report")])])
+    assert AnthropicLLM(client).respond_with_tools("sys", [], "report", ToolRegistry([FinalTool()])) == "exact evidence"
+    assert client.calls == 1

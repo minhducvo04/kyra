@@ -147,8 +147,12 @@ def propose(evidence: list[Evidence], llm: LLMBackend) -> list[Initiative]:
         rows = json.loads(fenced.group(1) if fenced else raw)
         if not isinstance(rows, list):
             raise ValueError("expected an array")
-        proposals = []
-        for row in rows:
+    except (ValueError, TypeError):
+        log.warning("Could not parse initiative proposals")
+        return []
+    proposals = []
+    for index, row in enumerate(rows, 1):
+        try:
             if not isinstance(row, dict) or set(row) != _FIELDS:
                 raise ValueError("unexpected proposal fields")
             if any(not isinstance(row[k], str) or not row[k].strip() or len(row[k]) > 2000
@@ -160,11 +164,10 @@ def propose(evidence: list[Evidence], llm: LLMBackend) -> list[Initiative]:
             if not isinstance(ids, list) or any(not isinstance(i, str) or not i for i in ids):
                 raise ValueError("invalid evidence ids")
             proposals.append(Initiative(**{**row, "evidence_ids": list(dict.fromkeys(ids))}))
-        return proposals
-    except (ValueError, TypeError):
-        # Never log the model response: it can contain private source material.
-        log.warning("Could not parse initiative proposals")
-        return []
+        except ValueError as exc:
+            # Reasons are fixed validation messages, never source or model text.
+            log.warning("Skipped initiative row %d: %s", index, exc)
+    return proposals
 
 
 def guard(initiatives: list[Initiative], evidence: list[Evidence]) -> list[Initiative]:
@@ -189,6 +192,11 @@ def guard(initiatives: list[Initiative], evidence: list[Evidence]) -> list[Initi
 
 
 class SuggestInitiativesTool(Tool):
+    terminal = True
+
+    def render_result(self, result: dict) -> str:
+        return render_suggestions(result)
+
     name = "suggest_initiatives"
     description = (
         "Suggest what to work on next using due reminders, project notes, repeated tool use, and recent commits. "

@@ -6,7 +6,6 @@ docs/model-benchmark.md for why you'd ever pick local, and the TurnRouter
 design in progress for how that decision gets made automatically).
 """
 import json
-import logging
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -190,18 +189,17 @@ class AnthropicLLM(LLMBackend):
             if response.stop_reason != "tool_use":
                 return extract_text(response)
 
-            suggestion = next((b for b in response.content
-                               if b.type == "tool_use" and b.name == "suggest_initiatives"), None)
-            if suggestion is not None:
-                # Suggestions are terminal: neither sibling calls nor a model reading
-                # their evidence may turn a proposed first step into an executed action.
-                from companion.initiatives import render_suggestions
-
-                try:
-                    return render_suggestions(registry.run(suggestion.name, **suggestion.input))
-                except Exception as exc:
-                    logging.getLogger(__name__).warning("Initiative proposal failed: %s", type(exc).__name__)
-                    return "I could not prepare suggestions. The source or model call failed; please try again."
+            calls = [b for b in response.content if b.type == "tool_use"]
+            terminal = next(((b, registry.terminal_tool(b.name)) for b in calls
+                             if registry.terminal_tool(b.name) is not None), None)
+            if terminal is not None:
+                block, tool = terminal
+                # A terminal result ends dispatch before any sibling can act on it.
+                reply = tool.render_result(registry.run(block.name, **block.input))
+                skipped = [b.name for b in calls if b is not block]
+                if skipped:
+                    reply += "\n\nOther requested tool calls were not executed: " + ", ".join(skipped) + ". Please request them separately."
+                return reply
 
             messages.append({"role": "assistant", "content": response.content})
             tool_results = []

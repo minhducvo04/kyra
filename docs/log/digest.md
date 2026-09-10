@@ -6,6 +6,8 @@ Entries below were moved verbatim from `CLAUDE.md` on 2026-09-09 (original order
 
 ## Entries
 
+- **Per-row initiative validation (2026-09-10)**: malformed rows are skipped with fixed validation reasons and row numbers, keeping valid suggestions without logging source text. Complete JSON fences remain supported; mixed prose and truncation remain rejected. Conflicting evidence IDs still fail loudly rather than silently choose a potentially wrong source.
+
 - **On-demand initiatives, section 1 (2026-09-09)**: `suggest_initiatives` collects live due/overdue reminders,
   project notes, repeated tool reasons, and recent git subjects, then makes one proposal call. It returns at
   most three suggestions with exact cited evidence or abstains; empty evidence makes no proposal call.

@@ -133,3 +133,17 @@ def test_propose_accepts_a_complete_json_fence_from_the_real_model():
 @pytest.mark.parametrize("reply", ['```json\n[]', 'prefix\n```json\n[]\n```', '```json\n[]\n```\ntrailing'])
 def test_propose_rejects_incomplete_or_mixed_fences(reply):
     assert propose(BUNDLE, ScriptedLLM([reply])) == []
+
+
+def test_proposals_skip_bad_rows_without_discarding_good_rows(caplog):
+    import json
+
+    from companion.initiatives import Evidence, propose
+    from tests.fakes import ScriptedLLM
+
+    good = {"title": "Review", "why": "The note", "first_step": "Read the note", "minutes": 5, "evidence_ids": ["a"]}
+    bad = dict(good, minutes=True, title="private malformed text")
+    items = propose([Evidence("a", "notes", "A note", "2026-09-10")], ScriptedLLM([json.dumps([good, bad, dict(good, priority=1)])]))
+    assert [i.title for i in items] == ["Review"]
+    assert "row 2" in caplog.text and "row 3" in caplog.text
+    assert "private malformed text" not in caplog.text
