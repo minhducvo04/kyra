@@ -58,6 +58,24 @@ No NAT gateway on purpose: tasks get public IPs and only the ALB may reach their
    `aws ecs execute-command --cluster kyra --task <id> --container api --interactive --command /bin/bash`.
 7. **Pause or destroy**: set the desired counts to 0 and `terraform apply`, or `./teardown.sh`.
 
+## Integrating Workspace and initiatives
+
+The combined migration head is `d210a93e7b61`. It joins Workspace's
+`b721d430a9ef` and initiatives' `c910a21d8f04`, preserving both histories.
+For an existing database at either head, run `alembic current`, then
+`alembic upgrade head`, then `alembic current` using the **new image** before
+rolling the services onto it. Check that the migration task exits with code 0
+and reports `d210a93e7b61`. The existing CI deploy job does not run migrations;
+keep this operator step explicit before enabling automatic deployment.
+
+Do not use `stamp head` to skip this upgrade: stamping changes the version
+record without creating the missing tables. The additive migrations preserve
+tables already created by application startup. An unversioned database that
+already contains tables needs schema inspection and a matching baseline stamp
+before upgrade; the empty-database path is `upgrade head` before first startup.
+Back up the target database before any production migration. Local integration
+verification uses scratch databases and does not migrate a running deployment.
+
 ## What is deliberately not here (and why)
 
 - **SQS**: the `jobs` table on RDS already gives durable state and streamable progress, and the SSE endpoint

@@ -410,6 +410,7 @@
 
     <div class="jobs-tabs" role="tablist">
       <button class="jobs-tab is-active" data-tools-tab="reminders" type="button">REMINDERS</button>
+      <button class="jobs-tab" data-tools-tab="initiatives" type="button">SUGGESTIONS</button>
       <button class="jobs-tab" data-tools-tab="news" type="button">NEWS</button>
       <button class="jobs-tab" data-tools-tab="science" type="button">SCIENCE</button>
       <button class="jobs-tab" data-tools-tab="learning" type="button">LEARNING</button>
@@ -427,6 +428,12 @@
         <span>show completed</span>
       </label>
       <div class="jobs-tracker-list" id="reminder-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tools-tab-panel="initiatives">
+      <p class="jobs-help">Choose a first step to add as an undated reminder. Nothing runs automatically.</p>
+      <button class="jobs-btn" id="initiative-refresh" type="button">Refresh suggestions</button>
+      <div class="jobs-tracker-list" id="initiative-list"></div>
     </section>
 
     <section class="jobs-tab-panel" data-tools-tab-panel="news">

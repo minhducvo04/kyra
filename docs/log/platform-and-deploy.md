@@ -1,5 +1,32 @@
 # Platform, configuration and deployment
 
+## 2026-09-10: local integration of Workspace, initiatives and cloud fixes
+
+The integration preserves the cumulative cloud branch `fd04390`, initiatives branch `6bd1aea`, and Workspace/Learn checkout `179b221`. Removed lines were enumerated against all three inputs; the shared Swift error and learning types remain in their Workspace/Learn modules. Cloud runtime changes and initiative service logic remain identical to their reviewed inputs.
+
+Migration `d210a93e7b61` joins the two existing heads without rewriting either. Eight SQLite upgrade/startup cases first failed on multiple heads, then passed while preserving records and receipt rows and matching metadata. Six real PostgreSQL upgrade/startup paths converged on the combined head; each then exercised eight concurrent accepts producing one reminder plus checkpoint and learning retries. Existing checkpoint migration tests now use a programmatic Alembic configuration so they cannot replace later tests' log capture; the three affected log assertions remain intact.
+
+The actual linux/amd64 Dockerfile built from cached CPU dependencies, upgraded an empty scratch database before startup, enforced authentication, and passed the combined native transport run. The deploy runbook now names the new head and the explicit pre-rollout upgrade. This local integration did not migrate real databases, push images or Git, change CI variables, or deploy.
+
+## 2026-09-10: independent review and cloud request proof complete
+
+The client implementation at a79117f received independent review approval, with a detached rerun of all 565 tests and clean ruff. After the deployment maintainer updated the single-IP allowlist for the current network, an independent GET /api/backend at 07:20 UTC returned HTTP 200 and backend auto. Its unique verification marker matched a 200 OK access event in /kyra/api from the new task. The earlier connection blocker is resolved. Exact event metadata and response are retained privately in `data/verifications/2026-09-10-overnight-codex/cloud-access-proof.json`.
+
+The overnight build/review/proof loop is complete. Initiatives remain unmerged and undeployed; human integration still needs to reconcile the Alembic heads before migration. No infrastructure was changed by this verification, and no chat or database fixtures were created. HTTPS and CI variable choices remain owner follow-ups.
+
+
+## 2026-09-10: CPU image deployed; external probe blocked by allowlist
+
+The logging-enabled CPU image from 727711a completed deployment for API and worker, with one running task each and no pending tasks. The API task runs the expected new image digest and its load-balancer target is healthy. The final GET /api/backend access-log check remains unproven: the verification client now uses an address outside the configured single-IP allowlist, and both connection probes timed out. No access rule or infrastructure was changed by this check. Private evidence is in `data/verifications/2026-09-10-overnight-codex/cloud-access-proof.json`. Resume the probe after the client network or authorized allowlist changes; do not treat the timeout as an unhealthy application.
+
+
+## 2026-09-10: proposal transactions and independent cloud checks
+
+The initiatives branch adds proposal, daily-snapshot and reminder-receipt tables. Migration c910a21d8f04 follows master head 95948f84f255 and tolerates tables created by startup. It was verified on SQLite both before and after create_all and on local PostgreSQL after create_all. Do not apply it directly to the separate workspace migration head; human branch integration needs an Alembic merge revision first. No deployed schema was modified for initiatives.
+
+Independent sandbox verification reached GET /api/backend and three POST /api/chat/stream turns: plain text, add_reminder, list_reminders. ECS Exec confirmed the fixture in the relational database. Cleanup removed one new reminder and six new memory records by snapshot difference, restored three routing log lines, and verified notes unchanged. Existing records were preserved. Request-level CloudWatch proof remains unavailable: the running server suppresses access logs with uvicorn log_level=warning. The initiatives tool is absent from the deployed image and was verified locally instead.
+
+
 `settings.py`, `errors.py`, `db.py`/`schema.py`/Alembic, `jobs.py`, `webauth.py`, the container, `deploy/aws`, `render.yaml`, startup cost, the repo move.
 
 Entries below were moved verbatim from `CLAUDE.md` on 2026-09-09 (original order kept, newest work is usually nearer the top of each section). Add new entries at the top of this file, dated, with the *why*.
