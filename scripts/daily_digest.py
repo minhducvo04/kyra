@@ -50,6 +50,7 @@ from companion.digest import (
     to_json,
     write_archive,
 )
+from companion.initiative_digest import populate_initiatives
 from companion.job_boards import SEEN_PATH
 from companion.logging_setup import configure_logging
 from companion.paths import DATA_DIR
@@ -160,10 +161,13 @@ def main() -> None:
             scratch = Path(tmp) / "seen.json"
             if SEEN_PATH.exists():
                 shutil.copy2(SEEN_PATH, scratch)
-            print(render_markdown(build_digest(seen_path=scratch)))
+            data = build_digest(seen_path=scratch)
+            populate_initiatives(data, write=False)
+            print(render_markdown(data))
         return
 
     data = build_digest()
+    populate_initiatives(data)
 
     DIGEST_DIR.mkdir(parents=True, exist_ok=True)
     stem = datetime.now().strftime("%Y-%m-%d")

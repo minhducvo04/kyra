@@ -9,9 +9,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import Engine, insert, select, update
+from sqlalchemy.exc import IntegrityError
 
 from companion.db import engine_for_store
 from companion.paths import DATA_DIR
+from companion.schema import initiative_reminder_receipts as RECEIPTS
 from companion.schema import reminders as T
 from companion.tools import Tool
 
@@ -36,6 +38,23 @@ class RemindersStore:
         with self._engine.begin() as conn:
             res = conn.execute(insert(T).values(text=text, due_at=due_at, created_at=now, done=0))
         return Reminder(id=res.inserted_primary_key[0], text=text, due_at=due_at, created_at=now, done=False)
+
+    def add_once(self, initiative_id: str, text: str) -> Reminder:
+        """The receipt uniqueness constraint rolls back a duplicate reminder insert."""
+        now = datetime.now(UTC).isoformat()
+        try:
+            with self._engine.begin() as conn:
+                previous = conn.execute(select(RECEIPTS.c.reminder_id).where(RECEIPTS.c.initiative_id == initiative_id)).scalar_one_or_none()
+                if previous is None:
+                    result = conn.execute(insert(T).values(text=text, created_at=now, done=0))
+                    previous = result.inserted_primary_key[0]
+                    conn.execute(insert(RECEIPTS).values(initiative_id=initiative_id, reminder_id=previous))
+        except IntegrityError:
+            with self._engine.connect() as conn:
+                previous = conn.execute(select(RECEIPTS.c.reminder_id).where(RECEIPTS.c.initiative_id == initiative_id)).scalar_one()
+        with self._engine.connect() as conn:
+            row = conn.execute(select(T).where(T.c.id == previous)).one()
+        return Reminder(id=row.id, text=row.text, due_at=row.due_at, created_at=row.created_at, done=bool(row.done))
 
     def list(self, include_done: bool = False) -> list[Reminder]:
         q = select(T)

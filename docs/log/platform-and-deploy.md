@@ -1,10 +1,54 @@
 # Platform, configuration and deployment
 
+## 2026-09-10: integrated image deployed and exercised on AWS
+
+Final post-cleanup checks: API and worker each have one running task, zero pending tasks and a completed deployment on the expected digest. Health, backend and the empty initiatives endpoint returned 200. The deployed JavaScript and stylesheet match the reviewed source byte-for-byte; a unique final backend request matched its 200 OK CloudWatch event. The full Python suite passed 618 tests in 20.70s and lint remained clean.
+
+Deployed runtime source `7da40d2` from the previously tested linux/amd64 image, using the existing API and worker capacity. ECR commit tag and running tasks use digest `sha256:467700a373d8e075d6f63e9d4addbe198f5471a3975d30991ea102d29170fe6d`. The prior image and task definitions were recorded privately for rollback.
+
+Before rollout, a one-shot task made an exclusive compressed row backup on the existing EFS storage, then upgraded the deployed database from `b721d430a9ef` to `d210a93e7b61`. It exited 0 and verified that every pre-existing row was unchanged. Existing RDS point-in-time recovery was available; no new RDS snapshot or permanent application capacity was added. The migration task definition was deregistered after use.
+
+Real requests through the deployed API proved a hosted tool turn saving a fictional reminder to RDS and a sourced suggestion containing its exact evidence. The daily generator made one hosted call, reused its cache on the same and next unchanged day, and left files unchanged for read-only preview. Live endpoints preserved the same reminder receipt on acceptance retry, retained a dismissal reason, rejected a stale checkpoint with 409, and returned the same learning item on retry. An empty fixture source plus absent container git evidence abstained without another provider call.
+
+Verification removed its database rows, four memory records and two routing log entries, checked original rows and memory IDs, and confirmed notes unchanged. An API-only restart on the same image clears the verification conversation from process memory. The temporary verification directory was removed; the private pre-migration backup is deliberately retained for recovery. Proof lives under gitignored `data/verifications/2026-09-10-aws-integration/`.
+
+The existing IP allowlist and optional-token configuration were preserved. External health, backend and initiatives requests returned 200; remote checkpoint access correctly returned 503 until an API token is configured, while its loopback path passed verification. HTTPS, API-token setup, CI variables and a cloud daily scheduler were not added. The daily pipeline was exercised explicitly, not claimed to be scheduled in the cloud. No Git push occurred.
+
+## 2026-09-10: local integration of Workspace, initiatives and cloud fixes
+
+The integration preserves the cumulative cloud branch `fd04390`, initiatives branch `6bd1aea`, and Workspace/Learn checkout `179b221`. Removed lines were enumerated against all three inputs; the shared Swift error and learning types remain in their Workspace/Learn modules. Cloud runtime changes and initiative service logic remain identical to their reviewed inputs.
+
+Migration `d210a93e7b61` joins the two existing heads without rewriting either. Eight SQLite upgrade/startup cases first failed on multiple heads, then passed while preserving records and receipt rows and matching metadata. Six real PostgreSQL upgrade/startup paths converged on the combined head; each then exercised eight concurrent accepts producing one reminder plus checkpoint and learning retries. Existing checkpoint migration tests now use a programmatic Alembic configuration so they cannot replace later tests' log capture; the three affected log assertions remain intact.
+
+The actual linux/amd64 Dockerfile built from cached CPU dependencies, upgraded an empty scratch database before startup, enforced authentication, and passed the combined native transport run. The deploy runbook now names the new head and the explicit pre-rollout upgrade. This local integration did not migrate real databases, push images or Git, change CI variables, or deploy.
+
+## 2026-09-10: independent review and cloud request proof complete
+
+The client implementation at a79117f received independent review approval, with a detached rerun of all 565 tests and clean ruff. After the deployment maintainer updated the single-IP allowlist for the current network, an independent GET /api/backend at 07:20 UTC returned HTTP 200 and backend auto. Its unique verification marker matched a 200 OK access event in /kyra/api from the new task. The earlier connection blocker is resolved. Exact event metadata and response are retained privately in `data/verifications/2026-09-10-overnight-codex/cloud-access-proof.json`.
+
+The overnight build/review/proof loop is complete. Initiatives remain unmerged and undeployed; human integration still needs to reconcile the Alembic heads before migration. No infrastructure was changed by this verification, and no chat or database fixtures were created. HTTPS and CI variable choices remain owner follow-ups.
+
+
+## 2026-09-10: CPU image deployed; external probe blocked by allowlist
+
+The logging-enabled CPU image from 727711a completed deployment for API and worker, with one running task each and no pending tasks. The API task runs the expected new image digest and its load-balancer target is healthy. The final GET /api/backend access-log check remains unproven: the verification client now uses an address outside the configured single-IP allowlist, and both connection probes timed out. No access rule or infrastructure was changed by this check. Private evidence is in `data/verifications/2026-09-10-overnight-codex/cloud-access-proof.json`. Resume the probe after the client network or authorized allowlist changes; do not treat the timeout as an unhealthy application.
+
+
+## 2026-09-10: proposal transactions and independent cloud checks
+
+The initiatives branch adds proposal, daily-snapshot and reminder-receipt tables. Migration c910a21d8f04 follows master head 95948f84f255 and tolerates tables created by startup. It was verified on SQLite both before and after create_all and on local PostgreSQL after create_all. Do not apply it directly to the separate workspace migration head; human branch integration needs an Alembic merge revision first. No deployed schema was modified for initiatives.
+
+Independent sandbox verification reached GET /api/backend and three POST /api/chat/stream turns: plain text, add_reminder, list_reminders. ECS Exec confirmed the fixture in the relational database. Cleanup removed one new reminder and six new memory records by snapshot difference, restored three routing log lines, and verified notes unchanged. Existing records were preserved. Request-level CloudWatch proof remains unavailable: the running server suppresses access logs with uvicorn log_level=warning. The initiatives tool is absent from the deployed image and was verified locally instead.
+
+
 `settings.py`, `errors.py`, `db.py`/`schema.py`/Alembic, `jobs.py`, `webauth.py`, the container, `deploy/aws`, `render.yaml`, startup cost, the repo move.
 
 Entries below were moved verbatim from `CLAUDE.md` on 2026-09-09 (original order kept, newest work is usually nearer the top of each section). Add new entries at the top of this file, dated, with the *why*.
 
 ## Entries
+
+- **The image was 3.5 GB because of a wheel nobody asked for (2026-09-10)** - `sentence-transformers` depends on torch, and PyPI's torch wheel carries the CUDA libraries, so the pip layer was 6.7 GB on a Fargate task that has no GPU. Installing torch from the CPU wheel index first (Dockerfile) brings the image to 753 MB. Pip timeout and retries are set as image environment because two builds died on flaky downloads. Also: `scripts/web_ui.py` ran uvicorn at `warning`, so the container had no access log; it now follows `KYRA_LOG_LEVEL`, which the task definition sets to INFO.
+- **First real deploy, and the router had no fallback for a machine without a local model (2026-09-10)** - the Terraform in `deploy/aws/` was applied for the first time (43 resources, us-west-2, budget 40 USD/month). The image needs Rosetta rather than QEMU under Colima on Apple silicon, because LaTeX's post-install pipes break under emulation. The real finding: `router.py` treated a classifier exception as "default to Claude, text path", which on a laptop is a rare hiccup and in the container, where `mlx_lm` does not exist, is every turn: the deployed Kyra could not call a tool. Now a classifier error routes to the Claude tool path and the model decides per turn; unparseable classifier output still means text. Verified by a reminder turn that reached RDS after the redeploy. Follow-ups: CPU-only torch (the pip layer is 6.7 GB because sentence-transformers pulls CUDA), HTTPS, and the CI deploy variables.
 
 - **Checkpoint revisions and learning-save receipts (2026-09-09)**: `CheckpointStore` / `DbCheckpointStore` adds private task context under `DATA_DIR`. The `(UUID, revision)` primary key arbitrates concurrent writers; matching historical retries return their original receipt while a different payload conflicts with 409. Learning's optional `request_id` inserts the item and receipt in one transaction, so a response lost after commit can be retried without another review item. References remain text and never fetch files or URLs. Checkpoint routes fail closed for remote callers when no API token is configured; older routes retain their existing auth policy. Migration `b721d430a9ef` is additive. Independent review caught startup `create_all()` racing the operator's migration order: table-existence guards now preserve records whether migration precedes or follows startup, including partially created new tables. Tests verify schema equality and preservation. Native CI now runs Swift state/simulation tests and a generic visionOS Simulator build.
 

@@ -83,14 +83,14 @@ def test_route_classifier_decides_and_complexity_biases():
     assert d.backend == "claude" and d.decompose_biased
 
 
-def test_route_classifier_failure_defaults_safely():
+def test_route_classifier_failure_hands_the_turn_to_claude_with_tools():
     set_mode("auto")
     d = _router(RuntimeError("model missing")).route("hi")
-    assert d.path == "text" and d.backend == "claude" and "RuntimeError" in d.error
+    assert d.path == "tool" and d.backend == "claude" and "RuntimeError" in d.error
     d = _router("garbage").route("hi")
     assert d.backend == "claude" and "unparseable" in d.reason
     d = _router('{"path":"weird","backend":"weird"}').route("hi")
-    assert (d.path, d.backend) == ("text", "claude")
+    assert (d.path, d.backend) == ("text", "claude")  # a parsed-but-odd answer still means text
 
 
 def test_decision_log_fields_are_stable():

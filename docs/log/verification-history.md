@@ -1,5 +1,64 @@
 # Verification history
 
+## 2026-09-10: integrated image deployed and exercised on AWS
+
+Final post-cleanup checks: API and worker each have one running task, zero pending tasks and a completed deployment on the expected digest. Health, backend and the empty initiatives endpoint returned 200. The deployed JavaScript and stylesheet match the reviewed source byte-for-byte; a unique final backend request matched its 200 OK CloudWatch event. The full Python suite passed 618 tests in 20.70s and lint remained clean.
+
+Deployed runtime source `7da40d2` from the previously tested linux/amd64 image, using the existing API and worker capacity. ECR commit tag and running tasks use digest `sha256:467700a373d8e075d6f63e9d4addbe198f5471a3975d30991ea102d29170fe6d`. The prior image and task definitions were recorded privately for rollback.
+
+Before rollout, a one-shot task made an exclusive compressed row backup on the existing EFS storage, then upgraded the deployed database from `b721d430a9ef` to `d210a93e7b61`. It exited 0 and verified that every pre-existing row was unchanged. Existing RDS point-in-time recovery was available; no new RDS snapshot or permanent application capacity was added. The migration task definition was deregistered after use.
+
+Real requests through the deployed API proved a hosted tool turn saving a fictional reminder to RDS and a sourced suggestion containing its exact evidence. The daily generator made one hosted call, reused its cache on the same and next unchanged day, and left files unchanged for read-only preview. Live endpoints preserved the same reminder receipt on acceptance retry, retained a dismissal reason, rejected a stale checkpoint with 409, and returned the same learning item on retry. An empty fixture source plus absent container git evidence abstained without another provider call.
+
+Verification removed its database rows, four memory records and two routing log entries, checked original rows and memory IDs, and confirmed notes unchanged. An API-only restart on the same image clears the verification conversation from process memory. The temporary verification directory was removed; the private pre-migration backup is deliberately retained for recovery. Proof lives under gitignored `data/verifications/2026-09-10-aws-integration/`.
+
+The existing IP allowlist and optional-token configuration were preserved. External health, backend and initiatives requests returned 200; remote checkpoint access correctly returned 503 until an API token is configured, while its loopback path passed verification. HTTPS, API-token setup, CI variables and a cloud daily scheduler were not added. The daily pipeline was exercised explicitly, not claimed to be scheduled in the cloud. No Git push occurred.
+
+## 2026-09-10: combined local integration verified
+
+**618 Python tests passed in 20.13s**, ruff clean; **13 Swift tests passed**, and the generic visionOS Simulator build succeeded. The actual combined Swift client ran against a separate local uvicorn process using fictional scratch data: initiative evidence decoding, accept/retry with one reminder receipt, dismiss reason, reminders, checkpoint save/replay/list/conflict, and learning save/retry/due all passed. Unauthenticated API access returned 401. The same native transport passed against the freshly built linux/amd64 image after its real `alembic upgrade head` reached `d210a93e7b61`; `/healthz` returned 200 and the API gate returned 401 without a token.
+
+Eight SQLite migration cases reproduced the multiple-head failure before the merge revision and passed afterwards. Six real PostgreSQL migration/startup paths passed; each handled eight concurrent accepts with one reminder plus checkpoint and learning receipt retries. Full-suite integration also reproduced three logging assertion failures caused by older migration tests reconfiguring logging; fixing the test configuration kept every assertion and restored the green suite.
+
+Proof: gitignored `data/verifications/2026-09-10-integration/`, including `migration-red.log`, `pytest.log`, `pytest-green.log`, `swift-tests.log`, `vision-build.log`, `native-live.log`, `postgres-live.json`, `docker-build.log`, `container-live.json`, `container-http.log`, and per-parent removal inventories. Native transport used command-line preferences without persistent writes. Scratch API state and temporary containers were removed. This is local integration verification; no hosted model call, physical-device run, remote CI run, real-data migration, push or deployment occurred.
+
+## 2026-09-10: independent review and cloud request proof complete
+
+The client implementation at a79117f received independent review approval, with a detached rerun of all 565 tests and clean ruff. After the deployment maintainer updated the single-IP allowlist for the current network, an independent GET /api/backend at 07:20 UTC returned HTTP 200 and backend auto. Its unique verification marker matched a 200 OK access event in /kyra/api from the new task. The earlier connection blocker is resolved. Exact event metadata and response are retained privately in `data/verifications/2026-09-10-overnight-codex/cloud-access-proof.json`.
+
+The overnight build/review/proof loop is complete. Initiatives remain unmerged and undeployed; human integration still needs to reconcile the Alembic heads before migration. No infrastructure was changed by this verification, and no chat or database fixtures were created. HTTPS and CI variable choices remain owner follow-ups.
+
+
+## 2026-09-10: CPU image deployed; external probe blocked by allowlist
+
+The logging-enabled CPU image from 727711a completed deployment for API and worker, with one running task each and no pending tasks. The API task runs the expected new image digest and its load-balancer target is healthy. The final GET /api/backend access-log check remains unproven: the verification client now uses an address outside the configured single-IP allowlist, and both connection probes timed out. No access rule or infrastructure was changed by this check. Private evidence is in `data/verifications/2026-09-10-overnight-codex/cloud-access-proof.json`. Resume the probe after the client network or authorized allowlist changes; do not treat the timeout as an unhealthy application.
+
+
+## 2026-09-10: Today and HUD, with compatibility checks
+
+The client branch passed 565 pytest tests in 18.97 s and ruff. Real Swift transport requests decoded sources, recovered the same acceptance receipt on retry, and persisted dismissal feedback. The visionOS simulator build succeeded and displayed three fixture proposals. An older-server simulation kept its existing reminder visible while explaining the missing suggestions feature. A separate preview bundle preserved the installed application and was removed afterward.
+
+A real browser verified exact escaped evidence, retained rows after a network failure, successful retry and dismissal, and a phone-width layout. Screenshots cover Today, the older-server state, the HUD at two widths and the generated digest. The digest footer now accurately allows for model use. The hosted proposal check also exposed an unsupported progress assumption in a rationale: cited-ID membership is verified, factual entailment is not. Read the evidence before accepting.
+
+Cloud fixture cleanup completed and the API rolling restart finished on the same image, clearing transient conversation history. API and worker each have one running task, none pending. Claude owns the subsequent CPU-image/access-log update. Initiatives remain local branches pending human integration; no model feature was deployed by this client work.
+
+Private proof directory: `data/verifications/2026-09-10-overnight-codex/`. Scratch servers, stores, the preview application and the temporary PostgreSQL container were removed.
+
+
+## 2026-09-10: daily initiatives and deployed sandbox
+
+- Section-one review branch: 546 tests passed; real hosted selection and proposal preserved the exact source quote.
+- Daily branch: 565 tests passed in 19.24 s; ruff clean. The full suite used the existing Hugging Face cache with offline mode enabled, without changing the tokenizer test.
+- Real hosted daily generation produced sourced proposals. Same-day and unchanged next-day runs reused that one call. A separate real tool proposal succeeded; removing the fixture in a directory without git evidence produced abstention without a model call.
+- A real loopback HTTP server returned the saved evidence, the same receipt for repeated accepts, a conflict for dismissing an accepted item, and not-found for a missing ID. Scratch state was removed.
+- Local PostgreSQL 16: eight simultaneous accepts created one reminder; startup-created tables upgraded to c910a21d8f04; an older daily run could not restore proposals after an empty day. Temporary container removed.
+- Deployed API: backend JSON, plain chat, add/list reminder all passed. ECS Exec verified the fixture row. One reminder, six memory records and three router log entries were cleaned; original rows and notes preserved. Access-log evidence in CloudWatch is still missing because the deployed log level suppresses it. Initiatives are not deployed.
+
+Evidence retained privately at `data/verifications/2026-09-10-overnight-codex/`; no private documents or credentials were copied into tracked files.
+
+
+- **Initiatives review follow-through (2026-09-10)**: four new regressions failed first; 546 tests passed in 21.06s, ruff clean after import cleanup. A real hosted tool-selection plus proposal call returned suggestions with exact fictional evidence through the generic terminal interface. Proof: `data/verifications/2026-09-10-overnight-codex/review-real.json`, `review-red.log`, `review-pytest.log`. Independent deployed GET /api/backend returned JSON; access-log proof remains unavailable because the server uses warning log level. No cloud chat/tool claim is made in this entry.
+
 What was verified for real (real API call, real compile, real browser, real device), and when. Moved verbatim from `CLAUDE.md`'s "Verified vs. not" section on 2026-09-09. **Prepend** a dated block after each substantive session: what ran for real, the `pytest` count read from the summary line (not the dots), `ruff` status, and what was deliberately not done.
 
 ## Entries (newest first)
@@ -11,6 +70,25 @@ What was verified for real (real API call, real compile, real browser, real devi
 **2026-09-10 (wake-up controls, independent review by Claude Code)**: **548 passed in 43.02s** (547 before the added test) on a warm tokenizer cache, ruff clean, PII guard passing. Reviewed `94f77f1`: 6 findings, 0 blocking (list in `docs/plans/2026-09-10-wake-up-controls.md`). Real run, silent preview scheduled 12 s ahead: the waiting `osascript` window closed itself at the deadline and a ringing one replaced it in the same 0.25 s poll, no `say` child in preview mode, and SIGTERM afterwards exited 0 in **0.097 s** with no surviving children. Proof: `data/verifications/2026-09-10-wake-up-controls/independent-deadline.json` and `.log`. Pointer clicks on Snooze and Wake now were **not** obtained: System Events refused with `not allowed assistive access`, an Accessibility permission only Duc can grant, so those two buttons remain his acceptance check (one preview was stopped by a human click at 11:06). Added one regression for the scheduled wait-then-ring path (10 wake-up tests). No model call, no database, no push.
 
 **2026-09-10 (local wake-up controls)**: **546 passed, 1 skipped in 65.29s**, ruff clean; the skip is the existing optional tokenizer check when its cache is unavailable offline. Nine new wake-up regressions failed at import before implementation and passed afterward, covering Stop, snooze cancellation, overdue resume, dialog failure, safe message arguments and owned-child cleanup. A real silent native dialog returned Stop and exited; a real audible run was cancelled with SIGTERM and exited 0 in **0.019 seconds**, leaving none of its `say`, `osascript` or `caffeinate` children. `--help` ran and a timezone-free `--at` was rejected. The old private alarm script was backed up privately and replaced with a wrapper; reopening it without arguments now shows a silent preview. No wake-up remains running, and the daily digest LaunchAgent was not changed. Proof: `data/verifications/2026-09-10-wake-up-controls/pytest-full.log`, `native-preview.log`, `native-cleanup.json`, `native-speech.log`. The desktop UI inspection tool stalled and returned `cgWindowNotFound`; no screenshot or real Snooze-button click was obtained. Independent button acceptance is still a handoff check. No production database, model API, push or deployment was involved.
+**2026-09-09 (on-demand initiatives)**: section 1 implemented on `session/2026-09-09-initiatives-codex`
+from master. Real `scripts/chat.py` runs with the configured local router adapter, BGE memory, and hosted
+backend used fictional scratch reminders and project notes. Seeded: two cited suggestions, one outer
+selection call and one proposal call. Empty: one selection call, no proposal call, explicit abstention.
+Git used an explicit empty fixture, with its live repository reader separately exercised in tests. Source
+reminders and notes stayed unchanged; scratch memory and router logs were removed with the temporary data
+directory. The first model response exposed fenced JSON, reproduced in a failing test before the parser fix.
+The harness boundary also went red before green: suggestions no longer lead to sibling or follow-up actions.
+**543 tests passed in 17.12 seconds**, no skips; **ruff clean**. The pre-existing tokenizer test initially
+failed on an empty cache; the final run used `HF_HOME` pointing at the existing local model cache and
+`HF_HUB_OFFLINE=1`, without changing or skipping that test. Proof is under
+`data/verifications/2026-09-09-initiatives-codex/`: `chat-seeded.json`, `chat-empty.json`, their CLI logs,
+`boundary-red.log`, `fence-red.log`, `missing-git-red.log`, `pytest.log`, and `ruff.log`.
+No native UI changes, physical-device check, scheduled generation, persistence, deployment, merge, or push.
+Independent review is pending.
+
+**2026-09-10 (CPU-only torch image and access logs)**: image rebuilt with torch from the CPU wheel index: **753 MB in ECR against 3.57 GB** for the previous build (the CUDA suite came in through sentence-transformers). Two attempts died on read timeouts from the PyTorch mirror and then PyPI over a motel Wi-Fi; pip timeout and retries now live in the image environment, third build clean. Redeployed and verified by digest on the running task; GET /api/backend 200 and a real chat turn 200 through the new image, memory (BGE on CPU torch) working since the reply recalled a fixture reminder from earlier in the night. uvicorn's access log now appears in CloudWatch `/kyra/api` (ALB health checks and the test requests visible). The laptop's public IP changed mid-session and `allowed_cidrs` had to be re-applied, which is the gate working as designed. Full suite on the branch: **493 passed** (master's count plus the router test), ruff clean.
+
+**2026-09-10 (Kyra on AWS, first real deployment)**: `deploy/aws/` applied for real for the first time under the owner's authorisation and a 40 dollar monthly budget: 43 resources in us-west-2, image built on the laptop with Colima (Rosetta; the QEMU build broke on LaTeX's post-install) and pushed to ECR, `alembic stamp head` as a one-shot task (upgrade failed because the api task's create_all had already made the tables, as the README predicts). From the admitted IP: GET /api/backend 200 in 0.17 s; a plain chat turn returned a real Claude reply. **The first tool turn found a real defect**: with no `mlx_lm` in the container the classifier raised and the router fell back to the text path, so "remind me" said it saved and saved nothing. After the fix in this branch (classifier error means the Claude tool path) and a redeploy verified by image digest, the same turn routed `tool / classifier unavailable, claude decides` and the reminder appeared in RDS through /api/reminders; it was then completed to leave the sandbox clean. `tests/test_router.py` 11 passed, ruff clean. Not run: the worker path (no queued job), HTTPS (no certificate), the visionOS client against the cloud. Details and the follow-ups (CPU-only torch to shrink the 6.7 GB layer) in `data/private_docs/deploy-status-2026-09-10.md`.
 
 **2026-09-09 (Vision workspace and learning lab)**: **537 Python tests passed, 1 skipped in 67.78s**, ruff clean; the skip is the optional student-tokenizer check when Hugging Face is unavailable and the tokenizer is not cached (confirmed with `-rs`). **13 Swift tests passed**, covering all eight server configurations and eleven arrival rates plus draft, connection, conflict and retry regressions. `xcodebuild` succeeded against visionOS Simulator 26.5, including the generic destination command used by the new CI job. The actual `KyraClient.swift` was compiled for macOS and exercised against a separate uvicorn process with a scratch `KYRA_DATA_DIR`, synthetic data, a placeholder model key and a test token: checkpoint create/replay/edit/list/stale conflict, lesson retry with the same item id, and review not due immediately all passed. A request without the token returned 401. In Simulator the restarted Workspace loaded the saved checkpoint, and a Debug-only local queue fixture rendered two active servers, one disabled server, 40 completions and 10 waiting in a separate Shared Space volume. Screenshot inspection prompted larger volume labels and side-by-side placement. The independent backend and native reviews approved after migration-order and retry/destination bugs were reproduced and fixed. Evidence lives in gitignored `data/verifications/2026-09-09-vision-workspace-learning/`. Physical-device targeting/readability/comfort and GitHub-hosted CI were not run; no production data, model API call, push, merge or deployment was involved.
 
