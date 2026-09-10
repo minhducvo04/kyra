@@ -36,3 +36,13 @@ Reviewed: 94f77f1, 6 findings, 0 blocking.
 Findings 1 and 6 retain Claude's disposition. Duc's remaining acceptance is
 `scripts/wake_up.py --preview`: click Snooze 10 min, Wake now, then Stop before
 merging. No button acceptance or merge is claimed by this follow-up.
+
+## Button acceptance (2026-09-10)
+
+Duc requested the remaining checks and local merge. The desktop-control tool
+could not select the `osascript` window, so Duc supplied the clicks in a silent
+preview. The real CLI log confirms ringing, Snooze, waiting, Wake now (ringing
+again six seconds later), then Stop; the process exited 0. Evidence:
+`data/verifications/2026-09-10-wake-up-controls/button-acceptance.log`.
+This completes finding 1's remaining acceptance check. Claude's review found
+no blocking issues, and findings 2 to 4 were addressed in `b4f6177`.
