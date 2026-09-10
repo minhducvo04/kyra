@@ -57,7 +57,7 @@ def test_building_the_tool_registry_loads_no_model(tmp_path):
     assert _heavy_modules_after(statement, tmp_path) == []
 
 
-@pytest.mark.parametrize("module", ["companion.digest", "companion.job_boards", "companion.outreach"])
+@pytest.mark.parametrize("module", ["companion.digest", "companion.job_boards", "companion.outreach", "companion.initiatives"])
 def test_the_scheduled_and_tool_modules_stay_cheap_to_import(module, tmp_path):
     # daily_digest.py runs unattended at 05:00; a heavy import there is a slow
     # start nobody is awake to notice.

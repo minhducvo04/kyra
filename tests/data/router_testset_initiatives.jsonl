@@ -1,0 +1,10 @@
+{"message": "what should I work on next", "path": "tool", "backend": "claude", "note": "suggest_initiatives"}
+{"message": "any ideas for what to do on kyra today", "path": "tool", "backend": "claude", "note": "suggest_initiatives"}
+{"message": "got suggestions for this week", "path": "tool", "backend": "claude", "note": "suggest_initiatives"}
+{"message": "if you were me what would you pick up next", "path": "tool", "backend": "claude", "note": "suggest_initiatives"}
+{"message": "what's worth doing next on the project", "path": "tool", "backend": "claude", "note": "suggest_initiatives"}
+{"message": "why do people say to work on one thing at a time", "path": "text", "backend": "claude", "note": "near miss: advice, no suggestion asked of kyra"}
+{"message": "is it a good idea to suggest a raise in a first review", "path": "text", "backend": "claude", "note": "near miss: 'suggest' but a compensation question"}
+{"message": "explain how initiative works in dungeons and dragons", "path": "text", "backend": "local", "note": "near miss: 'initiative' the game term"}
+{"message": "remind me to work on the initiatives plan tomorrow", "path": "tool", "backend": "claude", "note": "add_reminder, not suggest_initiatives"}
+{"message": "list my reminders about work", "path": "tool", "backend": "claude", "note": "list_reminders, not suggest_initiatives"}

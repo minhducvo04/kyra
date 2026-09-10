@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// The daily loop, on the headset: what is due, and what is due to be recalled.
+/// Daily decisions: reminders, recall, and sourced suggestions to accept or dismiss.
 ///
 /// The digest already assembles this at 05:00 on the Mac and writes a page Duc
-/// reads in a browser. This is the two parts he acts on rather than reads -
-/// reminders he can tick off and reviews he can answer - because those are the
+/// reads in a browser. This is the part he acts on rather than reads:
+/// reminders he can tick off, reviews he can answer, and proposed first steps. These are the
 /// ones worth having in front of him while he is wearing it, and everything
 /// else in the digest is reading matter.
 ///
@@ -15,6 +15,10 @@ struct TodayView: View {
 
     @State private var reminders: [Reminder] = []
     @State private var reviews: [LearningItem] = []
+    @State private var initiatives: [InitiativeProposal] = []
+    @State private var reasons: [String: String] = [:]
+    @State private var pending: Set<String> = []
+    @State private var suggestionsUnavailable = false
     @State private var loading = true
     @State private var problem: String?
 
@@ -26,7 +30,7 @@ struct TodayView: View {
                         .foregroundStyle(.secondary)
                 } else if loading {
                     ProgressView().frame(maxWidth: .infinity)
-                } else if reminders.isEmpty && reviews.isEmpty {
+                } else if reminders.isEmpty && reviews.isEmpty && initiatives.isEmpty {
                     // Not an error state, and worth saying warmly rather than as a blank.
                     VStack(spacing: 8) {
                         Image(systemName: "checkmark.circle").font(.system(size: 42)).foregroundStyle(.tertiary)
@@ -35,6 +39,55 @@ struct TodayView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, 60)
+                }
+
+                HStack {
+                    if suggestionsUnavailable {
+                        Text("Suggestions need an updated server.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Refresh", systemImage: "arrow.clockwise") { Task { await load() } }
+                        .disabled(loading || !pending.isEmpty)
+                }
+
+                if !initiatives.isEmpty {
+                    section("Kyra suggests", count: initiatives.count) {
+                        Text("Choose a first step to add as an undated reminder.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        ForEach(initiatives) { item in
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(item.title).font(.headline)
+                                Text(item.firstStep)
+                                Text("\(item.why) About \(item.minutes) minutes.")
+                                    .font(.callout).foregroundStyle(.secondary)
+                                DisclosureGroup("Evidence") {
+                                    ForEach(item.evidence) { evidence in
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("\(evidence.source) · \(evidence.when)").font(.caption).foregroundStyle(.secondary)
+                                            Text(evidence.quote).font(.callout)
+                                        }.padding(.vertical, 6)
+                                    }
+                                }
+                                if item.status == "proposed" {
+                                    TextField("Dismiss reason (optional)", text: Binding(
+                                        get: { reasons[item.id] ?? "" },
+                                        set: { reasons[item.id] = String($0.prefix(2000)) }
+                                    )).textFieldStyle(.roundedBorder)
+                                }
+                                HStack {
+                                    Button(item.status == "accepting" ? "Finish adding reminder" : "Add reminder") {
+                                        decide(item, accept: true)
+                                    }.buttonStyle(.borderedProminent)
+                                    if item.status == "proposed" {
+                                        Button("Dismiss") { decide(item, accept: false) }
+                                    }
+                                    if pending.contains(item.id) { ProgressView() }
+                                }.frame(minHeight: 60)
+                            }
+                            .disabled(pending.contains(item.id))
+                            .padding(.bottom, 14)
+                        }
+                    }
                 }
 
                 if !reminders.isEmpty {
@@ -114,7 +167,38 @@ struct TodayView: View {
         } catch {
             problem = error.localizedDescription
         }
+        do {
+            initiatives = try await client.initiatives()
+            suggestionsUnavailable = false
+        } catch KyraError.server(404) {
+            initiatives = []
+            suggestionsUnavailable = true
+        } catch {
+            problem = error.localizedDescription
+        }
         loading = false
+    }
+
+    private func decide(_ item: InitiativeProposal, accept: Bool) {
+        guard pending.insert(item.id).inserted else { return }
+        Task {
+            defer { pending.remove(item.id) }
+            do {
+                if accept {
+                    _ = try await client.acceptInitiative(item.id)
+                } else {
+                    let reason = reasons[item.id]?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    _ = try await client.dismissInitiative(item.id, reason: reason?.isEmpty == false ? reason : nil)
+                }
+                initiatives.removeAll { $0.id == item.id }
+                reasons.removeValue(forKey: item.id)
+                reminders = try await client.reminders().filter { !$0.done }
+                problem = nil
+            } catch {
+                // Keep the row: retry recovers the receipt after a lost response.
+                problem = error.localizedDescription
+            }
+        }
     }
 
     private func complete(_ reminder: Reminder) {

@@ -1,7 +1,8 @@
-# Web/API layer only - what the container installs. No torch / mlx-lm / voice stack:
-# local models and audio stay on the Mac (see docs/v2-outline.md); in a container the
-# router's local classifier is unavailable and route() falls back to Claude (already
-# handled: "classifier error, defaulted to claude").
+# Web/API layer only - what the container installs. No mlx-lm / voice stack: local models and
+# audio stay on the Mac (see docs/v2-outline.md); in a container the router's local classifier is
+# unavailable and route() hands the turn to Claude with tools ("classifier unavailable, claude
+# decides"). torch does come in, through sentence-transformers for memory; the Dockerfile installs
+# the CPU wheel first so the CUDA suite never does.
 anthropic>=0.40.0
 python-dotenv>=1.0.0
 pydantic>=2.0

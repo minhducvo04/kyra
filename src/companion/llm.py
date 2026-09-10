@@ -189,6 +189,18 @@ class AnthropicLLM(LLMBackend):
             if response.stop_reason != "tool_use":
                 return extract_text(response)
 
+            calls = [b for b in response.content if b.type == "tool_use"]
+            terminal = next(((b, registry.terminal_tool(b.name)) for b in calls
+                             if registry.terminal_tool(b.name) is not None), None)
+            if terminal is not None:
+                block, tool = terminal
+                # A terminal result ends dispatch before any sibling can act on it.
+                reply = tool.render_result(registry.run(block.name, **block.input))
+                skipped = [b.name for b in calls if b is not block]
+                if skipped:
+                    reply += "\n\nOther requested tool calls were not executed: " + ", ".join(skipped) + ". Please request them separately."
+                return reply
+
             messages.append({"role": "assistant", "content": response.content})
             tool_results = []
             for block in response.content:

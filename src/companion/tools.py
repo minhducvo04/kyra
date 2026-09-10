@@ -3,6 +3,7 @@ subsystem (see CLAUDE.md), shaped to match the Claude API's tool-use format
 so a Tool's schema is literally what goes in the `tools=` list of a
 Messages API call, no translation layer needed.
 """
+import json
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -12,6 +13,12 @@ class Tool(ABC):
     `input_schema` together are Claude's tool-definition shape; `run`
     is what actually executes once Claude (or a router) decides to call it.
     """
+
+    terminal = False
+
+    def render_result(self, result: Any) -> str:
+        """Text returned directly for terminal tools, without another model call."""
+        return json.dumps(result)
 
     name: str
     description: str
@@ -37,6 +44,10 @@ class ToolRegistry:
 
     def register(self, tool: Tool) -> None:
         self._tools[tool.name] = tool
+
+    def terminal_tool(self, name: str) -> Tool | None:
+        tool = self._tools.get(name)
+        return tool if tool is not None and tool.terminal else None
 
     def schemas(self) -> list[dict]:
         """Pass this straight as `tools=` to client.messages.create()."""

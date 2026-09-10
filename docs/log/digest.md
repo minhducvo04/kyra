@@ -1,10 +1,35 @@
 # The daily digest
 
+## 2026-09-10: daily proposals with explicit acceptance
+
+The daily run now caches one attempt per day under a shared POSIX lock, reuses unchanged evidence on later days, and supports read-only previews. An interrupted provider call leaves a pending marker instead of silently spending again. A snapshot row serializes publication, including empty days, so historical runs cannot restore stale proposals. Exact evidence stays with each proposal. The digest renders proposed items only and does not count them as committed actions.
+
+Acceptance claims the proposal, then creates an undated reminder with a unique receipt in the same reminder transaction. A lost response can resume from accepting; dismissal cannot win after that claim. Accepted and dismissed identities remain retired when the same cached proposal returns. GET lists proposals and pending acceptances for retry; POST accept returns the original receipt and POST dismiss retains its optional reason. The session-thread source remains dependent on the unmerged shared-agent branch.
+
+Verified: 565 pytest tests passed, ruff clean, real hosted daily generation and tool proposals, cache reuse, empty-source abstention, real HTTP acceptance retry and conflicts. PostgreSQL 16 handled eight simultaneous accepts with one reminder. Fictional scratch state and the temporary database container were removed. Proof: `data/verifications/2026-09-10-overnight-codex/`.
+
+
 `digest.py` and `scripts/daily_digest.py`: the 05:00 page, the JSON archive, the notification, the Applications section.
 
 Entries below were moved verbatim from `CLAUDE.md` on 2026-09-09 (original order kept, newest work is usually nearer the top of each section). Add new entries at the top of this file, dated, with the *why*.
 
 ## Entries
+
+- **Per-row initiative validation (2026-09-10)**: malformed rows are skipped with fixed validation reasons and row numbers, keeping valid suggestions without logging source text. Complete JSON fences remain supported; mixed prose and truncation remain rejected. Conflicting evidence IDs still fail loudly rather than silently choose a potentially wrong source.
+
+- **On-demand initiatives, section 1 (2026-09-09)**: `suggest_initiatives` collects live due/overdue reminders,
+  project notes, repeated tool reasons, and recent git subjects, then makes one proposal call. It returns at
+  most three suggestions with exact cited evidence or abstains; empty evidence makes no proposal call.
+  Sources implement `InitiativeSource`, missing files are not created merely to read them, and Git is optional
+  for packaged installs. The guard checks reference membership, not factual support. The parser checks types,
+  fields, positive time estimates, and truncation; a real fenced-JSON failure gained a regression test before
+  the fix. The shared tool loop returns suggestions directly, preventing sibling or follow-up actions.
+  Real `scripts/chat.py` runs with the configured router adapter, BGE memory, and hosted backend used fictional
+  scratch sources: a seeded turn returned two suggestions from one proposal call; an empty turn abstained
+  with no proposal call. Both made one outer selection call and preserved source reminders and notes. Git
+  used an explicit non-repository fixture because empty user data does not imply empty repository history.
+  All scratch state was removed. Proof: `data/verifications/2026-09-09-initiatives-codex/`. No daily generation,
+  persistence, acceptance, digest/UI integration, or deployment. Usefulness on real tasks remains to be evaluated.
 
 - **The digest has an Applications section, because the pipeline's whole end state was invisible (2026-09-08)** - mass apply finishes at `ready_to_submit` (filled, waiting on Duc's click) or `needs_attention`, and nothing surfaced either until he next opened the JOBS panel, so a batch queued overnight could sit for days. `DigestData` carries `waiting`/`needs_attention` from `JobApplicationStore`, both count toward `action_count`, and the HTML gives each its own card: the waiting one shows the **resume filename it will attach** (what an employer receives, which Duc asked to be able to check every time) and a link straight to the form; the attention one pulls the reason out of the row's last `[apply ...]` note line. `summary_line` mentions applications **only when there are some** - the line is already five numbers long and "0 to submit" every morning would train him to stop reading it, but a filled application is the most actionable thing the digest ever holds, so when there is one it leads. Verified against the real tracker: the real `needs_attention` rows rendered with their real links and reasons, and `--dry-run` left `seen.json` byte-identical.
 - Daily digest: `python3 scripts/daily_digest.py [--dry-run|--no-notify|--open|--index|--date YYYY-MM-DD|--search TERM|--rebuild]` — due reminders, outreach follow-ups, due reviews, new board postings, top news → `data/digests/<date>.md` (archive) **+ `<date>.html` and `latest.html` (the page you actually read)** + a macOS notification. Scheduled at 05:00 by launchd (`deploy/com.kyra.daily-digest.plist`, installed in `~/Library/LaunchAgents/`; `launchctl unload` it to stop). Logic lives in `src/companion/digest.py` (`build_digest` → `DigestData` → `render_markdown`/`render_html`/`render_index`), the script is the thin CLI — same shape as `watch_boards.py` over `job_boards.py`. **`<date>.json` is the canonical record** (`to_json`/`from_json`); `--rebuild` regenerates every page from it, `--index` opens the archive front page, `--date` opens one past day, `--search` finds a headline across every archived day.

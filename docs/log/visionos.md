@@ -1,5 +1,12 @@
 # The visionOS client
 
+## 2026-09-10: sourced suggestions in Today
+
+Today now reads the daily proposal list and shows title, first step, rationale, estimated time and an evidence disclosure. Add reminder returns an undated reminder receipt; Dismiss accepts optional feedback. A request in flight disables that row, and a failed request keeps it available for retry. Interrupted acceptance offers Finish adding reminder. Refresh reloads current state. A server without the endpoint shows an upgrade message while reminders and reviews remain usable. No transport-security exception was added.
+
+Verified with a real visionOS simulator build and separate preview bundle, then a screenshot of the actual API-backed rows. The same Swift transport compiled for macOS and passed live source decoding, repeated acceptance receipt and dismissal-reason checks. A second simulator run against an endpoint-absent fixture still displayed the existing reminder. Preview bundle and all scratch stores were removed. Evidence: `data/verifications/2026-09-10-overnight-codex/today-vision.png`, `today-legacy.png`, `vision-build.log`, and `InitiativeClientSmoke.swift`.
+
+
 `apple/KyraVision/`: transport, presence orb, Today tab, the SSE parsing bug, the launch-argument seam.
 
 Entries below were moved verbatim from `CLAUDE.md` on 2026-09-09 (original order kept, newest work is usually nearer the top of each section). Add new entries at the top of this file, dated, with the *why*.

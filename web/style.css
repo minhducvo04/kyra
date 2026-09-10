@@ -18,6 +18,26 @@
   --inner-speed: 46s;
 }
 
+#initiative-list .jobs-tracker-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-wrap: anywhere;
+}
+#initiative-list h3, #initiative-list p { margin: 0; }
+#initiative-list input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.65rem;
+  background: var(--void);
+  color: var(--text);
+  border: 1px solid var(--grid);
+  font: inherit;
+}
+#initiative-list button { min-height: 44px; padding: 0.5rem 0.75rem; font-size: 12px; }
+#initiative-list summary { padding: 0.5rem 0; cursor: pointer; }
+#initiative-list [role="alert"] { color: var(--danger); }
+
 body[data-backend="local"] {
   --accent: #ffb454;
   --accent-dim: #8a5a1d;

@@ -1973,7 +1973,7 @@ function openToolsPanel() {
   toolsPanel.setAttribute("aria-hidden", "false");
   toolsToggle.classList.add("is-active");
   const activeTab = document.querySelector("#tools-panel .jobs-tab.is-active");
-  const loaders = { reminders: loadReminders, learning: loadLearningDue, memory: loadMemoryNotes };
+  const loaders = { reminders: loadReminders, initiatives: loadInitiatives, learning: loadLearningDue, memory: loadMemoryNotes };
   if (activeTab && loaders[activeTab.dataset.toolsTab]) loaders[activeTab.dataset.toolsTab]();
 }
 function closeToolsPanel() {
@@ -1992,10 +1992,88 @@ document.querySelectorAll("#tools-panel .jobs-tab").forEach((tab) => {
     document.querySelectorAll("#tools-panel .jobs-tab-panel").forEach((p) => {
       p.classList.toggle("is-active", p.dataset.toolsTabPanel === tab.dataset.toolsTab);
     });
-    const loaders = { reminders: loadReminders, learning: loadLearningDue, memory: loadMemoryNotes };
+    const loaders = { reminders: loadReminders, initiatives: loadInitiatives, learning: loadLearningDue, memory: loadMemoryNotes };
     if (loaders[tab.dataset.toolsTab]) loaders[tab.dataset.toolsTab]();
   });
 });
+
+/* Suggestions are read from the daily snapshot. Only these explicit buttons act. */
+async function loadInitiatives() {
+  const list = document.getElementById("initiative-list");
+  try {
+    const response = await fetch("/api/initiatives");
+    if (response.status === 404) {
+      list.textContent = "Suggestions need an updated server.";
+      return;
+    }
+    const data = await readJson(response);
+    list.replaceChildren();
+    if (!data.initiatives.length) list.textContent = "No suggestions waiting for a decision.";
+    for (const proposal of data.initiatives) {
+      const row = document.createElement("div");
+      row.className = "jobs-tracker-item";
+      const title = document.createElement("h3");
+      title.textContent = proposal.title;
+      const step = document.createElement("p");
+      step.textContent = proposal.first_step;
+      const why = document.createElement("p");
+      why.textContent = `${proposal.why} About ${proposal.minutes} minutes.`;
+      const evidence = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = "Evidence";
+      evidence.append(summary);
+      for (const source of proposal.evidence) {
+        const quote = document.createElement("p");
+        quote.textContent = `${source.source} (${source.when}): ${source.quote}`;
+        evidence.append(quote);
+      }
+      const reason = document.createElement("input");
+      reason.type = "text";
+      reason.placeholder = "Dismiss reason (optional)";
+      reason.setAttribute("aria-label", `Dismiss reason for ${proposal.title}`);
+      reason.maxLength = 2000;
+      const actions = document.createElement("div");
+      actions.className = "jobs-reminder-actions";
+      const accept = document.createElement("button");
+      accept.type = "button";
+      accept.textContent = proposal.status === "accepting" ? "Finish adding reminder" : "Add reminder";
+      const dismiss = document.createElement("button");
+      dismiss.type = "button";
+      dismiss.textContent = "Dismiss";
+      const error = document.createElement("p");
+      error.setAttribute("role", "alert");
+      async function decide(action) {
+        accept.disabled = dismiss.disabled = reason.disabled = true;
+        error.textContent = "";
+        try {
+          await readJson(await fetch(`/api/initiatives/${encodeURIComponent(proposal.id)}/${action}`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(action === "dismiss" ? { reason: reason.value.trim() || null } : {}),
+          }));
+          await loadInitiatives();
+          await loadReminders();
+        } catch (problem) {
+          error.textContent = `Could not finish: ${problem.message}. You can retry.`;
+        } finally {
+          accept.disabled = dismiss.disabled = reason.disabled = false;
+        }
+      }
+      accept.addEventListener("click", () => decide("accept"));
+      dismiss.addEventListener("click", () => decide("dismiss"));
+      actions.append(accept);
+      row.append(title, step, why, evidence);
+      if (proposal.status === "proposed") {
+        row.append(reason);
+        actions.append(dismiss);
+      }
+      row.append(actions, error);
+      list.append(row);
+    }
+  } catch (problem) {
+    list.textContent = `Could not load suggestions: ${problem.message}`;
+  }
+}
+document.getElementById("initiative-refresh").addEventListener("click", loadInitiatives);
 
 /* -- memory notes --
    The curated facts that go into every system prompt in full, and into every
