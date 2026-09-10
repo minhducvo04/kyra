@@ -175,11 +175,17 @@ class TurnRouter:
                 prompt = CLASSIFIER_PROMPT.format(tools=tool_desc, message=user_input)
                 raw = self._classifier.respond(system="", history=[], user_input=prompt)
         except Exception as e:
-            # Classifier itself failing is not a reason to fail the turn -
-            # fall back to the safest default (Claude, text path) and say why.
+            # Classifier itself failing is not a reason to fail the turn. It used to
+            # fall back to the text path, which read as the safe choice until the
+            # first real run on AWS (2026-09-10): the container has no mlx_lm, so
+            # every turn hit this branch and the deployed Kyra could never call a
+            # tool - "remind me" saved nothing and said it had. Without a local
+            # classifier the right fallback is the Claude tool path, where the model
+            # decides per turn whether a tool is needed and plain questions still get
+            # a plain answer. The error is kept so the log says why.
             return RoutingDecision(
-                path="text", backend="claude",
-                reason="classifier error, defaulted to claude", error=f"{type(e).__name__}: {e}",
+                path="tool", backend="claude",
+                reason="classifier unavailable, claude decides", error=f"{type(e).__name__}: {e}",
             )
 
         parsed = _parse_json(raw)
