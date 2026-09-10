@@ -1,5 +1,10 @@
 # Platform, configuration and deployment
 
+## 2026-09-10: CPU image deployed; external probe blocked by allowlist
+
+The logging-enabled CPU image from 727711a completed deployment for API and worker, with one running task each and no pending tasks. The API task runs the expected new image digest and its load-balancer target is healthy. The final GET /api/backend access-log check remains unproven: the verification client now uses an address outside the configured single-IP allowlist, and both connection probes timed out. No access rule or infrastructure was changed by this check. Private evidence is in `data/verifications/2026-09-10-overnight-codex/cloud-access-proof.json`. Resume the probe after the client network or authorized allowlist changes; do not treat the timeout as an unhealthy application.
+
+
 ## 2026-09-10: proposal transactions and independent cloud checks
 
 The initiatives branch adds proposal, daily-snapshot and reminder-receipt tables. Migration c910a21d8f04 follows master head 95948f84f255 and tolerates tables created by startup. It was verified on SQLite both before and after create_all and on local PostgreSQL after create_all. Do not apply it directly to the separate workspace migration head; human branch integration needs an Alembic merge revision first. No deployed schema was modified for initiatives.

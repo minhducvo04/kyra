@@ -1,5 +1,10 @@
 # Verification history
 
+## 2026-09-10: CPU image deployed; external probe blocked by allowlist
+
+The logging-enabled CPU image from 727711a completed deployment for API and worker, with one running task each and no pending tasks. The API task runs the expected new image digest and its load-balancer target is healthy. The final GET /api/backend access-log check remains unproven: the verification client now uses an address outside the configured single-IP allowlist, and both connection probes timed out. No access rule or infrastructure was changed by this check. Private evidence is in `data/verifications/2026-09-10-overnight-codex/cloud-access-proof.json`. Resume the probe after the client network or authorized allowlist changes; do not treat the timeout as an unhealthy application.
+
+
 ## 2026-09-10: Today and HUD, with compatibility checks
 
 The client branch passed 565 pytest tests in 18.97 s and ruff. Real Swift transport requests decoded sources, recovered the same acceptance receipt on retry, and persisted dismissal feedback. The visionOS simulator build succeeded and displayed three fixture proposals. An older-server simulation kept its existing reminder visible while explaining the missing suggestions feature. A separate preview bundle preserved the installed application and was removed afterward.
