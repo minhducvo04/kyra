@@ -6,6 +6,7 @@ docs/model-benchmark.md for why you'd ever pick local, and the TurnRouter
 design in progress for how that decision gets made automatically).
 """
 import json
+import logging
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -188,6 +189,19 @@ class AnthropicLLM(LLMBackend):
                 return "I ran out of room thinking that one through - mind trying again, maybe a bit more directly?"
             if response.stop_reason != "tool_use":
                 return extract_text(response)
+
+            suggestion = next((b for b in response.content
+                               if b.type == "tool_use" and b.name == "suggest_initiatives"), None)
+            if suggestion is not None:
+                # Suggestions are terminal: neither sibling calls nor a model reading
+                # their evidence may turn a proposed first step into an executed action.
+                from companion.initiatives import render_suggestions
+
+                try:
+                    return render_suggestions(registry.run(suggestion.name, **suggestion.input))
+                except Exception as exc:
+                    logging.getLogger(__name__).warning("Initiative proposal failed: %s", type(exc).__name__)
+                    return "I could not prepare suggestions. The source or model call failed; please try again."
 
             messages.append({"role": "assistant", "content": response.content})
             tool_results = []

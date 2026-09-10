@@ -6,6 +6,7 @@ was constructed three times with the same tool list typed out separately
 in each file.
 """
 from companion.focus import focus_tools
+from companion.initiatives import GitSource, PatternsSource, ProjectNotesSource, RemindersSource, SuggestInitiativesTool
 from companion.job_applications import JobApplicationStore, job_application_tools
 from companion.job_autofill import job_autofill_tools
 from companion.job_posting_fetch import TargetPostingTool
@@ -51,5 +52,9 @@ def default_tool_registry(draft_backend: AnthropicLLM | None = None) -> ToolRegi
         + [AnalyzePostingTool(), TargetPostingTool(applications)]
         + focus_tools()
         + [SearchKyraDataTool()]  # opens its index on first use, not here
+        + [SuggestInitiativesTool(
+            sources=[RemindersSource(reminders), ProjectNotesSource(), PatternsSource(), GitSource()],
+            llm=draft_backend,
+        )]
         + [TechNewsTool(), ScienceFactsTool()]
     )

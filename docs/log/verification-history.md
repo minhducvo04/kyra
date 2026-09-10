@@ -4,6 +4,22 @@ What was verified for real (real API call, real compile, real browser, real devi
 
 ## Entries (newest first)
 
+**2026-09-09 (on-demand initiatives)**: section 1 implemented on `session/2026-09-09-initiatives-codex`
+from master. Real `scripts/chat.py` runs with the configured local router adapter, BGE memory, and hosted
+backend used fictional scratch reminders and project notes. Seeded: two cited suggestions, one outer
+selection call and one proposal call. Empty: one selection call, no proposal call, explicit abstention.
+Git used an explicit empty fixture, with its live repository reader separately exercised in tests. Source
+reminders and notes stayed unchanged; scratch memory and router logs were removed with the temporary data
+directory. The first model response exposed fenced JSON, reproduced in a failing test before the parser fix.
+The harness boundary also went red before green: suggestions no longer lead to sibling or follow-up actions.
+**543 tests passed in 17.12 seconds**, no skips; **ruff clean**. The pre-existing tokenizer test initially
+failed on an empty cache; the final run used `HF_HOME` pointing at the existing local model cache and
+`HF_HUB_OFFLINE=1`, without changing or skipping that test. Proof is under
+`data/verifications/2026-09-09-initiatives-codex/`: `chat-seeded.json`, `chat-empty.json`, their CLI logs,
+`boundary-red.log`, `fence-red.log`, `missing-git-red.log`, `pytest.log`, and `ruff.log`.
+No native UI changes, physical-device check, scheduled generation, persistence, deployment, merge, or push.
+Independent review is pending.
+
 **2026-09-08 (memory writes)**: `ChromaMemoryStore.add()` now writes `uuid.uuid4().hex` ([PR #14](https://github.com/minhducvo04/kyra/pull/14)); `tests/test_memory.py` pins the post-condition that a write is retrievable, both drift tests red against the counter first. `pytest` **345 passed**, `ruff` clean. Verified past the suite with real BGE embeddings against a **copy** of the real `data/memory_db` (original never opened, md5 unchanged before and after): the two-instance repro keeps all four writes, the existing numeric-id rows still retrieve, uuid rows land beside them. The missing ids 30-37 were then traced in Chroma's write-ahead log to two sessions deleting their own verification turns, not lost user data. **Confirmed in production the same day**: every memory written from 11:07 on 2026-09-08 carries a uuid, and across five sessions each cleanup's delete block matches its add block exactly, with nothing stranded - which is the counter-era failure (ids 38/39, since removed) closed end to end on the real store, without a migration.
 **2026-09-08 (the two slice-3 branches merged)**: `d724ce7`. Two sessions built mass apply slice 3 from the same base at the same time and the results compose, so both are in: **automatic first** (`job_boards.find_posting` looks the posting up on the company's own board from the company and role already on the tracker row, so a bare LinkedIn URL needs nothing typed), **manual as the fallback** (Duc pastes the "Apply on company website" link and the listing rides along as `source_url`, recorded and never fetched) - the automatic path's refusal message already told him to do exactly what the manual path implements. They meet at one line: when resolution rewrites the URL, the one he pasted becomes the `source_url`, so a row's provenance is recorded the same way whichever path found it, and both branches' `source_url` tests pass against that single implementation. **The merge needed one decision rather than both sides**: `WorkdayBoard` joining `SOURCES` made slug-guessing try Workday, which can never work (its token is `<tenant>.<pod>/<site>`, and an unkeyworded fetch raises), so guessing skips any source with `requires_keywords` and a *watched* Workday board is searched with the role title instead - which neither branch did alone. The two counts below (452, 375) are each accurate for their own branch before the merge; **the merged figure was 491 passed** at `d724ce7` (and 493 once master's atomic-JSON and search-upsert commits merged in at `449c2c5`), ruff clean, re-verified afterwards rather than assumed (the resolver against Anthropic's live board still refuses the bare "AI Engineer"; the Netic row through the merged pipeline against copies of the real tracker reuses without a tailoring call, renames to the `Duc_Vo_` prefix and lands `ready_to_submit` with the tracker still at 10 rows).
 
