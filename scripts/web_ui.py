@@ -31,7 +31,9 @@ def main() -> None:
 
     configure_logging()
     print(f"Kyra web UI: http://{args.host}:{args.port}")
-    uvicorn.run("companion.webapp:app", host=args.host, port=args.port, log_level="warning")
+    # uvicorn's own level follows KYRA_LOG_LEVEL: at INFO the access log reaches CloudWatch in the
+    # container; on the laptop the default INFO is fine too. Below INFO uvicorn goes quiet.
+    uvicorn.run("companion.webapp:app", host=args.host, port=args.port, log_level=settings.log_level.lower())
 
 
 if __name__ == "__main__":
