@@ -1,5 +1,31 @@
 # The visionOS client
 
+## 2026-09-14: native microphone input for the headset
+
+Duc reached the physical client's connection screen and requested voice input without keyboard dictation.
+Talk now records mono 16 kHz PCM WAV through AVAudioRecorder, then Send voice uses the existing
+`/api/voice/stream` endpoint for transcription, the spoken response register and sentence-by-sentence Kokoro
+playback. The microphone permission request is explicit; no speech-recognition service, new backend route,
+wake word or continuous listening was added. Cancel, leaving Talk, backgrounding and audio interruptions
+discard capture. At 60 seconds the native recorder stops and preserves the clip for explicit Send or Cancel.
+
+A small recording interface permits hermetic tests of denied permission, a cancelled pending permission,
+failed capture, single-use finish and the duration-limit receipt. Stream tests cover multipart binary bytes,
+transcript/audio/done events without blank SSE separators, malformed completion and server errors. Turn IDs
+and player identity checks prevent old callbacks from reviving stopped playback. Playback now uses the
+supported playback/spokenAudio category/mode with mixing and reports activation/play errors. Settings
+provided at launch persist through the same UserDefaults storage already used by the settings fields.
+
+Verification: 22 native tests passed; 643 Python tests passed with one existing optional skip; ruff clean;
+real signed visionOS build and installation succeeded. A compiled copy of the actual Swift transport sent
+synthetic speech to an isolated real backend and received transcription, a Claude response and two WAV
+clips. Cached speech and embedding directories were supplied explicitly in that verification fixture after
+model-hub lookup failures; production code and model configuration were not changed. Scratch servers were
+stopped afterwards; test conversations remain confined to scratch data. Physical-device voice requests
+reached the normal server; user confirmation of audible playback on the final build remains pending.
+Evidence: `data/verifications/2026-09-14-avp-voice/` (Swift red/green logs, signed build/install logs,
+`VoiceClientSmoke.swift`, `voice-smoke-success.log`, and independent Claude review records).
+
 ## 2026-09-10: sourced suggestions in Today
 
 Today now reads the daily proposal list and shows title, first step, rationale, estimated time and an evidence disclosure. Add reminder returns an undated reminder receipt; Dismiss accepts optional feedback. A request in flight disables that row, and a failed request keeps it available for retry. Interrupted acceptance offers Finish adding reminder. Refresh reloads current state. A server without the endpoint shows an upgrade message while reminders and reviews remain usable. No transport-security exception was added.

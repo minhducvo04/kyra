@@ -1,5 +1,14 @@
 # Verification history
 
+**2026-09-14 (native AVP voice)**: real signed device build and installation; 22 Swift tests;
+643 Python tests passed, one existing optional skip; ruff clean. The actual Swift multipart/SSE
+voice client completed a synthetic speech round trip through isolated Whisper, real Claude, Chroma
+and Kokoro, returning two WAV clips. The fixture used explicit cached model directories after Hub
+lookup failures. No production test conversations were created; scratch servers stopped. Final
+headset listening acceptance remains pending. Evidence: `data/verifications/2026-09-14-avp-voice/`,
+particularly `voice-smoke-success.log`, `signed-build-final.log`, and `device-install-final.log`.
+
+
 ## 2026-09-10: snapshot merged and main scheduled entry point verified
 
 Merged Claude's completed integration into the snapshot branch, preserving both sides of two log conflicts, then fast-forwarded local master to `e441bbf`. Enumerated 61 parent/file comparisons: no additions from either parent were lost. Combined suite: **643 passed, 1 skipped in 67.69s**; existing optional tokenizer skip, ruff and plist syntax clean. The main tree matches the verified branch.

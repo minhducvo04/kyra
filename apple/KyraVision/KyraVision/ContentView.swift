@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 struct Line: Identifiable {
     enum Who { case duc, kyra, system }
@@ -10,6 +11,7 @@ struct Line: Identifiable {
 
 struct ContentView: View {
     let client: KyraClient
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var lines: [Line] = []
     @State private var draft = ""
@@ -18,9 +20,11 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var turn: Task<Void, Never>?
     @State private var speech = SpeechPlayer()
+    @State private var voice = VoiceInput(recorder: HeadsetVoiceRecorder())
+    @State private var turnID = UUID()
 
     private var connected: Bool { !client.baseURL.isEmpty }
-    private var thinking: Bool { presence == .thinking }
+    private var answering: Bool { turn != nil }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,10 +44,32 @@ struct ContentView: View {
                 .font(.system(.caption, design: .monospaced))
                 .padding(.horizontal, 16).padding(.vertical, 10)
                 .glassBackgroundEffect()
-                .onTapGesture { showSettings = true }
+                .onTapGesture { stop(); showSettings = true }
         }
         .sheet(isPresented: $showSettings) { settings }
         .task { await refreshBackend() }
+        .onDisappear { stop() }
+        .onChange(of: speech.error) {
+            if let error = speech.error {
+                lines.append(Line(who: .system, text: "Could not play the reply: \(error)"))
+            }
+        }
+        .onChange(of: scenePhase) {
+            if scenePhase == .background { stop() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { note in
+            if let type = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+               type == AVAudioSession.InterruptionType.began.rawValue { stop() }
+        }
+        .onChange(of: voice.phase) {
+            if voice.phase == .ready { presence = .idle }
+        }
+        .onChange(of: voice.error) {
+            if let error = voice.error {
+                lines.append(Line(who: .system, text: error))
+                presence = .failed
+            }
+        }
         .onAppear {
             if !connected { showSettings = true }
             // Lets a question be handed in at launch:
@@ -94,28 +120,97 @@ struct ContentView: View {
     }
 
     private var composer: some View {
-        HStack(spacing: 12) {
-            TextField("Say something to Kyra", text: $draft, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.system(.body))
-                .lineLimit(1...4)
-                .padding(.horizontal, 18).padding(.vertical, 14)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 22))
-                .onSubmit(send)
-
-            // Send becomes Stop while she is answering, the same as the web HUD:
-            // stopping is part of the conversation, not an error path.
-            Button(thinking ? "Stop" : "Send") {
-                thinking ? stop() : send()
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                if voice.phase != .idle {
+                    Text(voice.phase == .recording ? "Listening… Tap Send voice when finished." :
+                         voice.phase == .ready ? "One minute recorded. Send voice or Cancel." : "Waiting for microphone permission…")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Cancel") { voice.cancel(); presence = .idle }
+                    if voice.phase == .recording || voice.phase == .ready {
+                        Button("Send voice", systemImage: "arrow.up") { sendVoice() }
+                            .buttonStyle(.borderedProminent)
+                            .frame(minWidth: 120, minHeight: 60)
+                    }
+                } else {
+                    TextField("Message Kyra", text: $draft, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.system(.body))
+                        .lineLimit(1...4)
+                        .padding(.horizontal, 18).padding(.vertical, 14)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 22))
+                        .onSubmit(send)
+                    Button("Talk", systemImage: "mic.fill") { startRecording() }
+                        .disabled(!connected || answering)
+                        .frame(minWidth: 90, minHeight: 60)
+                    Button(answering ? "Stop" : "Send") {
+                        answering ? stop() : send()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(answering ? .red : .accentColor)
+                    .disabled(!answering && (draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connected))
+                    .frame(minWidth: 90, minHeight: 60)
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .tint(thinking ? .red : .accentColor)
-            .disabled(!thinking && (draft.isEmpty || !connected))
-            // visionOS targets want to be comfortably large; eyes plus pinch is
-            // a coarser pointer than a trackpad.
-            .frame(minWidth: 96, minHeight: 60)
         }
         .padding(20)
+    }
+
+    private func startRecording() {
+        guard !answering, voice.phase == .idle, connected else { return }
+        turnID = UUID()
+        speech.stop()
+        Task {
+            await voice.start()
+            if voice.phase == .recording { presence = .listening }
+        }
+    }
+
+    private func sendVoice() {
+        guard let wav = voice.finish() else {
+            presence = .failed
+            return
+        }
+        let id = UUID()
+        turnID = id
+        presence = .thinking
+        turn = Task {
+            defer { if turnID == id { turn = nil } }
+            var heardSpeech = false
+            do {
+                try await client.sendVoice(wav) { event in
+                    guard turnID == id, !Task.isCancelled else { return }
+                    switch event {
+                    case .transcript(let text):
+                        heardSpeech = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        if heardSpeech { lines.append(Line(who: .duc, text: text)) }
+                    case .audio(let clip):
+                        presence = .speaking
+                        speech.enqueue(clip)
+                    case .done(let reply):
+                        if !reply.reply.isEmpty {
+                            lines.append(Line(who: .kyra, text: reply.reply, badge: reply.badge))
+                        }
+                    }
+                }
+                try Task.checkCancellation()
+                if !heardSpeech {
+                    lines.append(Line(who: .system, text: "I didn’t hear any words. Tap Talk and try again."))
+                }
+                while speech.isSpeaking {
+                    try await Task.sleep(for: .milliseconds(120))
+                }
+                guard turnID == id else { return }
+                presence = .idle
+            } catch is CancellationError {
+                // Stop discards queued clips and invalidates this turn.
+            } catch {
+                guard turnID == id else { return }
+                speech.stop()
+                lines.append(Line(who: .system, text: error.localizedDescription))
+                presence = .failed
+            }
+        }
     }
 
     private var settings: some View {
@@ -170,18 +265,22 @@ struct ContentView: View {
 
     private func send() {
         let message = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !message.isEmpty, connected else { return }
+        guard !message.isEmpty, connected, !answering, voice.phase == .idle else { return }
+        let id = UUID()
+        turnID = id
         draft = ""
         lines.append(Line(who: .duc, text: message))
         presence = .thinking
 
         turn = Task {
+            defer { if turnID == id { turn = nil } }
             // One row is created on the first delta and grown in place, so the
             // reply appears as it is written rather than arriving whole.
             var replyIndex: Int?
             do {
                 let out = try await client.send(message) { delta in
                     Task { @MainActor in
+                        guard turnID == id else { return }
                         if let index = replyIndex, index < lines.count {
                             lines[index].text += delta
                         } else {
@@ -190,6 +289,8 @@ struct ContentView: View {
                         }
                     }
                 }
+                try Task.checkCancellation()
+                guard turnID == id else { return }
                 if let index = replyIndex, index < lines.count {
                     lines[index].text = out.reply   // authoritative, e.g. a truncation marker
                     lines[index].badge = out.badge
@@ -197,10 +298,11 @@ struct ContentView: View {
                     lines.append(Line(who: .kyra, text: out.reply, badge: out.badge))
                 }
                 presence = .idle
-                await speakReply(out.reply)
+                await speakReply(out.reply, id: id)
             } catch is CancellationError {
                 // stop() already set .interrupted.
             } catch {
+                guard turnID == id else { return }
                 lines.append(Line(who: .system, text: error.localizedDescription))
                 presence = .failed
             }
@@ -210,30 +312,38 @@ struct ContentView: View {
     /// Reads the reply aloud, starting on the first sentence rather than waiting
     /// for the whole thing to be synthesised. Failing to speak is not failing the
     /// turn: the reply is already on screen, so a silent answer beats an error.
-    private func speakReply(_ reply: String) async {
+    private func speakReply(_ reply: String, id: UUID) async {
         guard !reply.isEmpty else { return }
         presence = .speaking
         do {
             try await client.speak(reply) { wav in
-                Task { @MainActor in speech.enqueue(wav) }
+                Task { @MainActor in
+                    guard turnID == id else { return }
+                    speech.enqueue(wav)
+                }
             }
-            while speech.isSpeaking, presence == .speaking {
-                try? await Task.sleep(for: .milliseconds(120))
+            while speech.isSpeaking, turnID == id, presence == .speaking {
+                try await Task.sleep(for: .milliseconds(120))
             }
         } catch {
             // fall through - she just does not say this one out loud
         }
-        if presence == .speaking { presence = .idle }
+        if turnID == id, presence == .speaking { presence = .idle }
     }
 
     private func stop() {
+        let hadTurn = answering
+        guard hadTurn || voice.phase != .idle || speech.isSpeaking else { return }
+        turnID = UUID()
+        voice.cancel()
         speech.stop()
         turn?.cancel()
+        turn = nil
         // Cancelling the request only stops this end listening; the Mac keeps
         // generating and would file the whole reply into memory as if it had
         // been heard. /api/chat/cancel is the half that actually stops it.
-        Task { await client.cancel() }
-        if let last = lines.indices.last, lines[last].who == .kyra {
+        if hadTurn { Task { await client.cancel() } }
+        if hadTurn, let last = lines.indices.last, lines[last].who == .kyra {
             lines[last].badge = "interrupted"
         }
         presence = .interrupted

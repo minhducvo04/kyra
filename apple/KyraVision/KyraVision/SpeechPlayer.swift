@@ -16,10 +16,12 @@ import Observation
 @MainActor
 final class SpeechPlayer: NSObject {
     private(set) var isSpeaking = false
+    private(set) var error: String?
     private var queue: [Data] = []
     private var player: AVAudioPlayer?
 
     func enqueue(_ wav: Data) {
+        error = nil
         queue.append(wav)
         if player == nil { playNext() }
     }
@@ -39,17 +41,18 @@ final class SpeechPlayer: NSObject {
         }
         let wav = queue.removeFirst()
         do {
-            // Ambient rather than playback: on a headset Kyra is one thing in the
-            // room, not the thing you stopped everything else for.
-            try? AVAudioSession.sharedInstance().setCategory(.ambient, mode: .spokenAudio)
-            try? AVAudioSession.sharedInstance().setActive(true)
+            // Spoken audio supports playback; mixing keeps other apps audible.
+            // Set this explicitly after microphone capture leaves the record category.
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: .mixWithOthers)
+            try AVAudioSession.sharedInstance().setActive(true)
             let next = try AVAudioPlayer(data: wav)
             next.delegate = self
             player = next
             isSpeaking = true
-            next.play()
+            guard next.play() else { throw VoiceFailure("Audio playback could not start.") }
         } catch {
-            // One unplayable clip should not silence the rest of the sentence.
+            self.error = error.localizedDescription
+            player = nil
             playNext()
         }
     }
@@ -57,10 +60,16 @@ final class SpeechPlayer: NSObject {
 
 extension SpeechPlayer: AVAudioPlayerDelegate {
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        Task { @MainActor [weak self] in self?.playNext() }
+        Task { @MainActor [weak self] in
+            guard let self, self.player === player else { return }
+            self.playNext()
+        }
     }
 
     nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
-        Task { @MainActor [weak self] in self?.playNext() }
+        Task { @MainActor [weak self] in
+            guard let self, self.player === player else { return }
+            self.playNext()
+        }
     }
 }
