@@ -1,6 +1,6 @@
 "use strict";
 const $ = id => document.getElementById(id);
-let records = [], selected = "", busy = false;
+let records = [], selected = "", busy = false, reconciliationTarget = null;
 const cards = new Map();
 const statusLabel = {queued:"Queued", dispatching:"Running", done:"Complete", failed:"Failed",
   unreconciled:"Needs checking", mismatch:"Model changed"};
@@ -46,7 +46,44 @@ async function inspect(record) {
   const fallback = pending(record) ? "Waiting for the model. You can leave this page open." : "No completed answer was recorded.";
   card.append(el("pre", detail.artifact.output || fallback, "answer"));
   if (record.error) card.append(el("p", `${errorLabel[record.error] || "This call could not be verified. Open its receipt for the recorded reason."} No automatic retry.`, "meta"));
-  for (const review of detail.reviews) card.append(el("p", `Review #${review.reviewer_run_id}: ${review.stale ? "stale, artifact changed" : review.verdict}`, "meta"));
+  for (const review of detail.reviews) {
+    card.append(el("p", `Review #${review.reviewer_run_id}: ${review.stale ? "stale, artifact changed" : review.verdict}`, "meta"));
+    for (const decision of review.decisions) card.append(el("p",
+      `Your decision: ${decision.decision}${decision.stale ? " (stale, artifact changed)" : ""} · ${decision.created_at}`, "meta"));
+    if (!review.stale) {
+      const controls = el("div", undefined, "owner-controls"); controls.append(el("span", "Your decision on this review:"));
+      for (const value of ["approve", "reject"]) {
+        const button = el("button", value === "approve" ? "Approve" : "Reject");
+        button.onclick = async () => {
+          controls.querySelectorAll("button").forEach(b => { b.disabled = true; });
+          try {
+            await readJson(`/api/loop/reviews/${review.id}/decision`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({decision:value})});
+            await refresh();
+          } catch (error) { $("notice").textContent = error.message; }
+          finally { controls.querySelectorAll("button").forEach(b => { b.disabled = false; }); }
+        };
+        controls.append(button);
+      }
+      card.append(controls, el("p", "Records your decision only. Nothing is sent or executed.", "meta"));
+    }
+  }
+  for (const reconciliation of detail.reconciliations) {
+    const note = el("section", undefined, "declaration");
+    note.append(el("strong", "Your outcome note"), el("p",
+      `${reconciliation.outcome === "nothing_happened" ? "You found no processing" : "You found that the provider processed it"}. This is your declaration, not a verified provider result.`),
+      el("p", reconciliation.note === null ? "The note file is missing. Its original receipt is retained." : reconciliation.note), el("p", `${reconciliation.created_at}${reconciliation.note_changed ? " · Note file changed since recording" : ""}`, "meta"));
+    card.append(note);
+  }
+  if (detail.can_reconcile) {
+    const button = el("button", "Record what happened");
+    button.onclick = () => {
+      reconciliationTarget = record.id;
+      $("reconcile-run").textContent = `Contribution #${record.id} · ${modelName(record)}`;
+      $("outcome-note").value = ""; $("reconcile-error").textContent = "";
+      $("reconcile-dialog").showModal();
+    };
+    card.append(button);
+  }
   if (record.status === "done") {
     const reviewButton = el("button", `Ask ${record.developer === "Anthropic" ? "Codex" : "Claude"} to review`);
     reviewButton.onclick = async () => {
@@ -113,3 +150,14 @@ $("request").onsubmit = async event => {
 };
 refresh();
 setInterval(() => { if (records.some(pending)) refresh(); }, 2500);
+
+$("cancel-reconcile").onclick = () => $("reconcile-dialog").close();
+$("reconcile-form").onsubmit = async event => {
+  event.preventDefault(); $("save-reconcile").disabled = true;
+  try {
+    await readJson(`/api/loop/runs/${reconciliationTarget}/reconcile`, {method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({outcome:$("outcome").value, note:$("outcome-note").value})});
+    $("reconcile-dialog").close(); await refresh();
+  } catch (error) { $("reconcile-error").textContent = error.message; }
+  finally { $("save-reconcile").disabled = false; }
+};

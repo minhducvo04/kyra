@@ -205,3 +205,29 @@ loop_reviews = Table(
     Column("created_at", String(64), nullable=False),
     CheckConstraint("verdict IN ('approve','reject','comment')", name="loop_review_verdict"),
 )
+
+# Owner decisions are separate from model comments; neither overwrites execution evidence.
+loop_review_decisions = Table(
+    "loop_review_decisions", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("owner", String(160), nullable=False),
+    Column("review_id", Integer, nullable=False),
+    Column("subject_run_id", Integer, nullable=False),
+    Column("decision", String(16), nullable=False),
+    Column("artifact_sha256", String(64), nullable=False),
+    Column("reviewer_output_sha256", String(64), nullable=False),
+    Column("created_at", String(64), nullable=False),
+    CheckConstraint("decision IN ('approve','reject')", name="loop_owner_decision"),
+)
+
+loop_reconciliations = Table(
+    "loop_reconciliations", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("owner", String(160), nullable=False),
+    Column("run_id", Integer, nullable=False),
+    Column("outcome", String(32), nullable=False),
+    Column("note_sha256", String(64), nullable=False),
+    Column("note_path", Text, nullable=False),
+    Column("created_at", String(64), nullable=False),
+    CheckConstraint("outcome IN ('nothing_happened','provider_processed')", name="loop_declared_outcome"),
+)

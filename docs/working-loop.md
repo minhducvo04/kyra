@@ -1,8 +1,8 @@
 # Personal working loop
 
 Kyra's `/loop` page makes separate calls through the locally installed Codex and Claude Code CLIs. A user can
-ask one model for an answer and ask the other to review that exact answer. This first slice produces text and
-review comments. It cannot edit repositories or run tools from the page.
+ask one model for an answer and ask the other to review that exact answer. The personal loop produces text and
+review comments, with separate owner decisions. It cannot edit repositories or run tools from the page.
 
 ## Use it
 
@@ -37,6 +37,19 @@ lookup for future controlled resume. Be explicit about necessary context in each
 Full private reasoning is not available. Ask for explanations, assumptions and evidence in the response. The page
 shows those responses without claiming they are the model's internal thought process.
 
+## Decisions and reconciliation
+
+A completed, current review has **Approve** and **Reject** controls. These append your decision beside the model's
+comment, bound to both answers' hashes. Changing either answer makes the decision stale. A model saying "approved"
+does not create a decision. These controls record the local owner's declaration; they do not authenticate a human,
+release an artifact, execute work or send another provider request.
+
+For an uncertain run, use **Record what happened** after inspecting its native session. Choose **Nothing happened**
+or **Provider processed it** and add a short private note. This is your declaration, not proof of provider effects.
+An unreconciled run is eligible immediately; a stuck dispatch becomes eligible after its timeout plus 30 seconds.
+The original status and receipt stay unchanged. The page shows the notes and their timestamps. A new request may
+use subscription allowance again; the old run cannot be dispatched again.
+
 ## Failure and data handling
 
 A conditional database update claims each queued run once before execution. Model tools, plugins and external tool
@@ -57,7 +70,7 @@ one. `unreconciled` means execution began but completion could not be confirmed.
 hard server termination can leave a run in `dispatching`; inspect that receipt's start time and native session before
 making any new request. Restart does not claim an existing `dispatching` run again.
 
-`data/loop.db` stores metadata; `data/working_loop/<id>/` holds private prompts and answers. They follow `KYRA_DATA_DIR`
+`data/loop.db` stores metadata; `data/working_loop/<id>/` holds private prompts, answers and reconciliation notes. They follow `KYRA_DATA_DIR`
 and are gitignored. The UI is personal and loopback-only even when the wider Kyra app has a LAN token. It rejects
 foreign Origins and non-loopback Host names. Do not forward this endpoint through a local reverse proxy. This is
 not a multi-user privacy boundary and does not protect files from another process running as the same OS user.
@@ -67,7 +80,7 @@ log. Nothing from this workflow enters the existing companion memory or local cl
 
 ## Build and review
 
-See [the build plan](plans/2026-09-15-working-loop-build.md) and [the broader design](plans/2026-09-15-multi-model-working-loop.md).
+See [the build plan](plans/2026-09-15-working-loop-build.md), [owner decisions](plans/2026-09-15-working-loop-decisions.md) and [the broader design](plans/2026-09-15-multi-model-working-loop.md).
 Claude Fable High wrote the acceptance suite; Codex reviewed that contract and implemented it; Claude independently
 reviews implementation and adds regression tests. Private real-run evidence and the native Claude conversation
 reference live under `data/verifications/working-loop/` in the isolated working-loop worktree.

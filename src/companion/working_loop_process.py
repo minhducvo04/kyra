@@ -18,6 +18,10 @@ MAX_STREAM_BYTES = 4 * 1024 * 1024
 MAX_PROMPT_BYTES = 64 * 1024
 
 
+class ProcessNotStarted(Exception):
+    """Preflight refused execution; no provider process began."""
+
+
 class DispatchInterrupted(Exception):
     """A process started, but its outcome is not known. Never retry automatically."""
 
@@ -84,23 +88,23 @@ def _codex_state_directory() -> Path:
         raise FileNotFoundError("Codex subscription sign-in file is unavailable")
     root = DATA_DIR / "working_loop" / "codex-state"
     if root.is_symlink():
-        raise ValueError("codex_state_symlink")
+        raise ProcessNotStarted("codex_state_symlink")
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     root.chmod(0o700)
     # Reject any later customization of this managed directory instead of silently inheriting it.
     for name in ("AGENTS.md", "AGENTS.override.md", "config.toml", "plugins", "rules"):
         if (root / name).exists():
-            raise ValueError("codex_state_customized")
+            raise ProcessNotStarted("codex_state_customized")
     skills = root / "skills"
     if skills.is_symlink() or (skills.exists() and any(p.name != ".system" for p in skills.iterdir())):
-        raise ValueError("codex_state_customized")
+        raise ProcessNotStarted("codex_state_customized")
     # Codex itself installs its bundled .system skills on first use; these are not user extensions.
     target = root / "auth.json"
     try:
         target.symlink_to(source)
     except FileExistsError:
         if not target.is_symlink() or target.resolve() != source.resolve():
-            raise ValueError("codex_auth_reference_changed") from None
+            raise ProcessNotStarted("codex_auth_reference_changed") from None
     return root
 
 

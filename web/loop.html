@@ -12,4 +12,15 @@
 <div class="history-heading"><h2>Contributions</h2><span id="count"></span></div><div id="runs"><p class="empty">Choose a topic or start a new one.</p></div>
 </section>
 </main><footer>Models can explain their conclusions here. Full internal reasoning is not available. Reviews are comments, not a guarantee of correctness.</footer>
+<dialog id="reconcile-dialog">
+<form id="reconcile-form">
+<h2>Record what you found</h2>
+<p id="reconcile-run" class="meta"></p>
+<p>This is your declaration after checking the provider. Kyra keeps the original receipt and does not run another call.</p>
+<label>What happened?<select id="outcome"><option value="nothing_happened">I found no processing</option><option value="provider_processed">The provider processed it</option></select></label>
+<label>Your evidence or notes<textarea id="outcome-note" rows="4" maxlength="2000" required></textarea></label>
+<p id="reconcile-error" role="alert"></p>
+<div class="form-footer"><button type="button" id="cancel-reconcile">Cancel</button><button type="submit" id="save-reconcile">Save note</button></div>
+<small>A separate new request may use your allowance again.</small>
+</form></dialog>
 </body></html>

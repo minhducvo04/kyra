@@ -19,6 +19,7 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from functools import cache, cached_property
 from pathlib import Path
+from typing import Literal
 from uuid import UUID
 
 from anthropic import Anthropic
@@ -2105,7 +2106,9 @@ def loop_run(run_id: int) -> dict:
     if not record:
         raise ApiError(404, "not_found", "Run not found")
     return {"run": asdict(record), "artifact": controller.store.read_artifact(run_id, owner=controller.owner),
-            "reviews": controller.store.reviews_for(run_id, owner=controller.owner)}
+            "reviews": controller.store.reviews_for(run_id, owner=controller.owner),
+            "reconciliations": controller.store.reconciliations_for(run_id, owner=controller.owner),
+            "can_reconcile": controller.can_reconcile(record)}
 
 
 def _enqueue_loop(record) -> dict:
@@ -2150,3 +2153,40 @@ def _run_loop_job(payload, on_progress):
 
 
 HANDLERS["loop_dispatch"] = _run_loop_job
+
+
+class LoopDecisionIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    decision: Literal["approve", "reject"]
+
+
+class LoopReconciliationIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    outcome: Literal["nothing_happened", "provider_processed"]
+    note: str = Field(min_length=1, max_length=2000)
+
+
+@app.post("/api/loop/reviews/{review_id}/decision")
+def loop_decide_review(review_id: int, body: LoopDecisionIn) -> dict:
+    from companion.working_loop import ReviewRefused
+    controller = _loop_controller()
+    if not controller.store.get_review(review_id, owner=controller.owner):
+        raise ApiError(404, "not_found", "Review not found")
+    try:
+        decision = controller.decide_review(review_id, decision=body.decision)
+    except ReviewRefused as exc:
+        raise ApiError(409, "decision_refused", str(exc)) from None
+    return {"decision": asdict(decision)}
+
+
+@app.post("/api/loop/runs/{run_id}/reconcile")
+def loop_reconcile(run_id: int, body: LoopReconciliationIn) -> dict:
+    from companion.working_loop import PolicyRefused
+    controller = _loop_controller()
+    if not controller.store.get_run(run_id, owner=controller.owner):
+        raise ApiError(404, "not_found", "Run not found")
+    try:
+        result = controller.reconcile(run_id, outcome=body.outcome, note=body.note)
+    except PolicyRefused as exc:
+        raise ApiError(409, "reconcile_refused", str(exc)) from None
+    return {"reconciliation": asdict(result)}

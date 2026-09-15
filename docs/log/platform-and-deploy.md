@@ -1,5 +1,17 @@
 # Platform, configuration and deployment
 
+## 2026-09-15: owner decisions stay separate from model reviews
+
+The personal working loop now appends owner approve/reject decisions beside completed model reviews. Both the
+subject and reviewer output hashes determine whether a decision is current. The model's comment is preserved;
+no decision triggers execution or delivery. Uncertain calls accept a private owner outcome note without altering
+the original receipt or retrying. Stuck dispatches become eligible only after the timeout plus 30 seconds.
+
+Claude wrote the 20 failing acceptance cases and the slice contract; Codex implemented the two additive tables,
+routes and existing-page controls. A pre-start process refusal now records failed, not an uncertain execution.
+Real scratch-browser verification recorded a decision and an outcome note while the run count stayed unchanged.
+See `docs/plans/2026-09-15-working-loop-decisions.md` and `docs/working-loop.md`.
+
 ## 2026-09-15: personal working loop in an isolated local branch
 
 Added a small `/loop` page and controller on `session/2026-09-15-working-loop`. The existing job queue carries only

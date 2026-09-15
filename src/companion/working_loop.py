@@ -12,6 +12,8 @@ from sqlalchemy import insert, select, update
 
 from companion.db import engine_for_store
 from companion.paths import DATA_DIR
+from companion.schema import loop_reconciliations as RECONCILIATIONS
+from companion.schema import loop_review_decisions as OWNER_DECISIONS
 from companion.schema import loop_reviews as REVIEWS
 from companion.schema import loop_runs as RUNS
 from companion.schema import metadata
@@ -19,6 +21,7 @@ from companion.settings import get_settings
 from companion.working_loop_process import (  # re-export the process boundary for callers and tests
     MAX_PROMPT_BYTES,
     DispatchInterrupted,
+    ProcessNotStarted,
     command_for,
     parse_result,
 )
@@ -35,6 +38,10 @@ from companion.working_loop_process import (
 POLICY_VERSION = "2026-09-15.1"
 APPROVED_DEVELOPERS = frozenset({"Anthropic", "OpenAI"})
 PERSONAL_OWNER = "personal"
+STALE_DISPATCH_GRACE_SECONDS = 30
+DECISIONS = ("approve", "reject")
+RECONCILIATION_OUTCOMES = ("nothing_happened", "provider_processed")
+MAX_NOTE_CHARS = 2000
 STATUSES = ("queued", "dispatching", "done", "failed", "unreconciled", "mismatch")
 
 
@@ -104,6 +111,29 @@ class Review:
     created_at: str
 
 
+@dataclass(frozen=True)
+class Decision:
+    id: int
+    owner: str
+    review_id: int
+    subject_run_id: int
+    decision: str
+    artifact_sha256: str
+    reviewer_output_sha256: str
+    created_at: str
+
+
+@dataclass(frozen=True)
+class Reconciliation:
+    id: int
+    owner: str
+    run_id: int
+    outcome: str
+    note_sha256: str
+    note_path: str
+    created_at: str
+
+
 def _now():
     return datetime.now(UTC).isoformat()
 
@@ -162,6 +192,18 @@ class LoopStore(ABC):
 
     @abstractmethod
     def find_session(self, *, owner, project, topic, provider): ...
+
+    @abstractmethod
+    def get_review(self, review_id, *, owner): ...
+
+    @abstractmethod
+    def decide_review(self, *, owner, review_id, decision): ...
+
+    @abstractmethod
+    def add_reconciliation(self, *, owner, run_id, outcome, note): ...
+
+    @abstractmethod
+    def reconciliations_for(self, run_id, *, owner): ...
 
 
 class DbLoopStore(LoopStore):
@@ -283,13 +325,67 @@ class DbLoopStore(LoopStore):
         with self.engine.connect() as conn:
             rows = conn.execute(select(REVIEWS).where(REVIEWS.c.owner == owner,
                                                      REVIEWS.c.subject_run_id == run_id).order_by(REVIEWS.c.id)).all()
+            decisions = conn.execute(select(OWNER_DECISIONS).where(OWNER_DECISIONS.c.owner == owner,
+                OWNER_DECISIONS.c.subject_run_id == run_id).order_by(OWNER_DECISIONS.c.id)).all()
         results = []
         for row in rows:
             data = dict(row._mapping)
             reviewer = self.get_run(row.reviewer_run_id, owner=owner)
             data["stale"] = (current != row.artifact_sha256 or not reviewer
                              or self.current_artifact_sha256(reviewer.id, owner=owner) != reviewer.output_sha256)
+            data["decisions"] = [dict(d._mapping, stale=data["stale"] or d.artifact_sha256 != current
+                                      or d.reviewer_output_sha256 != reviewer.output_sha256)
+                                 for d in decisions if d.review_id == row.id]
             results.append(data)
+        return results
+
+    def get_review(self, review_id, *, owner):
+        with self.engine.connect() as conn:
+            row = conn.execute(select(REVIEWS).where(REVIEWS.c.id == review_id, REVIEWS.c.owner == owner)).first()
+        return Review(**dict(row._mapping)) if row else None
+
+    def decide_review(self, *, owner, review_id, decision):
+        review = self.get_review(review_id, owner=owner)
+        if not review or decision not in DECISIONS:
+            raise ReviewRefused("review_or_decision_invalid")
+        checked = next(r for r in self.reviews_for(review.subject_run_id, owner=owner) if r["id"] == review.id)
+        if checked["stale"]:
+            raise ReviewRefused("review_is_stale")
+        reviewer = self.get_run(review.reviewer_run_id, owner=owner)
+        values = dict(owner=owner, review_id=review.id, subject_run_id=review.subject_run_id, decision=decision,
+                      artifact_sha256=review.artifact_sha256, reviewer_output_sha256=reviewer.output_sha256, created_at=_now())
+        with self.engine.begin() as conn:
+            result = conn.execute(insert(OWNER_DECISIONS).values(**values))
+        return Decision(id=result.inserted_primary_key[0], **values)
+
+    def add_reconciliation(self, *, owner, run_id, outcome, note):
+        if not self.get_run(run_id, owner=owner):
+            raise PolicyRefused("run_not_owned")
+        if outcome not in RECONCILIATION_OUTCOMES or not isinstance(note, str) or not note.strip() or len(note) > MAX_NOTE_CHARS:
+            raise PolicyRefused("invalid_reconciliation")
+        values = dict(owner=owner, run_id=run_id, outcome=outcome, note_sha256=_sha(note), note_path="", created_at=_now())
+        with self.engine.begin() as conn:
+            result = conn.execute(insert(RECONCILIATIONS).values(**values))
+            rec_id = result.inserted_primary_key[0]
+            path = self._artifact_path(run_id, owner, f"reconciliation-{rec_id}.md")
+            _write_private(path, note)
+            values["note_path"] = str(path)
+            conn.execute(update(RECONCILIATIONS).where(RECONCILIATIONS.c.id == rec_id).values(note_path=str(path)))
+        return Reconciliation(id=rec_id, **values)
+
+    def reconciliations_for(self, run_id, *, owner):
+        if not self.get_run(run_id, owner=owner):
+            return []
+        with self.engine.connect() as conn:
+            rows = conn.execute(select(RECONCILIATIONS).where(RECONCILIATIONS.c.owner == owner,
+                RECONCILIATIONS.c.run_id == run_id).order_by(RECONCILIATIONS.c.id)).all()
+        results = []
+        for row in rows:
+            try:
+                note = self._artifact_path(run_id, owner, f"reconciliation-{row.id}.md").read_text(encoding="utf-8")
+            except FileNotFoundError:
+                note = None
+            results.append(dict(row._mapping, note=note, note_changed=note is None or _sha(note) != row.note_sha256))
         return results
 
     def find_session(self, *, owner, project, topic, provider):
@@ -336,6 +432,28 @@ class LoopController:
                                      choice=choice, prompt=prompt, review_subject_id=subject.id,
                                      review_subject_sha256=subject.output_sha256)
 
+    def decide_review(self, review_id, *, decision):
+        return self.store.decide_review(owner=self.owner, review_id=review_id, decision=decision)
+
+    def can_reconcile(self, run):
+        if not run or run.owner != self.owner:
+            return False
+        if run.status == "unreconciled":
+            return True
+        if run.status != "dispatching" or not run.started_at:
+            return False
+        try:
+            age = (datetime.now(UTC) - datetime.fromisoformat(run.started_at)).total_seconds()
+        except (ValueError, TypeError):
+            return False
+        return age > self.timeout_seconds + STALE_DISPATCH_GRACE_SECONDS
+
+    def reconcile(self, run_id, *, outcome, note):
+        run = self.store.get_run(run_id, owner=self.owner)
+        if not self.can_reconcile(run):
+            raise PolicyRefused("run_not_reconcilable")
+        return self.store.add_reconciliation(owner=self.owner, run_id=run_id, outcome=outcome, note=note)
+
     def dispatch(self, run_id):
         run = self.store.get_run(run_id, owner=self.owner)
         if not run or run.status != "queued":
@@ -366,6 +484,8 @@ class LoopController:
             done = self.store.finish(run.id, owner=self.owner, **parsed)
         except FileNotFoundError:
             return self.store.finish(run.id, owner=self.owner, status="failed", error="provider_unavailable")
+        except ProcessNotStarted as exc:
+            return self.store.finish(run.id, owner=self.owner, status="failed", error=str(exc))
         except DispatchInterrupted:
             return self.store.finish(run.id, owner=self.owner, status="unreconciled", error="dispatch_interrupted")
         except Exception:

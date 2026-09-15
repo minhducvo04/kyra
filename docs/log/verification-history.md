@@ -1,5 +1,20 @@
 # Verification history
 
+## 2026-09-15: owner decisions and outcome notes verified in the browser
+
+The new 20 Claude-authored acceptance cases failed before implementation and passed after. Combined loop,
+migration and startup checks: **95 passed in 5.32s**. Full suite: **727 passed in 29.62s**. Lint clean.
+A real browser appended an approve decision to a completed independent review and saved an outcome note for an
+explicit synthetic uncertain-run fixture. The review remained a comment, the uncertain status remained unchanged,
+and the run count stayed at eight. No provider request was made by either control. All state was scratch data.
+Private proof: `data/verifications/working-loop/decisions-browser-proof.json`, `decisions-codex-red.log`,
+`decisions-full-final.log`; independent review in `claude-decisions-review.md`. Claude caught a deleted-note edge case; both new regressions and a live missing-note HTTP check now pass with the receipt preserved. Proof: `missing-note-live-proof.json`.
+
+Separate provider probes established that fresh Codex calls do not recall the prior synthetic marker, while explicit
+resume recalls it under the same native session id. Claude explicit resume also recalled its synthetic marker under
+the same id. These prepare a later feature; the page still starts fresh sessions. Proof: `cross-call-isolation.json`,
+`codex-resume-proof.json`, `claude-resume-proof.json`. No native database was edited to simulate continuation.
+
 ## 2026-09-15: working loop, real subscription calls and independent review
 
 Isolated branch `session/2026-09-15-working-loop`, based on clean master. Claude Fable High authored 44 acceptance
