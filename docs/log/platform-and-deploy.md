@@ -1,5 +1,28 @@
 # Platform, configuration and deployment
 
+## 2026-09-15: personal working loop in an isolated local branch
+
+Added a small `/loop` page and controller on `session/2026-09-15-working-loop`. The existing job queue carries only
+run ids; private artifact files carry prompts and responses. Separate developer/host/requested-model/served-model
+fields prevent the model's prose from claiming another provider participated. OpenAI/Codex and Anthropic/Claude
+Code are the two approved routes, with bounded, tool-free official CLI calls using existing subscription sign-in.
+
+Claude Fable High wrote acceptance tests; Codex found and closed a gap in that contract where an unrelated completed
+run could approve an unseen artifact. Review requests now bind the original request, output and hash before execution;
+only independent, completed, current evidence can attach a comment. A conditional claim permits one process per run.
+
+The first real Claude call exposed a macOS Keychain requirement: the sanitized child environment must retain the OS
+account's USER/LOGNAME. A real subprocess regression pins that while proving API key and endpoint overrides remain
+absent. The failed attempt stays visible and immutable; a new explicit review succeeded. Claude then caught global Codex
+instructions leaking into the initial answer. Codex now keeps private native state separate and references existing
+authentication by symlink; two further real calls verified clean answers and capability disabling. Codex's served model remains
+unknown because its current JSONL protocol does not report it. Auxiliary Claude usage remains separate.
+
+This endpoint has its own loopback, Host and same-Origin checks regardless of the wider app's LAN token. Tools and
+repository editing stay unavailable from the page. Native session resume, three-provider orchestration, cost routing,
+memory and Father policy remain future slices. The existing chat handoff stays draft-only. See `docs/working-loop.md`.
+
+
 ## 2026-09-10: snapshot slice complete on local master
 
 After Claude finished the initiatives merge, the reviewed snapshot slice was integrated and local master advanced to `e441bbf`. The installed `com.kyra.snapshot` plist now exactly matches `deploy/com.kyra.snapshot.plist` and runs `scripts/snapshot_data.py` from the main checkout, rather than the temporary worktree. A 04:30 local-time schedule and umask 077 protect copies under `~/kyra-snapshots`; this remains same-disk recovery, not off-machine protection. Kickstart exited 0, eight SQLite integrity checks passed, and all 348 captured files restored identically into a temporary directory, subsequently removed. Evidence: `data/verifications/2026-09-10-snapshot/launchd-main.json`. Combined Python suite: 643 passed, 1 existing optional tokenizer skip; ruff clean. No snapshot push, hook installation, or filesystem-lock rollout.

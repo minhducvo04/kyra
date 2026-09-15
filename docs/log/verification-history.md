@@ -1,5 +1,30 @@
 # Verification history
 
+## 2026-09-15: working loop, real subscription calls and independent review
+
+Isolated branch `session/2026-09-15-working-loop`, based on clean master. Claude Fable High authored 44 acceptance
+cases and independently added 12 regressions; Codex implemented and added five regressions from the live integration
+and review findings. Full suite: **705 passed in 25.92s**. Focused loop suite: **61 passed in 3.29s**. Lint clean.
+
+A real browser submitted a Codex request, observed queued then complete, requested a Claude review, and displayed
+the completed response plus a non-stale comment bound to the original answer's hash. Reload preserved the topic and
+contributions. The first Claude attempt failed sign-in and remained failed: the corrected process environment retains
+OS account identity for Keychain while excluding inherited API keys and endpoint overrides.
+
+Claude's independent review caught global Codex instructions contaminating the first answer. The fix uses a private
+Codex state directory and a symlink to existing authentication. Two further real Codex calls succeeded, including a
+repeat of the original prompt without the leaked session-end line. Native trace inspection found no global instruction
+marker. A request to execute `pwd` reached the residual code-mode entry point, which returned `code-mode host is disabled`;
+no command executed. Capability disabling is verified; absence of every advertised tool name is not claimed.
+
+A deliberately weakened scratch copy removed the review-subject binding check. Claude's test failed on acceptance
+of an unrelated completed reviewer. The unchanged real implementation passed that same test. Private proof in the
+worktree's `data/verifications/working-loop/`: `seeded-defect-red.log`, `seeded-defect-green.log`, `live-run-1.json`
+through `live-run-5.json`, `codex-isolation-proof.json`, `full-tests-final.log`, and `claude-build-review.md`.
+Claude independently rechecked the fixes and approved this limited personal slice. No personal production data was
+used or modified. The live preview uses a separate scratch data directory and port.
+
+
 ## 2026-09-10: snapshot merged and main scheduled entry point verified
 
 Merged Claude's completed integration into the snapshot branch, preserving both sides of two log conflicts, then fast-forwarded local master to `e441bbf`. Enumerated 61 parent/file comparisons: no additions from either parent were lost. Combined suite: **643 passed, 1 skipped in 67.69s**; existing optional tokenizer skip, ruff and plist syntax clean. The main tree matches the verified branch.

@@ -102,3 +102,38 @@ tests changed:
 
 Red after these changes: every case in `tests/test_working_loop.py` fails on `ModuleNotFoundError`; the count is in
 the hand-off block.
+
+## Review (Claude)
+
+Reviewed: uncommitted build over `976b8d1`, 2026-09-15. 12 findings, 1 blocking. Full suite 701 passed, ruff clean;
+12 review regressions added in `tests/test_working_loop_review.py`. The blocker: Duc's global Codex instructions
+(`~/.codex/AGENTS.md`) reached the isolated Codex call in live run 1 (the answer ends with the session-end line the
+prompt never asked for). Details and the fix path are in the private note
+`data/verifications/working-loop/claude-build-review.md`.
+
+### Re-check (Claude, same day)
+
+B1 closed with a dedicated Codex state directory (auth referenced by symlink, no global instructions), proven by a
+live tool-demand call that ran nothing and a repeated prompt with no footer, plus the native trace. Findings 1, 2
+and 4 fixed red-then-green in `tests/test_working_loop_fixes.py`. Full suite 705 passed, ruff clean. **Approved for
+this limited personal slice**; two non-blocking notes carried into the next slice (private note). Commit is
+Codex's; push is Duc's.
+
+## Next slice (Claude's recommendation, needs no Duc input)
+
+Smallest useful slice: **human verdicts and reconciliation**. Two endpoints and two buttons on the existing page,
+same store and HTTP patterns, about ten tests.
+
+1. [`POST /api/loop/runs/{id}/reviews/{review_id}/verdict` with `approve` or `reject`, recorded by the owner,
+   refused when the review is stale] -> verify: the verdict binds the same artifact hash; editing the artifact makes
+   it stale; nothing in the reviewer's prose can set it.
+2. [`POST /api/loop/runs/{id}/reconcile` with `nothing_happened` or `provider_processed` plus a short note, allowed
+   only for `unreconciled` and stuck `dispatching` runs] -> verify: the record keeps its original status and gains
+   a reconciliation entry; only a reconciled run can be re-requested, as a new run, never a re-dispatch; nothing
+   is automatic.
+3. [Cross-call isolation check for the managed Codex state] -> verify: a unique marker in call A is unknown to
+   call B (the CLI writes `memories_*.sqlite` there; `features.memories=false` is passed but not yet proven).
+
+Why this first: today an unreconciled run is a dead end, and the "reviews are comments, the human approves" loop
+has no human step yet. After it, roadmap item 3: native session resume per topic through the private Codex state
+directory and Claude `--resume`, which needs a Codex probe of the resume flags before tests are written.

@@ -657,7 +657,7 @@ def loop_client(wl, monkeypatch, tmp_path):
     runner = ScriptedRunner([ok(wl, claude_stream(f"web reply {SENTINEL}"))])
     controller = wl.LoopController(store, runner, owner=wl.PERSONAL_OWNER)
     monkeypatch.setattr(webapp, "_loop_controller", lambda: controller)
-    with TestClient(webapp.app, client=("127.0.0.1", 4321)) as c:
+    with TestClient(webapp.app, base_url="http://127.0.0.1:8420", client=("127.0.0.1", 4321)) as c:
         yield c, runner
     get_settings.cache_clear()
 
@@ -719,7 +719,7 @@ def test_http_loop_routes_are_loopback_only_even_with_a_valid_token(wl, monkeypa
     runner = ScriptedRunner([])
     monkeypatch.setattr(webapp, "_loop_controller", lambda: wl.LoopController(store, runner, owner=wl.PERSONAL_OWNER))
     try:
-        lan = TestClient(webapp.app, client=("192.168.1.42", 51000))
+        lan = TestClient(webapp.app, base_url="http://127.0.0.1:8420", client=("192.168.1.42", 51000))
         auth = {"Authorization": "Bearer s3cret-token"}
         assert lan.get("/api/backend", headers=auth).status_code == 200      # the token still works elsewhere
         for method, path in [("get", "/api/loop/runs"), ("get", "/api/loop/runs/1"), ("post", "/api/loop/runs")]:

@@ -1,0 +1,115 @@
+"use strict";
+const $ = id => document.getElementById(id);
+let records = [], selected = "", busy = false;
+const cards = new Map();
+const statusLabel = {queued:"Queued", dispatching:"Running", done:"Complete", failed:"Failed",
+  unreconciled:"Needs checking", mismatch:"Model changed"};
+const errorLabel = {
+  provider_unavailable:"The model app could not be found. Check its installation.",
+  provider_exit_failed:"The model app could not complete this call. Check its sign-in and availability.",
+  dispatch_interrupted:"The call was interrupted. Its completion could not be confirmed.",
+  subject_changed:"The answer changed before review. The review was stopped.",
+  served_model_mismatch:"The provider reported a different model from the one requested.",
+  malformed_stream:"The model app returned an incomplete or unexpected receipt."
+};
+const pending = r => ["queued", "dispatching"].includes(r.status);
+const modelName = r => r.developer === "Anthropic" ? "Claude" : "Codex";
+function el(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+async function readJson(url, options) {
+  const response = await fetch(url, options);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || data.detail?.[0]?.msg || "Request failed");
+  return data;
+}
+function showTopics() {
+  const root = $("topics"); root.replaceChildren();
+  const query = $("filter").value.trim().toLowerCase();
+  for (const topic of [...new Set(records.map(r => r.topic))].filter(t => t.toLowerCase().includes(query))) {
+    const button = el("button", topic, "topic-button" + (topic === selected ? " active" : ""));
+    button.onclick = () => { selected = topic; $("topic").value = topic; render(); showTopics(); };
+    root.append(button);
+  }
+}
+async function inspect(record) {
+  const detail = await readJson(`/api/loop/runs/${record.id}`);
+  const card = el("article", undefined, "card"); card.id = `run-${record.id}`;
+  const top = el("div", undefined, "card-top");
+  top.append(el("strong", `${modelName(record)} ${record.review_subject_id ? "· Review" : "· Answer"}`),
+    el("span", statusLabel[record.status] || record.status, `badge ${record.status}`));
+  card.append(top, el("p", `#${record.id} · ${record.requested_model} · ${record.effort || "default effort"}`, "meta"));
+  if (record.review_subject_id) card.append(el("p", `Review of contribution #${record.review_subject_id}. No automatic approval.`, "meta"));
+  const fallback = pending(record) ? "Waiting for the model. You can leave this page open." : "No completed answer was recorded.";
+  card.append(el("pre", detail.artifact.output || fallback, "answer"));
+  if (record.error) card.append(el("p", `${errorLabel[record.error] || "This call could not be verified. Open its receipt for the recorded reason."} No automatic retry.`, "meta"));
+  for (const review of detail.reviews) card.append(el("p", `Review #${review.reviewer_run_id}: ${review.stale ? "stale, artifact changed" : review.verdict}`, "meta"));
+  if (record.status === "done") {
+    const reviewButton = el("button", `Ask ${record.developer === "Anthropic" ? "Codex" : "Claude"} to review`);
+    reviewButton.onclick = async () => {
+      reviewButton.disabled = true;
+      try { await readJson(`/api/loop/runs/${record.id}/review`, {method:"POST"}); await refresh(); }
+      catch (error) { $("notice").textContent = error.message; }
+      finally { reviewButton.disabled = false; }
+    };
+    card.append(reviewButton);
+  }
+  const request = el("details"); request.append(el("summary", "Request sent"), el("pre", detail.artifact.prompt, "receipt"));
+  const receipt = el("details");
+  receipt.append(el("summary", "Execution receipt"), el("pre", [
+    `Developer: ${record.developer} · Host: ${record.host} · Method: ${record.method}`,
+    `Requested: ${record.requested_model}`,
+    `Reported by provider: ${record.served_model || "Not supplied by this CLI"}`,
+    `Session: ${record.provider_session_id || "Not received"}`,
+    `Request: ${record.provider_request_id || "Not supplied"}`,
+    `Input SHA-256: ${record.input_sha256}`, `Output SHA-256: ${record.output_sha256 || "Not received"}`,
+    `Usage: ${record.usage ? JSON.stringify(record.usage, null, 2) : "Not supplied"}`,
+    `Per-model usage: ${record.model_usage ? JSON.stringify(record.model_usage, null, 2) : "Not supplied"}`,
+    "Cost: subscription usage; marginal billed cost is not supplied. Any provider costUSD is a list-price estimate.",
+    `Started: ${record.started_at || "Not started"} · Finished: ${record.finished_at || "Not finished"}`,
+    `Policy: ${record.policy_version} · Recorded error: ${record.error || "None"}`
+  ].join("\n"), "receipt"));
+  card.append(request, receipt); return card;
+}
+async function render() {
+  const topic = selected;
+  const visible = records.filter(r => r.topic === topic).reverse();
+  $("count").textContent = `${visible.length} saved`;
+  const nodes = [];
+  for (const record of visible) {
+    // Refresh review metadata too, while preserving opened receipts and stable cards otherwise.
+    const detail = await inspect(record);
+    if (selected !== topic) return;
+    const previous = cards.get(record.id);
+    if (previous) previous.querySelectorAll("details").forEach((d, i) => { detail.querySelectorAll("details")[i].open = d.open; });
+    cards.set(record.id, detail); nodes.push(detail);
+  }
+  $("runs").replaceChildren(...(nodes.length ? nodes : [el("p", "No contributions yet. Send the first request above.", "empty")]));
+}
+async function refresh() {
+  if (busy) return;
+  busy = true;
+  try {
+    records = (await readJson("/api/loop/runs")).runs;
+    if (!selected && records.length && !$("topic").value) { selected = records[0].topic; $("topic").value = selected; }
+    showTopics(); await render();
+  } catch (error) { $("notice").textContent = error.message; }
+  finally { busy = false; }
+}
+$("filter").oninput = showTopics;
+$("new-topic").onclick = () => { selected = ""; $("topic").value = ""; $("prompt").value = ""; $("topic").focus(); render(); showTopics(); };
+$("request").onsubmit = async event => {
+  event.preventDefault(); $("run").disabled = true; $("notice").textContent = "";
+  try {
+    const topic = $("topic").value.trim();
+    await readJson("/api/loop/runs", {method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({choice:$("choice").value, prompt:$("prompt").value, topic})});
+    selected = topic; $("prompt").value = ""; await refresh();
+  } catch (error) { $("notice").textContent = `${error.message}. Check saved contributions before submitting again.`; }
+  finally { $("run").disabled = false; }
+};
+refresh();
+setInterval(() => { if (records.some(pending)) refresh(); }, 2500);
