@@ -2108,7 +2108,7 @@ def loop_run(run_id: int) -> dict:
     return {"run": asdict(record), "artifact": controller.store.read_artifact(run_id, owner=controller.owner),
             "reviews": controller.store.reviews_for(run_id, owner=controller.owner),
             "reconciliations": controller.store.reconciliations_for(run_id, owner=controller.owner),
-            "can_reconcile": controller.can_reconcile(record)}
+            "can_reconcile": controller.can_reconcile(record), "can_continue": controller.can_continue(record)}
 
 
 def _enqueue_loop(record) -> dict:
@@ -2158,6 +2158,24 @@ HANDLERS["loop_dispatch"] = _run_loop_job
 class LoopDecisionIn(BaseModel):
     model_config = {"extra": "forbid"}
     decision: Literal["approve", "reject"]
+
+
+class LoopContinueIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    prompt: str = Field(min_length=1, max_length=65536)
+
+
+@app.post("/api/loop/runs/{run_id}/continue")
+def loop_continue(run_id: int, body: LoopContinueIn) -> dict:
+    from companion.working_loop import PolicyRefused
+    controller = _loop_controller()
+    if not controller.store.get_run(run_id, owner=controller.owner):
+        raise ApiError(404, "not_found", "Run not found")
+    try:
+        record = controller.continue_run(run_id, prompt=body.prompt)
+    except PolicyRefused as exc:
+        raise ApiError(409, "continuation_refused", str(exc)) from None
+    return _enqueue_loop(record)
 
 
 class LoopReconciliationIn(BaseModel):

@@ -17,9 +17,33 @@ finds installed binaries on PATH or in their macOS vendor application locations.
 4. Select **Ask Claude to review** or **Ask Codex to review**. The other company receives the original request,
    exact answer and its SHA-256 hash. A completed review appears in the topic and is attached as a comment.
 
-The topic list groups the latest 100 saved contributions. Older receipts remain in the database. Each dispatch starts a fresh CLI session; automatic native session
-resume and automatic inclusion of older topic messages are not implemented. The store has an owner/project/topic/provider
-lookup for future controlled resume. Be explicit about necessary context in each new request.
+The topic list groups the latest 100 saved contributions. Older receipts remain in the database. An ordinary request
+starts a fresh conversation. Choosing a topic groups contributions; it does not silently send that topic's history.
+
+## Continuing an answer
+
+Choose **Continue this conversation** on an eligible completed answer. The form names that contribution and keeps
+its topic and model fixed. **Send follow-up** resumes its recorded native session; **Start a fresh conversation
+instead** returns to a new session. The answer card shows its parent and says when the provider's returned session
+id matches the requested one. The receipt keeps both requested and returned ids. The CLI restores that session's
+context, which may increase input usage.
+
+Only the newest completed run for that owner/project/topic/provider can be continued. It must be a regular answer,
+use the current policy/model/effort, have a valid native identifier, and still match its saved prompt and output
+hashes. Older-policy receipts remain readable but cannot continue. One child is reserved per parent in the database,
+including under concurrent requests. A failed or uncertain follow-up keeps that reservation; start a fresh conversation
+instead of retrying the same parent. A verified child can itself be continued. A session mismatch is shown explicitly
+and its answer remains available for inspection.
+
+Reviews start fresh and cannot be resumed. A continued-answer review currently sees only its latest request and
+answer; the review prompt explicitly warns that earlier turns were not shown. This feature does not import unrelated native app chats or choose a
+conversation automatically. It verifies continuity for conversations created through this loop. Do not also resume
+these managed sessions outside Kyra while using them here; the controller cannot reserve another application's calls.
+
+Upgrading an earlier loop build requires migrating its existing `loop.db` before starting this version. Back up and
+verify its recorded schema first. Startup creates missing tables but does not add columns to old tables. The tested
+scratch upgrade matched the slice 2 schema, stamped its previously unversioned database at `f915b18d3e42`, then
+upgraded to `a916c29e4f53` with all eight prior receipts preserved. Do not stamp a different database by assumption.
 
 ## What the receipts prove
 

@@ -6,7 +6,7 @@ Timestamps stay ISO-8601 strings (as v1 wrote them) rather than
 TIMESTAMP columns - changing that is a data migration, tracked for a
 later slice. Alembic (migrations/) owns schema changes from here on.
 """
-from sqlalchemy import CheckConstraint, Column, Float, Integer, MetaData, String, Table, Text
+from sqlalchemy import CheckConstraint, Column, Float, Integer, MetaData, String, Table, Text, UniqueConstraint
 
 metadata = MetaData()
 
@@ -191,6 +191,9 @@ loop_runs = Table(
     Column("finished_at", String(64)),
     Column("review_subject_id", Integer),
     Column("review_subject_sha256", String(64)),
+    Column("continued_from_run_id", Integer),
+    Column("requested_session_id", String(160)),
+    UniqueConstraint("continued_from_run_id", name="loop_one_child_per_parent"),
     CheckConstraint("status IN ('queued','dispatching','done','failed','unreconciled','mismatch')", name="loop_run_status"),
 )
 

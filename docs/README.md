@@ -6,7 +6,7 @@ Start with `../AGENTS.md` (rules, commands, architecture) and `../README.md` (th
 
 | File | What it is |
 |---|---|
-| [working-loop.md](working-loop.md) | Personal Codex/Claude calls, private execution receipts, independent review comments and owner decisions. |
+| [working-loop.md](working-loop.md) | Personal Codex/Claude calls, private execution receipts, independent review comments, owner decisions and explicit conversation continuation. |
 | `design.md` | The v1 design: persona, memory over retrieval, the conversation core. Where the project started. |
 | `agentic-roadmap.md` | Duc's prioritised use cases, routed against the model benchmark and answered. The router's design history. |
 | `v2-outline.md` | The industry-shaped v2 outline (services, stores, queue, deploy) that Phase 1 was built from. |

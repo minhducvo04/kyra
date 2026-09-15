@@ -1,5 +1,18 @@
 # Verification history
 
+## 2026-09-15: native continuation and fresh-session isolation
+
+Claude Fable High authored the continuation contract and 21 cases, including concurrent parent reservation and
+changed-parent refusals. Focused loop/migration/startup checks: **118 passed in 6.91s**. Full suite: **749 passed in
+28.89s**. Both providers passed live A/B/C checks: a fresh call stored a synthetic marker; a browser-requested
+continuation recalled it with the same native session id; a separate fresh call returned UNKNOWN with a different
+id. Duplicate continuation returned 409. Private proof: `data/verifications/working-loop/continuation-live-proof.json`.
+
+The existing scratch database was unversioned. Its schema was compared with commit `0358938`, backed up, stamped
+at its verified prior revision and upgraded. All eight old run rows survived unchanged; proof and backup remain
+private (`continuation-migration-proof.json`, `live/loop-before-continuation.db`). Production databases were not
+opened or migrated. Independent implementation review is recorded in `claude-continuation-review.md`.
+
 ## 2026-09-15: owner decisions and outcome notes verified in the browser
 
 The new 20 Claude-authored acceptance cases failed before implementation and passed after. Combined loop,

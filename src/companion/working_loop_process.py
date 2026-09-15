@@ -7,6 +7,7 @@ import signal
 import subprocess
 import tempfile
 import time
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -123,11 +124,18 @@ def _claude_path() -> str:
     return "claude"
 
 
-def command_for(choice) -> list[str]:
+def command_for(choice, *, resume_session_id=None) -> list[str]:
+    if resume_session_id is not None:
+        # IDs come from verified receipts, never from caller-supplied CLI options.
+        try:
+            if str(uuid.UUID(resume_session_id)) != resume_session_id:
+                raise ValueError
+        except (ValueError, TypeError, AttributeError):
+            raise ProcessNotStarted("invalid_session_id") from None
     if choice.provider == "claude_code":
         return [_claude_path(), "--safe-mode", "--model", choice.requested_model, "--effort", choice.effort,
                 "--tools", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
-                "--output-format", "stream-json", "--verbose", "-p"]
+                "--output-format", "stream-json", "--verbose", "-p"] + (["--resume", resume_session_id] if resume_session_id else [])
     settings = get_settings()
     binary = settings.codex_cli_path or shutil.which("codex") or "/Applications/ChatGPT.app/Contents/Resources/codex"
     args = [binary, "exec", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check",
@@ -137,7 +145,7 @@ def command_for(choice) -> list[str]:
                     "code_mode", "code_mode_host", "image_generation", "view_image", "hooks", "memories",
                     "skill_search", "sleep_tool", "workspace_dependencies"):
         args.extend(["-c", f"features.{feature}=false"])
-    return args + ["-"]
+    return args + (["resume", resume_session_id] if resume_session_id else []) + ["-"]
 
 
 def parse_result(result: ProcessResult, provider: str) -> dict:

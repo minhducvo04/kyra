@@ -1,5 +1,18 @@
 # Platform, configuration and deployment
 
+## 2026-09-15: explicit native continuation with one child per answer
+
+The loop can resume a completed answer's native Claude or Codex session. The caller supplies only its run id and
+new prompt. The controller checks owner, scope, exact allowed model/effort, current policy, UUID, latest completed
+run id and saved artifact hashes. A database uniqueness constraint reserves one child per parent at creation,
+including concurrent requests; failed or uncertain children keep that reservation. Parent checks repeat before
+dispatch and returned session identity must match. Reviews still start fresh.
+
+Policy advances to `2026-09-15.2`; prior receipts remain readable but cannot be resumed. Migration
+`a916c29e4f53` adds the link fields and uniqueness constraint, tolerating current tables already created by startup.
+A real upgrade of the scratch loop database preserved all eight prior run rows; production data was untouched.
+See `docs/working-loop.md` for usage and the requirement to migrate an existing loop database before startup.
+
 ## 2026-09-15: owner decisions stay separate from model reviews
 
 The personal working loop now appends owner approve/reject decisions beside completed model reviews. Both the
