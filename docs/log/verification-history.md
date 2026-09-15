@@ -1,5 +1,17 @@
 # Verification history
 
+## 2026-09-15: prior-turn review evidence and stale-context refusal
+
+Claude's 14 acceptance cases pass (13 initially failed; the oversized-subject refusal already existed). All loop,
+migration and startup checks: **133 passed in 6.13s**. Full suite: **766 passed in 27.45s**; lint clean.
+A browser-requested Codex review of a continued Claude answer received one earlier turn and checked its exact
+synthetic marker. Its native session was fresh and its developer independent. A browser-recorded owner decision
+became stale along with the review when the earlier prompt was temporarily edited; another decision returned 409.
+The scratch file was restored. Claude independently confirmed two additional gaps; three red regressions now pass for subject-request edits and a cycle at the depth limit. A live subject-request edit also invalidated the review and decision and returned 409 (`subject-request-live-proof.json`). The approval conditions are fulfilled. Proof: `data/verifications/working-loop/review-context-live-proof.json`.
+
+The additive scratch upgrade preserved all fourteen existing run rows (`review-context-migration-proof.json`).
+Production data was untouched. Independent implementation review is recorded in `claude-review-context-review.md`.
+
 ## 2026-09-15: native continuation and fresh-session isolation
 
 Claude Fable High authored the continuation contract and 21 cases, including concurrent parent reservation and

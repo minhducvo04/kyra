@@ -1,5 +1,16 @@
 # Platform, configuration and deployment
 
+## 2026-09-15: bounded prior turns for independent reviews
+
+Reviews of continued answers now receive up to eight prior turns from the loop's own artifacts. Prompt selection
+is deterministic: inspect a bounded chain, validate owner/scope/hashes, put turns in chronological order and drop
+whole oldest turns to fit the existing byte limit. Omission is explicit. Review receipts store only included run
+ids and input/output hashes, with an omission flag. Quoted conversation text remains data and reviewers run fresh.
+
+Included context is rechecked before dispatch, attaching a review and recording an owner decision. Edits make
+reviews and decisions stale. Migration `b916d30f5a64` adds a nullable metadata column; legacy reviews remain readable.
+A real independent review used one earlier turn, and a reversible scratch edit proved stale-state propagation.
+
 ## 2026-09-15: explicit native continuation with one child per answer
 
 The loop can resume a completed answer's native Claude or Codex session. The caller supplies only its run id and

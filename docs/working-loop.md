@@ -35,15 +35,20 @@ including under concurrent requests. A failed or uncertain follow-up keeps that 
 instead of retrying the same parent. A verified child can itself be continued. A session mismatch is shown explicitly
 and its answer remains available for inspection.
 
-Reviews start fresh and cannot be resumed. A continued-answer review currently sees only its latest request and
-answer; the review prompt explicitly warns that earlier turns were not shown. This feature does not import unrelated native app chats or choose a
+Reviews start fresh and cannot be resumed. A review of a continued answer includes up to eight prior turns,
+oldest first, read from this loop's saved artifacts. Whole oldest turns are removed if needed to fit the prompt
+limit; the request and page say when earlier turns were omitted. Missing or changed inspected context or a changed subject request refuses the
+review. The receipt records each included turn's id and input/output hashes. A change to any included prompt or
+answer stops a queued review and marks a completed review and its owner decisions stale. Omitted context is not
+verified; the reviewer is told to flag missing information. Legacy reviews with no recorded context stay labeled. This feature does not import unrelated native app chats or choose a
 conversation automatically. It verifies continuity for conversations created through this loop. Do not also resume
 these managed sessions outside Kyra while using them here; the controller cannot reserve another application's calls.
 
 Upgrading an earlier loop build requires migrating its existing `loop.db` before starting this version. Back up and
 verify its recorded schema first. Startup creates missing tables but does not add columns to old tables. The tested
 scratch upgrade matched the slice 2 schema, stamped its previously unversioned database at `f915b18d3e42`, then
-upgraded to `a916c29e4f53` with all eight prior receipts preserved. Do not stamp a different database by assumption.
+upgraded to `a916c29e4f53` with all eight prior receipts preserved. The later context migration
+`b916d30f5a64` preserved all fourteen receipts present before that upgrade. Do not stamp a different database by assumption.
 
 ## What the receipts prove
 

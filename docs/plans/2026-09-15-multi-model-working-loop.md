@@ -1,6 +1,6 @@
 # Multi-model working loop: performance, cost, memory, and Father’s interface
 
-Date: 2026-09-15. Status: first personal two-provider slice is being implemented with Claude Fable High in `session/2026-09-15-working-loop`. See `2026-09-15-working-loop-build.md` and `../working-loop.md`. Third-company qualification and account setup remain future work. No production deployment.
+Date: 2026-09-15. Status: the personal two-provider loop, owner decisions, recovery notes and explicit native continuation are implemented with Claude Fable High on `session/2026-09-15-working-loop`; bounded prior-turn review context is implemented and independently reviewed. See `2026-09-15-working-loop-build.md` and `../working-loop.md`. Third-company qualification and account setup remain future work. No production deployment.
 
 ## 1. Outcome and standing decisions
 

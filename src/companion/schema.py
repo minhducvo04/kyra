@@ -193,6 +193,7 @@ loop_runs = Table(
     Column("review_subject_sha256", String(64)),
     Column("continued_from_run_id", Integer),
     Column("requested_session_id", String(160)),
+    Column("review_context", Text),
     UniqueConstraint("continued_from_run_id", name="loop_one_child_per_parent"),
     CheckConstraint("status IN ('queued','dispatching','done','failed','unreconciled','mismatch')", name="loop_run_status"),
 )
