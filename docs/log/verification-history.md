@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-15: layered visionOS app icon
+
+Real Xcode simulator build, separate com.kyra.IconPreview installation, and Home View rendering verified the new three-layer icon. Source layers checked at 1024 x 1024 with an opaque background and transparent foregrounds; Assets.car and CFBundleIcons were present in the built app. 22 native tests, Python suite and lint passed. Evidence in the primary checkout: data/verifications/2026-09-15-vision-icon/build.log, swift-tests.log, pytest.log and home-icon.png. Production app data was untouched; the preview uses its own bundle identifier. Physical headset appearance and independent review remain unverified.
+
 **2026-09-14 (native AVP voice)**: real signed device build and installation; 22 Swift tests;
 643 Python tests passed, one existing optional skip; ruff clean. The actual Swift multipart/SSE
 voice client completed a synthetic speech round trip through isolated Whisper, real Claude, Chroma

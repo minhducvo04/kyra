@@ -7,7 +7,7 @@ let package = Package(
     products: [.library(name: "KyraQueueLab", targets: ["KyraQueueLab"])],
     targets: [
         .target(name: "KyraQueueLab", path: "KyraVision/KyraVision",
-                exclude: ["KyraVisionApp.swift", "KyraClient.swift", "ContentView.swift",
+                exclude: ["Assets.xcassets", "KyraVisionApp.swift", "KyraClient.swift", "ContentView.swift",
                           "PresenceOrb.swift", "SpeechPlayer.swift", "TodayView.swift",
                           "WorkspaceView.swift", "LearningLabView.swift"],
                 sources: ["QueueSimulation.swift", "WorkspaceState.swift", "LearningLab.swift",

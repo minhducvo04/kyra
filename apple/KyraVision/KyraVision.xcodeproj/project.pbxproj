@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1000000000000000000115 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000015 /* Assets.xcassets */; };
 		A1000000000000000000101 /* KyraVisionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001 /* KyraVisionApp.swift */; };
 		A1000000000000000000102 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002 /* ContentView.swift */; };
 		A1000000000000000000103 /* KyraClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000003 /* KyraClient.swift */; };
@@ -23,6 +24,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A1000000000000000000015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1000000000000000000000 /* KyraVision.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KyraVision.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000001 /* KyraVisionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KyraVisionApp.swift; sourceTree = "<group>"; };
 		A1000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -61,6 +63,7 @@
 		A1000000000000000000301 /* KyraVision */ = {
 			isa = PBXGroup;
 			children = (
+				A1000000000000000000015 /* Assets.xcassets */,
 				A1000000000000000000013 /* VoiceInput.swift */,
 				A1000000000000000000014 /* VoiceStream.swift */,
 				A1000000000000000000001 /* KyraVisionApp.swift */,
@@ -144,6 +147,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000000000000000000115 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

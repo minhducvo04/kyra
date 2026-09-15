@@ -1,5 +1,11 @@
 # The visionOS client
 
+## 2026-09-15: a layered orb app icon
+
+The client referenced AppIcon without shipping an asset catalog. Added original cyan sphere artwork with an open orbit to match the companion direction, using an opaque background and two transparent 1024 x 1024 sRGB layers. Native drawing source is in apple/Design/generate_app_icon.swift so the artwork remains editable without a new dependency. The system applies its circular mask and layer depth. The catalog is now included in app resources and excluded from the state-test Swift package.
+
+Verified by a real visionOS simulator build, compiled icon metadata, separate preview installation, and Home View screenshot. All 22 native tests passed; the Python suite and lint passed. Evidence: data/verifications/2026-09-15-vision-icon/ in the primary checkout. The native floating orb/card remains a later slice on this branch; no chat or voice behavior changed. Independent review is pending before integration.
+
 ## 2026-09-14: native microphone input for the headset
 
 Duc reached the physical client's connection screen and requested voice input without keyboard dictation.
