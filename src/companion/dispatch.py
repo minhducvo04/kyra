@@ -1,5 +1,6 @@
 """Explicit assignment stages: Claude plans, Codex builds, Claude reviews."""
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -50,6 +51,21 @@ def codex_exec_command(worktree: Path, brief: Path) -> list[str]:
             "--skip-git-repo-check", "--json", "-m", choice.requested_model,
             "-c", f'model_reasoning_effort="{choice.effort}"',
             f"Read {brief} and implement that assignment. Do not edit tests. Leave changes unstaged. Do not push."]
+
+
+def final_message(stdout: str) -> str | None:
+    """Extract display text from tool-using builds, without attesting their protocol."""
+    for line in reversed(stdout.splitlines()):
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict) or event.get("type") != "item.completed":
+            continue
+        item = event.get("item")
+        if isinstance(item, dict) and item.get("type") == "agent_message" and isinstance(item.get("text"), str):
+            return item["text"]
+    return None
 
 
 def _git(root, *args):
@@ -140,9 +156,9 @@ class Dispatcher:
             raise PolicyRefused("dispatch_outcome_unknown") from None
         raw_stream = private / "raw-stream.jsonl"
         _write_private(raw_stream, process.stdout)
-        parsed = parse_result(process, "codex")
+        output = final_message(process.stdout) or parse_result(process, "codex")["output"] or process.stdout[-2000:]
         self.store.finish(run.id, owner=self.owner, status="done" if process.returncode == 0 else "failed",
-                          output=parsed["output"] or process.stdout[-2000:])
+                          output=output)
         result_present = result_path.is_file() and not result_path.is_symlink()
         result_sha = hashlib.sha256(result_path.read_bytes()).hexdigest() if result_present else None
         self.store.advance_assignment(assignment.id, owner=self.owner, status="built",

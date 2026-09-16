@@ -163,6 +163,21 @@ def test_build_stores_final_message_and_private_raw_stream(dp, wl, tmp_path, rep
     assert receipt.files_changed == []
 
 
+def test_build_stores_final_message_after_commands(dp, wl, tmp_path, repo):
+    store = wl.DbLoopStore(tmp_path / "loop.db", artifacts_dir=tmp_path / "artifacts")
+    assignment = _assignment(store)
+    stream = '{"type":"item.completed","item":{"type":"agent_message","text":"Starting"}}\n'
+    stream += codex_stream("Updated hello.py and verified the change.", tool_event=True)
+    stream += 'not JSON\nnull\n{"type":"item.completed","item":null}\n'
+    runner = ScriptedRunner([ok(wl, claude_stream("plan")), ok(wl, stream)])
+    dispatcher = _dispatcher(dp, wl, store, runner, repo, tmp_path)
+    dispatcher.plan(assignment.id)
+    _drain(wl, store, runner)
+    dispatcher.build(assignment.id, confirmed=True)
+    built = store.get_assignment(assignment.id, owner="duc")
+    assert store.read_artifact(built.builder_run_id, owner="duc")["output"] == "Updated hello.py and verified the change."
+
+
 def test_review_carries_the_diff_to_the_other_company(dp, wl, tmp_path, repo):
     store = wl.DbLoopStore(tmp_path / "loop.db", artifacts_dir=tmp_path / "artifacts")
     a = _assignment(store)

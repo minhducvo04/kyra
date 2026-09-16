@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: D05 tool-using build message extraction
+
+The new stored-output regression failed before the fix, then passed with command events, earlier messages and malformed trailing lines. All eight dispatch tests passed with disposable Git worktrees and SQLite stores, using scripted providers. No live model call was made; full-suite evidence is `/private/tmp/kyra-D05-pytest.log`, with results in `data/private_docs/assignment-D05-result.md`.
+
 ## 2026-09-16: D03 build output extraction
 
 One new hermetic test reproduced raw JSON in stored build output before the fix, then verified final message text, the full private stream and its receipt path. All seven dispatch tests passed with real disposable Git worktrees and databases, using scripted provider output. Runtime fallback evidence is `/private/tmp/kyra-D03-runtime.log`; full results are in `data/private_docs/assignment-D03-result.md`. No live model call was made.
