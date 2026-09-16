@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Kyra · Working loop</title><link rel="stylesheet" href="/static/loop.css"><script src="/static/loop.js" defer></script></head>
+<body>
+<header><a href="/">KYRA</a><span>Working loop</span><small>Personal · On this Mac</small></header>
+<main>
+<aside><h2>Your topics</h2><label for="filter">Find a topic</label><input id="filter" type="search" placeholder="Search saved topics"><div id="topics"></div><button id="new-topic" type="button">+ New topic</button></aside>
+<section class="workspace">
+<div class="intro"><p class="eyebrow">TWO MODELS. VISIBLE CONTRIBUTIONS.</p><h1>A second pair of eyes.</h1><p>Ask one model, then have the other check its exact answer.</p></div>
+<div id="continuation" hidden><p id="continuation-label"></p><button id="fresh-request" type="button">Start a fresh conversation instead</button></div>
+<form id="request"><div class="row"><label>Topic<input id="topic" required maxlength="160" placeholder="What are you working on?"></label><label>Start with<select id="choice"><option value="codex-default">Codex · Astra · High</option><option value="claude-fable-high">Claude · Fable 5.1 · High</option></select></label></div><label>Your request<textarea id="prompt" required maxlength="65536" rows="5" placeholder="Describe the task and what a good result needs to include."></textarea></label><div class="form-footer"><small>Uses your signed-in plans. Answers and review comments are saved privately.</small><button id="run" type="submit">Run model</button></div></form>
+<p id="notice" role="status" aria-live="polite"></p>
+<div class="history-heading"><h2>Contributions</h2><span id="count"></span></div><div id="runs"><p class="empty">Choose a topic or start a new one.</p></div>
+</section>
+</main><footer>Models can explain their conclusions here. Full internal reasoning is not available. Reviews are comments, not a guarantee of correctness.</footer>
+<dialog id="reconcile-dialog">
+<form id="reconcile-form">
+<h2>Record what you found</h2>
+<p id="reconcile-run" class="meta"></p>
+<p>This is your declaration after checking the provider. Kyra keeps the original receipt and does not run another call.</p>
+<label>What happened?<select id="outcome"><option value="nothing_happened">I found no processing</option><option value="provider_processed">The provider processed it</option></select></label>
+<label>Your evidence or notes<textarea id="outcome-note" rows="4" maxlength="2000" required></textarea></label>
+<p id="reconcile-error" role="alert"></p>
+<div class="form-footer"><button type="button" id="cancel-reconcile">Cancel</button><button type="submit" id="save-reconcile">Save note</button></div>
+<small>A separate new request may use your allowance again.</small>
+</form></dialog>
+</body></html>

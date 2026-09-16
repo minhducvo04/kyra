@@ -41,3 +41,9 @@ lint clean. Claude approved with no blocking findings. Two optional parser findi
 and fixed with two focused regression cases. The real Fable proposal and scratch database round trip
 passed after prompt clarifications; malformed responses stayed rejected. Details and limitations are
 recorded at the top of `docs/log/verification-history.md`.
+
+## Integration after PR #4
+
+Duc subsequently authorized pushing and merging PR #5. Preserve both branches' schema/log additions,
+join their migrations with `f916b02c3d45`, and verify upgrades from both former heads before pushing.
+The actual push and merge proceed only after the combined checks and GitHub CI pass.

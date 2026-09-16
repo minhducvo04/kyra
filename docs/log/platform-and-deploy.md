@@ -1,5 +1,64 @@
 # Platform, configuration and deployment
 
+## 2026-09-15: bounded prior turns for independent reviews
+
+Reviews of continued answers now receive up to eight prior turns from the loop's own artifacts. Prompt selection
+is deterministic: inspect a bounded chain, validate owner/scope/hashes, put turns in chronological order and drop
+whole oldest turns to fit the existing byte limit. Omission is explicit. Review receipts store only included run
+ids and input/output hashes, with an omission flag. Quoted conversation text remains data and reviewers run fresh.
+
+Included context is rechecked before dispatch, attaching a review and recording an owner decision. Edits make
+reviews and decisions stale. Migration `b916d30f5a64` adds a nullable metadata column; legacy reviews remain readable.
+A real independent review used one earlier turn, and a reversible scratch edit proved stale-state propagation.
+
+## 2026-09-15: explicit native continuation with one child per answer
+
+The loop can resume a completed answer's native Claude or Codex session. The caller supplies only its run id and
+new prompt. The controller checks owner, scope, exact allowed model/effort, current policy, UUID, latest completed
+run id and saved artifact hashes. A database uniqueness constraint reserves one child per parent at creation,
+including concurrent requests; failed or uncertain children keep that reservation. Parent checks repeat before
+dispatch and returned session identity must match. Reviews still start fresh.
+
+Policy advances to `2026-09-15.2`; prior receipts remain readable but cannot be resumed. Migration
+`a916c29e4f53` adds the link fields and uniqueness constraint, tolerating current tables already created by startup.
+A real upgrade of the scratch loop database preserved all eight prior run rows; production data was untouched.
+See `docs/working-loop.md` for usage and the requirement to migrate an existing loop database before startup.
+
+## 2026-09-15: owner decisions stay separate from model reviews
+
+The personal working loop now appends owner approve/reject decisions beside completed model reviews. Both the
+subject and reviewer output hashes determine whether a decision is current. The model's comment is preserved;
+no decision triggers execution or delivery. Uncertain calls accept a private owner outcome note without altering
+the original receipt or retrying. Stuck dispatches become eligible only after the timeout plus 30 seconds.
+
+Claude wrote the 20 failing acceptance cases and the slice contract; Codex implemented the two additive tables,
+routes and existing-page controls. A pre-start process refusal now records failed, not an uncertain execution.
+Real scratch-browser verification recorded a decision and an outcome note while the run count stayed unchanged.
+See `docs/plans/2026-09-15-working-loop-decisions.md` and `docs/working-loop.md`.
+
+## 2026-09-15: personal working loop in an isolated local branch
+
+Added a small `/loop` page and controller on `session/2026-09-15-working-loop`. The existing job queue carries only
+run ids; private artifact files carry prompts and responses. Separate developer/host/requested-model/served-model
+fields prevent the model's prose from claiming another provider participated. OpenAI/Codex and Anthropic/Claude
+Code are the two approved routes, with bounded, tool-free official CLI calls using existing subscription sign-in.
+
+Claude Fable High wrote acceptance tests; Codex found and closed a gap in that contract where an unrelated completed
+run could approve an unseen artifact. Review requests now bind the original request, output and hash before execution;
+only independent, completed, current evidence can attach a comment. A conditional claim permits one process per run.
+
+The first real Claude call exposed a macOS Keychain requirement: the sanitized child environment must retain the OS
+account's USER/LOGNAME. A real subprocess regression pins that while proving API key and endpoint overrides remain
+absent. The failed attempt stays visible and immutable; a new explicit review succeeded. Claude then caught global Codex
+instructions leaking into the initial answer. Codex now keeps private native state separate and references existing
+authentication by symlink; two further real calls verified clean answers and capability disabling. Codex's served model remains
+unknown because its current JSONL protocol does not report it. Auxiliary Claude usage remains separate.
+
+This endpoint has its own loopback, Host and same-Origin checks regardless of the wider app's LAN token. Tools and
+repository editing stay unavailable from the page. Native session resume, three-provider orchestration, cost routing,
+memory and Father policy remain future slices. The existing chat handoff stays draft-only. See `docs/working-loop.md`.
+
+
 ## 2026-09-10: snapshot slice complete on local master
 
 After Claude finished the initiatives merge, the reviewed snapshot slice was integrated and local master advanced to `e441bbf`. The installed `com.kyra.snapshot` plist now exactly matches `deploy/com.kyra.snapshot.plist` and runs `scripts/snapshot_data.py` from the main checkout, rather than the temporary worktree. A 04:30 local-time schedule and umask 077 protect copies under `~/kyra-snapshots`; this remains same-disk recovery, not off-machine protection. Kickstart exited 0, eight SQLite integrity checks passed, and all 348 captured files restored identically into a temporary directory, subsequently removed. Evidence: `data/verifications/2026-09-10-snapshot/launchd-main.json`. Combined Python suite: 643 passed, 1 existing optional tokenizer skip; ruff clean. No snapshot push, hook installation, or filesystem-lock rollout.
