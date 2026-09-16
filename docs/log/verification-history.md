@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: D03 build output extraction
+
+One new hermetic test reproduced raw JSON in stored build output before the fix, then verified final message text, the full private stream and its receipt path. All seven dispatch tests passed with real disposable Git worktrees and databases, using scripted provider output. Runtime fallback evidence is `/private/tmp/kyra-D03-runtime.log`; full results are in `data/private_docs/assignment-D03-result.md`. No live model call was made.
+
 ## 2026-09-16: D02 dispatch prompt regression
 
 The new stored-prompt assertion failed before the fix and passed afterward; all six dispatch tests passed using disposable databases and scripted providers. No live model behavior is claimed. Full-suite evidence and the requested fresh live dispatch are recorded in `data/private_docs/assignment-D02-result.md`.

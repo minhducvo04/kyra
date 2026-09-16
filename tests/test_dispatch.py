@@ -145,6 +145,24 @@ def test_build_is_gated_then_runs_codex_in_a_fresh_worktree(dp, wl, tmp_path, re
         d.build(a.id, confirmed=True)
 
 
+def test_build_stores_final_message_and_private_raw_stream(dp, wl, tmp_path, repo):
+    store = wl.DbLoopStore(tmp_path / "loop.db", artifacts_dir=tmp_path / "artifacts")
+    assignment = _assignment(store)
+    stream = codex_stream("Updated hello.py and verified the change.")
+    runner = ScriptedRunner([ok(wl, claude_stream("plan")), ok(wl, stream)])
+    dispatcher = _dispatcher(dp, wl, store, runner, repo, tmp_path)
+    dispatcher.plan(assignment.id)
+    _drain(wl, store, runner)
+    receipt = dispatcher.build(assignment.id, confirmed=True)
+    built = store.get_assignment(assignment.id, owner="duc")
+    assert store.read_artifact(built.builder_run_id, owner="duc")["output"] == "Updated hello.py and verified the change."
+    raw_stream = Path(receipt.raw_stream_path)
+    assert raw_stream == Path(receipt.worktree) / "data" / "private_docs" / "raw-stream.jsonl"
+    assert raw_stream.read_text() == stream
+    assert raw_stream.stat().st_mode & 0o777 == 0o600
+    assert receipt.files_changed == []
+
+
 def test_review_carries_the_diff_to_the_other_company(dp, wl, tmp_path, repo):
     store = wl.DbLoopStore(tmp_path / "loop.db", artifacts_dir=tmp_path / "artifacts")
     a = _assignment(store)

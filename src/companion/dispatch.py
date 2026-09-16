@@ -17,6 +17,7 @@ from companion.working_loop import (
     ProcessRunner,
     _write_private,
 )
+from companion.working_loop_process import parse_result
 
 PLAN_INSTRUCTIONS = (
     "No tools, files or commands are available. "
@@ -39,6 +40,7 @@ class BuildReceipt:
     returncode: int
     files_changed: list[str]
     result_present: bool
+    raw_stream_path: str
 
 
 def codex_exec_command(worktree: Path, brief: Path) -> list[str]:
@@ -136,8 +138,11 @@ class Dispatcher:
         except Exception:
             self.store.finish(run.id, owner=self.owner, status="unreconciled", error="dispatch_outcome_unknown")
             raise PolicyRefused("dispatch_outcome_unknown") from None
+        raw_stream = private / "raw-stream.jsonl"
+        _write_private(raw_stream, process.stdout)
+        parsed = parse_result(process, "codex")
         self.store.finish(run.id, owner=self.owner, status="done" if process.returncode == 0 else "failed",
-                          output=process.stdout)
+                          output=parsed["output"] or process.stdout[-2000:])
         result_present = result_path.is_file() and not result_path.is_symlink()
         result_sha = hashlib.sha256(result_path.read_bytes()).hexdigest() if result_present else None
         self.store.advance_assignment(assignment.id, owner=self.owner, status="built",
@@ -151,7 +156,7 @@ class Dispatcher:
                 changed.append(entry[3:])
                 if "R" in entry[:2] or "C" in entry[:2]:
                     next(entries, None)
-        return BuildReceipt(assignment.id, str(worktree), branch, process.returncode, changed, result_present)
+        return BuildReceipt(assignment.id, str(worktree), branch, process.returncode, changed, result_present, str(raw_stream))
 
     def review(self, assignment_id) -> ExecutionRecord:
         assignment = self._assignment(assignment_id)
