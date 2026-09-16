@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: Father drafting, one live Anthropic run
+
+The Northwind fixture workflow with a {{draft}} placeholder went through LLMDrafter with the real Anthropic backend: two calls (draft, then the humanizer critique), the second pass removed a stiff word and kept every fact, check_draft found nothing, the DOCX built and pandoc rendered one page; report findings empty, draft_provider anthropic. Proof: `data/verifications/father/f04-claude-live.json` in the worktree. Synthetic facts only; the Father tenant server still configures no drafter.
+
 ## 2026-09-16: Father task cards in a real browser
 
 The Father tenant server ran on port 8422 with `KYRA_TENANT=father` and an external scratch data root (a
