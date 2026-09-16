@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: learning reels slice A built by Codex, reviewed and real-run by Claude
+
+Codex built `companion.reels`, the four tables and migration, and `scripts/reels.py` through the exec channel against the red tests; Claude fixed its own two conflicting fixtures, then ran the real path against a scratch `KYRA_DATA_DIR`: one oEmbed registration of a public MIT OpenCourseWare lecture URL (title and channel returned, `EMBED_ONLY`, only the oEmbed host contacted) and two Claude proposal calls on the fictional fixture transcript. The first was cut at 2.7 KB with a fenced reply and was rejected as `truncated`; after the fence unwrap and a 16000-token budget the second produced 2 moments that passed every guard, both judged approvable by a person with one note each (`docs/reels-eval.md`). Full suite with the local API token setting empty: **717 passed in 23.52s**; ruff clean; PII guard green. Evidence: `data/verifications/2026-09-16-reels-a/` (raw reply, script). Scratch directory removed; no real store touched.
+
 ## 2026-09-10: snapshot merged and main scheduled entry point verified
 
 Merged Claude's completed integration into the snapshot branch, preserving both sides of two log conflicts, then fast-forwarded local master to `e441bbf`. Enumerated 61 parent/file comparisons: no additions from either parent were lost. Combined suite: **643 passed, 1 skipped in 67.69s**; existing optional tokenizer skip, ruff and plist syntax clean. The main tree matches the verified branch.

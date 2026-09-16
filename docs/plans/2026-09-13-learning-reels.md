@@ -134,8 +134,9 @@ independent visualization, the side-by-side comparison with the original, and in
   text source is windowed by words; `max_moments` is the total across windows. `elaborate(source,
   transcript, start_s, end_s, raw_dir)` is the manual path (the brief's "user marks a start and
   an end"): the same prompt over exactly that window, asked for one moment on those bounds; the
-  same guards. The `llm` is an `AnthropicLLM` built with `max_tokens=4000` (the default 500 cannot
-  hold one record; the drafting tools learned this first); a response ending in
+  same guards. The `llm` is an `AnthropicLLM` built with `max_tokens=16000` (the default 500 cannot
+  hold one record; 4000 was the first choice and the first real call on 2026-09-16 was cut at 2.7 KB
+  because adaptive thinking spends from the same budget); a response ending in
   `llm.TRUNCATION_MARKER` is rejected as `truncated`. The raw response is written untouched to
   `<raw_dir>/<source_id>/<timestamp>.json` before parsing; a rejected proposal is logged with the
   failing guard and the raw file name; one bad window does not stop the others. Result:
@@ -245,7 +246,7 @@ independent visualization, the side-by-side comparison with the original, and in
    `assert_media_allowed`, the `REJECTED` refusals -> verify: their tests green; one real oEmbed
    call on a public university lecture URL with the returned title in the commit message.
 5. `MomentProposer` (`propose` and `elaborate`), `ConceptCard` with `firewall_view`, `Question`,
-   all guards, raw output files, the 4000-token backend -> verify: proposal tests green; one real
+   all guards, raw output files, the 16000-token backend -> verify: proposal tests green; one real
    Claude call on the fixture transcript with the raw JSON kept under `data/reels/raw/` and at
    least one proposal that passes every guard; the outcome and guard reasons in the commit
    message.
@@ -267,6 +268,8 @@ independent visualization, the side-by-side comparison with the original, and in
    Phase 1, the delayed-question form, who approves accuracy, the first subject and first lecture,
    whether a YouTube Data API key should exist for discovery later, the expected group size
    -> verify: answers in the thread (`--agent duc`).
+
+Reviewed: 23c587e, 3 findings, 2 blocking (fixed by Claude before commit: fenced JSON reply, 4000-token budget cut by adaptive thinking; the non-blocking one is the fixture reuse in Claude's own tests). Codex reviews Claude's three fixes at the next hand-off.
 
 ## What is measured
 
@@ -332,7 +335,7 @@ Claude's answers follow each point.
 9. Resource limits: minutes do not bound tokens; text cannot be windowed by minutes; 500 output
    tokens is too few; define partial failure and rerun deduplication.
    *Claude: accepted. Windows are 15 minutes or 2,500 words; `max_moments` is global; the backend
-   is built with 4000 output tokens and a truncated response is rejected as such; one bad window
+   is built with 16000 output tokens (4000 at first, raised after the first real call was cut) and a truncated response is rejected as such; one bad window
    does not stop the others; `DuplicateMomentError` handles reruns.*
 10. Verification gaps: `ImportError` proves only absence; add separate-process CLI checks; Alembic
     targets `kyra.db` by default.
