@@ -213,7 +213,7 @@ def normalize_usage(provider: str, usage: dict | None) -> dict | None:
 
 class LoopStore(ABC):
     @abstractmethod
-    def bind_assignment(self, assignment_id, *, owner, plan_run_id=None, review_run_id=None, worktree=None): ...
+    def bind_assignment(self, assignment_id, *, owner, plan_run_id=None, review_run_id=None, worktree=...): ...
 
     @abstractmethod
     def create_assignment(self, *, owner, code, title, goal, allowed_files, acceptance, tier="work") -> Assignment: ...
@@ -338,9 +338,11 @@ class DbLoopStore(LoopStore):
             return self._assignment(conn.execute(select(ASSIGNMENTS).where(
                 ASSIGNMENTS.c.id == assignment_id, ASSIGNMENTS.c.owner == owner)).first())
 
-    def bind_assignment(self, assignment_id, *, owner, plan_run_id=None, review_run_id=None, worktree=None):
+    def bind_assignment(self, assignment_id, *, owner, plan_run_id=None, review_run_id=None, worktree=...):
         values = {key: value for key, value in dict(plan_run_id=plan_run_id,
-                  review_run_id=review_run_id, worktree=worktree).items() if value is not None}
+                  review_run_id=review_run_id).items() if value is not None}
+        if worktree is not Ellipsis:  # Explicit None clears a failed build's binding.
+            values["worktree"] = worktree
         with self.engine.begin() as conn:
             where = (ASSIGNMENTS.c.id == assignment_id, ASSIGNMENTS.c.owner == owner)
             for run_id in (plan_run_id, review_run_id):

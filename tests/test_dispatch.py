@@ -178,6 +178,27 @@ def test_build_stores_final_message_after_commands(dp, wl, tmp_path, repo):
     assert store.read_artifact(built.builder_run_id, owner="duc")["output"] == "Updated hello.py and verified the change."
 
 
+def test_build_preflight_failure_cleans_up_and_can_retry(dp, wl, tmp_path, repo):
+    store = wl.DbLoopStore(tmp_path / "loop.db", artifacts_dir=tmp_path / "artifacts")
+    assignment = _assignment(store)
+    runner = ScriptedRunner([ok(wl, claude_stream("plan")), wl.ProcessNotStarted("codex_state_customized"),
+                             FileNotFoundError("missing CLI"), ok(wl, codex_stream("Built"))])
+    dispatcher = _dispatcher(dp, wl, store, runner, repo, tmp_path)
+    dispatcher.plan(assignment.id)
+    _drain(wl, store, runner)
+    branches = subprocess.check_output(["git", "branch", "--list"], cwd=repo)
+    for _ in range(2):
+        with pytest.raises(wl.PolicyRefused, match="provider_unavailable"):
+            dispatcher.build(assignment.id, confirmed=True)
+        assert not (tmp_path / "wt" / "W9").exists()
+        after = store.get_assignment(assignment.id, owner="duc")
+        assert after.worktree is None and after.status == "assigned"
+        assert after.plan_run_id is not None
+        assert subprocess.check_output(["git", "branch", "--list"], cwd=repo) == branches
+        assert store.list_runs(owner="duc")[0].error == "provider_unavailable"
+    assert dispatcher.build(assignment.id, confirmed=True).returncode == 0
+
+
 def test_review_carries_the_diff_to_the_other_company(dp, wl, tmp_path, repo):
     store = wl.DbLoopStore(tmp_path / "loop.db", artifacts_dir=tmp_path / "artifacts")
     a = _assignment(store)

@@ -7,6 +7,7 @@ import signal
 import subprocess
 import tempfile
 import time
+import tomllib
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -92,14 +93,24 @@ def _codex_state_directory() -> Path:
         raise ProcessNotStarted("codex_state_symlink")
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     root.chmod(0o700)
-    # Reject any later customization of this managed directory instead of silently inheriting it.
-    for name in ("AGENTS.md", "AGENTS.override.md", "config.toml", "plugins", "rules"):
-        if (root / name).exists():
+    for name in ("AGENTS.md", "AGENTS.override.md", "rules"):
+        if (root / name).exists() or (root / name).is_symlink():
             raise ProcessNotStarted("codex_state_customized")
-    skills = root / "skills"
-    if skills.is_symlink() or (skills.exists() and any(p.name != ".system" for p in skills.iterdir())):
+    # Codex writes project trust entries, plugins, skills, sessions and SQLite caches itself.
+    # Permit only the observed generated config shape, not model/tool/provider overrides.
+    config = root / "config.toml"
+    if config.is_symlink():
         raise ProcessNotStarted("codex_state_customized")
-    # Codex itself installs its bundled .system skills on first use; these are not user extensions.
+    if config.exists():
+        try:
+            data = tomllib.loads(config.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            raise ProcessNotStarted("codex_state_customized") from None
+        projects = data.get("projects", {})
+        if (set(data) - {"projects"} or not isinstance(projects, dict)
+                or any(not isinstance(value, dict) or set(value) != {"trust_level"}
+                       or value["trust_level"] not in ("trusted", "untrusted") for value in projects.values())):
+            raise ProcessNotStarted("codex_state_customized")
     target = root / "auth.json"
     try:
         target.symlink_to(source)

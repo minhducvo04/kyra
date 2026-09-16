@@ -42,3 +42,36 @@ def test_codex_state_directory_links_auth_but_excludes_global_instructions(tmp_p
     (isolated / "skills" / ".system").mkdir(parents=True)
     assert process._codex_state_directory() == isolated
     assert auth.read_text() == '{"auth_mode":"chatgpt","tokens":{"access_token":"fixture"}}'
+
+
+def test_codex_populated_state_is_accepted_but_custom_config_is_refused(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    import pytest
+
+    from companion import working_loop_process as process
+
+    home = tmp_path / "home"
+    (home / ".codex").mkdir(parents=True)
+    (home / ".codex" / "auth.json").write_text('{"auth_mode":"chatgpt"}')
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setattr(process, "DATA_DIR", tmp_path / "data")
+    state = process._codex_state_directory()
+    for name in ("plugins/cache", "skills/.system", "sessions", "shell_snapshots", "tmp"):
+        (state / name).mkdir(parents=True)
+    (state / "state_5.sqlite").touch()
+    config = state / "config.toml"
+    config.write_text('[projects."/tmp/project"]\ntrust_level = "trusted"\n')
+    assert process._codex_state_directory() == state
+    for text in ('model = "custom"', '[projects."/tmp/project"]\ntrust_level = "trusted"\nmodel = "custom"',
+                 'projects = "invalid"', 'not valid toml'):
+        config.write_text(text)
+        with pytest.raises(process.ProcessNotStarted, match="codex_state_customized"):
+            process._codex_state_directory()
+    config.unlink()
+    for name in ("AGENTS.md", "AGENTS.override.md", "rules"):
+        entry = state / name
+        entry.mkdir() if name == "rules" else entry.write_text("Custom instructions")
+        with pytest.raises(process.ProcessNotStarted, match="codex_state_customized"):
+            process._codex_state_directory()
+        entry.rmdir() if name == "rules" else entry.unlink()

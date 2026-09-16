@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: D06 repeated dispatch preflight
+
+Two new hermetic regressions failed before the fix and passed afterward: populated Codex state with continued refusal of custom instructions/configuration, and preflight failures that remove the worktree/branch, clear the binding and allow a successful retry. All 12 dispatch/process tests passed. The actual managed state passed preflight without starting a provider; a previously stranded assignment was recovered after preserving its setup and confirming no source changes. Evidence: `/private/tmp/kyra-D06-state-proof.log`, `/private/tmp/kyra-D06-recovery.log`, `/private/tmp/kyra-D06-pytest.log`; private details: `data/private_docs/assignment-D06-result.md`.
+
 ## 2026-09-16: first assignment dispatched from the Kyra page, end to end
 
 On the integration branch server (8424, worktree data) assignment D01 (casual, one sentence in `docs/working-loop.md`) went through the page's API: Plan queued a Claude run (claude-fable-5-1, 216 s, done); Build with `confirmed: true` created worktree `data/working_loop/worktrees/D01` on branch `session/2026-09-16-D01`, ran `codex exec` there (50 s), changed exactly the allowed file and wrote the result file (receipt with its hash); Review queued a Claude run (12 s, done). All three appeared as cards on `/loop`. Proof: `data/verifications/w2/first-real-dispatch.json`. Three defects surfaced and were assigned: the plan and review prompts never said tools were disabled, so both models answered with tool-call text (D02, fixed and re-verified: a second plan came back as numbered steps in 16 s); the build card showed the raw JSON stream (D03, D05); the managed Codex state directory rejects its own files after the first real run, so a second build was refused and left its worktree bound (D06).

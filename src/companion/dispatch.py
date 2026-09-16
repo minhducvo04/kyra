@@ -150,6 +150,9 @@ class Dispatcher:
                                       timeout_seconds=self.timeout_seconds)
         except (FileNotFoundError, ProcessNotStarted):
             self.store.finish(run.id, owner=self.owner, status="failed", error="provider_unavailable")
+            _git(self.repo_root, "worktree", "remove", "--force", str(worktree))
+            _git(self.repo_root, "branch", "-D", branch)
+            self.store.bind_assignment(assignment.id, owner=self.owner, worktree=None)
             raise PolicyRefused("provider_unavailable") from None
         except Exception:
             self.store.finish(run.id, owner=self.owner, status="unreconciled", error="dispatch_outcome_unknown")
