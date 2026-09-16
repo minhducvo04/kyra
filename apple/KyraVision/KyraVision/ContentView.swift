@@ -15,6 +15,10 @@ struct ContentView: View {
     @State private var speech = SpeechPlayer()
     @State private var voice = VoiceInput(recorder: HeadsetVoiceRecorder())
     @State private var turnID = UUID()
+    @State private var reviewTask: Task<Void, Never>?
+    @State private var reviewID = UUID()
+    @State private var reviewAnswerID: UUID?
+    @State private var reviewDeveloper = ""
 
     private var connected: Bool { !client.baseURL.isEmpty }
     private var answering: Bool { turn != nil }
@@ -127,6 +131,19 @@ struct ContentView: View {
                                 .font(.system(.body))
                                 .foregroundStyle(line.who == "system" ? .secondary : .primary)
                                 .textSelection(.enabled)
+                            if line.who == "kyra" {
+                                Button("Second opinion") { askSecondOpinion(for: line) }
+                                    .disabled(!connected || answering || voice.phase != .idle || reviewTask != nil)
+                                if reviewAnswerID == line.id {
+                                    Text("Asking \(reviewDeveloper)…")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } else if line.who == "review" {
+                                Text("Review comment only. Never an approval.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .id(line.id)
@@ -170,7 +187,7 @@ struct ContentView: View {
                 case .stop:
                     Button("Stop", systemImage: "stop.fill", action: stop)
                         .tint(.red)
-                        .disabled(!presentation.stopEnabled)
+                        .disabled(!presentation.stopEnabled && reviewTask == nil)
                 }
             }
         }
@@ -379,9 +396,56 @@ struct ContentView: View {
         if turnID == id, presentation.presence == .speaking { presentation.presence = .idle }
     }
 
+    private func askSecondOpinion(for answer: TranscriptLine) {
+        guard connected, !answering, voice.phase == .idle, reviewTask == nil,
+              let index = presentation.lines.firstIndex(where: { $0.id == answer.id }),
+              let request = presentation.lines[..<index].last(where: { $0.who == "you" }) else { return }
+        let id = UUID()
+        let connection = client.connection
+        let choice = SecondOpinion.choice(forBadge: answer.badge)
+        let prompt = SecondOpinion.prompt(request: request.text, answer: answer.text)
+        reviewID = id
+        reviewAnswerID = answer.id
+        reviewDeveloper = choice == "codex-default" ? "OpenAI" : "Anthropic"
+        reviewTask = Task {
+            defer {
+                if reviewID == id {
+                    reviewTask = nil
+                    reviewAnswerID = nil
+                }
+            }
+            do {
+                try Task.checkCancellation()
+                guard reviewID == id, client.connection == connection else { return }
+                var run = try await client.createLoopRun(choice: choice, prompt: prompt)
+                while true {
+                    try Task.checkCancellation()
+                    guard reviewID == id, client.connection == connection else { return }
+                    reviewDeveloper = run.developer
+                    if let line = SecondOpinion.line(for: run) {
+                        presentation.lines.append(line)
+                        return
+                    }
+                    try await Task.sleep(for: .seconds(2))
+                    guard reviewID == id, client.connection == connection else { return }
+                    run = try await client.loopRun(run.id)
+                }
+            } catch {
+                guard reviewID == id, !Task.isCancelled, client.connection == connection else { return }
+                presentation.lines.append(TranscriptLine(who: "system",
+                    text: "Second opinion failed: \(error.localizedDescription)"))
+            }
+        }
+    }
+
     private func stop() {
         let hadTurn = answering
-        guard hadTurn || voice.phase != .idle || speech.isSpeaking || presentation.stopEnabled else { return }
+        guard hadTurn || reviewTask != nil || voice.phase != .idle || speech.isSpeaking || presentation.stopEnabled else { return }
+        // Stop listening for this review; it does not approve or cancel the run on the Mac.
+        reviewID = UUID()
+        reviewTask?.cancel()
+        reviewTask = nil
+        reviewAnswerID = nil
         turnID = UUID()
         voice.cancel()
         speech.stop()

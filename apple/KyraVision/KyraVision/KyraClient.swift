@@ -218,6 +218,21 @@ final class KyraClient: WorkspaceAPI, LessonAPI {
         flush()
     }
 
+    func createLoopRun(choice: String, prompt: String) async throws -> LoopRunSummary {
+        let body = try JSONEncoder().encode([
+            "choice": choice, "tier": "work", "topic": "headset", "prompt": prompt
+        ])
+        let (data, response) = try await Self.session.data(for: try request("/api/loop/runs", body: body))
+        try Self.check(response, data: data)
+        return try JSONDecoder().decode(LoopRunSummary.self, from: data)
+    }
+
+    func loopRun(_ id: Int) async throws -> LoopRunSummary {
+        let (data, response) = try await Self.session.data(for: try request("/api/loop/runs/\(id)"))
+        try Self.check(response, data: data)
+        return try JSONDecoder().decode(LoopRunSummary.self, from: data)
+    }
+
     // ---- the daily loop -------------------------------------------------------
     // Read-only endpoints plus the two actions that close a loop. Everything else
     // (profile, documents, autofill) stays on the Mac: those are desk work, and

@@ -25,7 +25,7 @@ final class SecondOpinionTests: XCTestCase {
         let prompt = SecondOpinion.prompt(request: "What is 2+2?", answer: "4")
         XCTAssertTrue(prompt.contains("What is 2+2?") && prompt.contains("\"4\""))
         // sha256("4")
-        XCTAssertTrue(prompt.contains("4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb41b56ff2ce5a6c1f0"))
+        XCTAssertTrue(prompt.contains("4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a"))
         XCTAssertTrue(prompt.lowercased().contains("review comment"))
         XCTAssertFalse(prompt.lowercased().contains("use tools"))
     }
