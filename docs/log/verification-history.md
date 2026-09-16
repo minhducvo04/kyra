@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: integration branch of the four overnight branches
+
+`session/2026-09-16-integration` merges working-loop, father, console and vision-orb-interface onto master, local only. Conflicts were in settings.py (loop fields beside the tenant validator), schema.py (three appended tables and one import line), webapp.py (one import) and the two logs that every branch prepends; each kept both sides. The lost-nothing check enumerated every file each branch changed and found no line any branch had that the merged tree lacks. Three Alembic heads were merged by ecb1b431ebce. Full suite 835 passed in 32.12s, ruff clean, Swift 31 passed. Master is untouched; merging it is Duc's.
+
 ## 2026-09-16: loop usage ledger and tiers in a real browser
 
 The working-loop worktree's server ran on port 8421 against the worktree's own data directory (never the
