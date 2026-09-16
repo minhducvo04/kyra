@@ -6,7 +6,7 @@ Timestamps stay ISO-8601 strings (as v1 wrote them) rather than
 TIMESTAMP columns - changing that is a data migration, tracked for a
 later slice. Alembic (migrations/) owns schema changes from here on.
 """
-from sqlalchemy import CheckConstraint, Column, Float, Integer, MetaData, String, Table, Text
+from sqlalchemy import CheckConstraint, Column, Float, Integer, MetaData, String, Table, Text, UniqueConstraint
 
 metadata = MetaData()
 
@@ -159,4 +159,79 @@ initiative_snapshot = Table(
     "initiative_snapshot", metadata,
     Column("id", Integer, primary_key=True),
     Column("day", String(10), nullable=False),
+)
+
+# Content-free execution receipts. Prompts and replies stay in private artifact files.
+loop_runs = Table(
+    "loop_runs", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("owner", String(160), nullable=False),
+    Column("project", String(160), nullable=False),
+    Column("topic", String(160), nullable=False),
+    Column("choice_key", String(64), nullable=False),
+    Column("provider", String(64), nullable=False),
+    Column("developer", String(64), nullable=False),
+    Column("host", String(64), nullable=False),
+    Column("method", String(16), nullable=False),
+    Column("requested_model", String(160), nullable=False),
+    Column("served_model", String(160)),
+    Column("effort", String(32)),
+    Column("status", String(32), nullable=False),
+    Column("provider_session_id", String(160)),
+    Column("provider_request_id", String(160)),
+    Column("input_sha256", String(64), nullable=False),
+    Column("output_sha256", String(64)),
+    Column("artifact_dir", Text, nullable=False),
+    Column("usage", Text),
+    Column("model_usage", Text),
+    Column("error", String(160)),
+    Column("policy_version", String(64), nullable=False),
+    Column("created_at", String(64), nullable=False),
+    Column("started_at", String(64)),
+    Column("finished_at", String(64)),
+    Column("review_subject_id", Integer),
+    Column("review_subject_sha256", String(64)),
+    Column("continued_from_run_id", Integer),
+    Column("requested_session_id", String(160)),
+    Column("review_context", Text),
+    UniqueConstraint("continued_from_run_id", name="loop_one_child_per_parent"),
+    CheckConstraint("status IN ('queued','dispatching','done','failed','unreconciled','mismatch')", name="loop_run_status"),
+)
+
+loop_reviews = Table(
+    "loop_reviews", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("owner", String(160), nullable=False),
+    Column("subject_run_id", Integer, nullable=False),
+    Column("reviewer_run_id", Integer, nullable=False),
+    Column("verdict", String(32), nullable=False),
+    Column("artifact_sha256", String(64), nullable=False),
+    Column("created_at", String(64), nullable=False),
+    CheckConstraint("verdict IN ('approve','reject','comment')", name="loop_review_verdict"),
+)
+
+# Owner decisions are separate from model comments; neither overwrites execution evidence.
+loop_review_decisions = Table(
+    "loop_review_decisions", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("owner", String(160), nullable=False),
+    Column("review_id", Integer, nullable=False),
+    Column("subject_run_id", Integer, nullable=False),
+    Column("decision", String(16), nullable=False),
+    Column("artifact_sha256", String(64), nullable=False),
+    Column("reviewer_output_sha256", String(64), nullable=False),
+    Column("created_at", String(64), nullable=False),
+    CheckConstraint("decision IN ('approve','reject')", name="loop_owner_decision"),
+)
+
+loop_reconciliations = Table(
+    "loop_reconciliations", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("owner", String(160), nullable=False),
+    Column("run_id", Integer, nullable=False),
+    Column("outcome", String(32), nullable=False),
+    Column("note_sha256", String(64), nullable=False),
+    Column("note_path", Text, nullable=False),
+    Column("created_at", String(64), nullable=False),
+    CheckConstraint("outcome IN ('nothing_happened','provider_processed')", name="loop_declared_outcome"),
 )

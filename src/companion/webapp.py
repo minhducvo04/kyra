@@ -19,6 +19,7 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from functools import cache, cached_property
 from pathlib import Path
+from typing import Literal
 from uuid import UUID
 
 from anthropic import Anthropic
@@ -2047,3 +2048,163 @@ def dismiss_initiative(initiative_id: str, body: DismissInitiativeIn):
         raise ApiError(404, 'not_found', 'Initiative not found') from None
     except ValueError as exc:
         raise ApiError(409, 'initiative_conflict', str(exc)) from None
+
+
+# Working loop stays personal and loopback-only, independently of the optional LAN token.
+@app.middleware("http")
+async def _loop_boundary(request: Request, call_next):
+    if request.url.path == "/loop" or request.url.path.startswith("/api/loop/"):
+        error = None
+        if _client_host(request) not in {"127.0.0.1", "::1"}:
+            error = "loopback_only"
+        elif request.url.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            error = "bad_host"
+        elif request.headers.get("origin") is not None:
+            # Compare scheme/host/port to stop another local page from spending subscriptions.
+            from urllib.parse import urlsplit
+            origin = urlsplit(request.headers["origin"])
+            if (origin.scheme, origin.netloc) != (request.url.scheme, request.url.netloc):
+                error = "bad_origin"
+        if error:
+            return JSONResponse(status_code=403, content={"error": {"code": error,
+                                "message": "Open this page directly on this Mac.", "details": {}}})
+    return await call_next(request)
+
+
+@cache
+def _loop_controller():
+    from companion.working_loop import PERSONAL_OWNER, DbLoopStore, LoopController, SubprocessRunner
+    return LoopController(DbLoopStore(), SubprocessRunner(), owner=PERSONAL_OWNER)
+
+
+class LoopRunIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    choice: str
+    prompt: str = Field(min_length=1, max_length=65536)
+    topic: str = Field(min_length=1, max_length=160)
+    project: str = Field(default="kyra", min_length=1, max_length=160)
+
+
+@app.get("/loop")
+def loop_page() -> HTMLResponse:
+    html = (WEB_DIR / "loop.html").read_text(encoding="utf-8")
+    for asset in ("loop.js", "loop.css"):
+        html = html.replace(f'/static/{asset}"', f'/static/{asset}?v={(WEB_DIR / asset).stat().st_mtime_ns}"')
+    return HTMLResponse(html)
+
+
+@app.get("/api/loop/runs")
+def loop_runs(topic: str | None = None) -> dict:
+    controller = _loop_controller()
+    return {"runs": [asdict(r) for r in controller.store.list_runs(owner=controller.owner, topic=topic)]}
+
+
+@app.get("/api/loop/runs/{run_id}")
+def loop_run(run_id: int) -> dict:
+    controller = _loop_controller()
+    record = controller.store.get_run(run_id, owner=controller.owner)
+    if not record:
+        raise ApiError(404, "not_found", "Run not found")
+    return {"run": asdict(record), "artifact": controller.store.read_artifact(run_id, owner=controller.owner),
+            "reviews": controller.store.reviews_for(run_id, owner=controller.owner),
+            "reconciliations": controller.store.reconciliations_for(run_id, owner=controller.owner),
+            "can_reconcile": controller.can_reconcile(record), "can_continue": controller.can_continue(record)}
+
+
+def _enqueue_loop(record) -> dict:
+    # The queue stores only an id, never prompts or model output.
+    _queue.enqueue("loop_dispatch", {"run_id": record.id})
+    return {"run": asdict(record)}
+
+
+@app.post("/api/loop/runs")
+def loop_create(body: LoopRunIn) -> dict:
+    from companion.working_loop import PolicyRefused
+    try:
+        record = _loop_controller().request(project=body.project, topic=body.topic,
+                                            choice_key=body.choice, prompt=body.prompt)
+    except PolicyRefused as exc:
+        raise ApiError(400, "policy_refused", str(exc)) from None
+    return _enqueue_loop(record)
+
+
+@app.post("/api/loop/runs/{run_id}/review")
+def loop_request_review(run_id: int) -> dict:
+    from companion.working_loop import PolicyRefused
+    try:
+        record = _loop_controller().request_review(run_id)
+    except PolicyRefused as exc:
+        raise ApiError(409, "review_refused", str(exc)) from None
+    return _enqueue_loop(record)
+
+
+def _run_loop_job(payload, on_progress):
+    from companion.working_loop import ReviewRefused
+    controller = _loop_controller()
+    record = controller.dispatch(payload["run_id"])
+    if record.status == "done" and record.review_subject_id:
+        try:
+            controller.store.add_review(owner=controller.owner, subject_run_id=record.review_subject_id,
+                reviewer_run_id=record.id, verdict="comment", artifact_sha256=record.review_subject_sha256)
+        except ReviewRefused:
+            pass  # A changed artifact never receives a fresh review label.
+    on_progress(record.status)
+    return {"run_id": record.id, "status": record.status}
+
+
+HANDLERS["loop_dispatch"] = _run_loop_job
+
+
+class LoopDecisionIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    decision: Literal["approve", "reject"]
+
+
+class LoopContinueIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    prompt: str = Field(min_length=1, max_length=65536)
+
+
+@app.post("/api/loop/runs/{run_id}/continue")
+def loop_continue(run_id: int, body: LoopContinueIn) -> dict:
+    from companion.working_loop import PolicyRefused
+    controller = _loop_controller()
+    if not controller.store.get_run(run_id, owner=controller.owner):
+        raise ApiError(404, "not_found", "Run not found")
+    try:
+        record = controller.continue_run(run_id, prompt=body.prompt)
+    except PolicyRefused as exc:
+        raise ApiError(409, "continuation_refused", str(exc)) from None
+    return _enqueue_loop(record)
+
+
+class LoopReconciliationIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    outcome: Literal["nothing_happened", "provider_processed"]
+    note: str = Field(min_length=1, max_length=2000)
+
+
+@app.post("/api/loop/reviews/{review_id}/decision")
+def loop_decide_review(review_id: int, body: LoopDecisionIn) -> dict:
+    from companion.working_loop import ReviewRefused
+    controller = _loop_controller()
+    if not controller.store.get_review(review_id, owner=controller.owner):
+        raise ApiError(404, "not_found", "Review not found")
+    try:
+        decision = controller.decide_review(review_id, decision=body.decision)
+    except ReviewRefused as exc:
+        raise ApiError(409, "decision_refused", str(exc)) from None
+    return {"decision": asdict(decision)}
+
+
+@app.post("/api/loop/runs/{run_id}/reconcile")
+def loop_reconcile(run_id: int, body: LoopReconciliationIn) -> dict:
+    from companion.working_loop import PolicyRefused
+    controller = _loop_controller()
+    if not controller.store.get_run(run_id, owner=controller.owner):
+        raise ApiError(404, "not_found", "Run not found")
+    try:
+        result = controller.reconcile(run_id, outcome=body.outcome, note=body.note)
+    except PolicyRefused as exc:
+        raise ApiError(409, "reconcile_refused", str(exc)) from None
+    return {"reconciliation": asdict(result)}

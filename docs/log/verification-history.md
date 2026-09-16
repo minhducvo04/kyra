@@ -1,5 +1,76 @@
 # Verification history
 
+## 2026-09-15: prior-turn review evidence and stale-context refusal
+
+Claude's 14 acceptance cases pass (13 initially failed; the oversized-subject refusal already existed). All loop,
+migration and startup checks: **133 passed in 6.13s**. Full suite: **766 passed in 27.45s**; lint clean.
+A browser-requested Codex review of a continued Claude answer received one earlier turn and checked its exact
+synthetic marker. Its native session was fresh and its developer independent. A browser-recorded owner decision
+became stale along with the review when the earlier prompt was temporarily edited; another decision returned 409.
+The scratch file was restored. Claude independently confirmed two additional gaps; three red regressions now pass for subject-request edits and a cycle at the depth limit. A live subject-request edit also invalidated the review and decision and returned 409 (`subject-request-live-proof.json`). The approval conditions are fulfilled. Proof: `data/verifications/working-loop/review-context-live-proof.json`.
+
+The additive scratch upgrade preserved all fourteen existing run rows (`review-context-migration-proof.json`).
+Production data was untouched. Independent implementation review is recorded in `claude-review-context-review.md`.
+
+## 2026-09-15: native continuation and fresh-session isolation
+
+Claude Fable High authored the continuation contract and 21 cases, including concurrent parent reservation and
+changed-parent refusals. Focused loop/migration/startup checks: **118 passed in 6.91s**. Full suite: **749 passed in
+28.89s**. Both providers passed live A/B/C checks: a fresh call stored a synthetic marker; a browser-requested
+continuation recalled it with the same native session id; a separate fresh call returned UNKNOWN with a different
+id. Duplicate continuation returned 409. Private proof: `data/verifications/working-loop/continuation-live-proof.json`.
+
+The existing scratch database was unversioned. Its schema was compared with commit `0358938`, backed up, stamped
+at its verified prior revision and upgraded. All eight old run rows survived unchanged; proof and backup remain
+private (`continuation-migration-proof.json`, `live/loop-before-continuation.db`). Production databases were not
+opened or migrated. Independent implementation review is recorded in `claude-continuation-review.md`.
+
+## 2026-09-15: owner decisions and outcome notes verified in the browser
+
+The new 20 Claude-authored acceptance cases failed before implementation and passed after. Combined loop,
+migration and startup checks: **95 passed in 5.32s**. Full suite: **727 passed in 29.62s**. Lint clean.
+A real browser appended an approve decision to a completed independent review and saved an outcome note for an
+explicit synthetic uncertain-run fixture. The review remained a comment, the uncertain status remained unchanged,
+and the run count stayed at eight. No provider request was made by either control. All state was scratch data.
+Private proof: `data/verifications/working-loop/decisions-browser-proof.json`, `decisions-codex-red.log`,
+`decisions-full-final.log`; independent review in `claude-decisions-review.md`. Claude caught a deleted-note edge case; both new regressions and a live missing-note HTTP check now pass with the receipt preserved. Proof: `missing-note-live-proof.json`.
+
+Separate provider probes established that fresh Codex calls do not recall the prior synthetic marker, while explicit
+resume recalls it under the same native session id. Claude explicit resume also recalled its synthetic marker under
+the same id. These prepare a later feature; the page still starts fresh sessions. Proof: `cross-call-isolation.json`,
+`codex-resume-proof.json`, `claude-resume-proof.json`. No native database was edited to simulate continuation.
+
+## 2026-09-15: working loop, real subscription calls and independent review
+
+Isolated branch `session/2026-09-15-working-loop`, based on clean master. Claude Fable High authored 44 acceptance
+cases and independently added 12 regressions; Codex implemented and added five regressions from the live integration
+and review findings. Full suite: **705 passed in 25.92s**. Focused loop suite: **61 passed in 3.29s**. Lint clean.
+
+A real browser submitted a Codex request, observed queued then complete, requested a Claude review, and displayed
+the completed response plus a non-stale comment bound to the original answer's hash. Reload preserved the topic and
+contributions. The first Claude attempt failed sign-in and remained failed: the corrected process environment retains
+OS account identity for Keychain while excluding inherited API keys and endpoint overrides.
+
+Claude's independent review caught global Codex instructions contaminating the first answer. The fix uses a private
+Codex state directory and a symlink to existing authentication. Two further real Codex calls succeeded, including a
+repeat of the original prompt without the leaked session-end line. Native trace inspection found no global instruction
+marker. A request to execute `pwd` reached the residual code-mode entry point, which returned `code-mode host is disabled`;
+no command executed. Capability disabling is verified; absence of every advertised tool name is not claimed.
+
+A deliberately weakened scratch copy removed the review-subject binding check. Claude's test failed on acceptance
+of an unrelated completed reviewer. The unchanged real implementation passed that same test. Private proof in the
+worktree's `data/verifications/working-loop/`: `seeded-defect-red.log`, `seeded-defect-green.log`, `live-run-1.json`
+through `live-run-5.json`, `codex-isolation-proof.json`, `full-tests-final.log`, and `claude-build-review.md`.
+Claude independently rechecked the fixes and approved this limited personal slice. No personal production data was
+used or modified. The live preview uses a separate scratch data directory and port.
+
+
+## 2026-09-10: snapshot merged and main scheduled entry point verified
+
+Merged Claude's completed integration into the snapshot branch, preserving both sides of two log conflicts, then fast-forwarded local master to `e441bbf`. Enumerated 61 parent/file comparisons: no additions from either parent were lost. Combined suite: **643 passed, 1 skipped in 67.69s**; existing optional tokenizer skip, ruff and plist syntax clean. The main tree matches the verified branch.
+
+Replaced the temporary worktree LaunchAgent with the tracked main-checkout plist byte-for-byte. Its 04:30 schedule and umask 077 remain active. A real `launchctl kickstart -k` exited 0 and captured 348 files; all eight SQLite copies passed integrity checks, and every restored file matched its snapshot by SHA-256 with independent inodes. The temporary restore was removed. Evidence: `data/verifications/2026-09-10-snapshot/launchd-main.json`, `merge-preservation.json`, and `pytest-integrated.log`. Snapshot code was not pushed. The merge-watching heartbeat is no longer needed.
+
 ## 2026-09-10: integrated image deployed and exercised on AWS
 
 Final post-cleanup checks: API and worker each have one running task, zero pending tasks and a completed deployment on the expected digest. Health, backend and the empty initiatives endpoint returned 200. The deployed JavaScript and stylesheet match the reviewed source byte-for-byte; a unique final backend request matched its 200 OK CloudWatch event. The full Python suite passed 618 tests in 20.70s and lint remained clean.
@@ -62,6 +133,12 @@ Evidence retained privately at `data/verifications/2026-09-10-overnight-codex/`;
 What was verified for real (real API call, real compile, real browser, real device), and when. Moved verbatim from `CLAUDE.md`'s "Verified vs. not" section on 2026-09-09. **Prepend** a dated block after each substantive session: what ran for real, the `pytest` count read from the summary line (not the dots), `ruff` status, and what was deliberately not done.
 
 ## Entries (newest first)
+
+**2026-09-10 (snapshot launchd kickstart)**: the installed 04:30 `com.kyra.snapshot` job, with `Umask=63`, was kickstarted and exited 0. Its new snapshot captured 345 files; all eight SQLite integrity checks passed and every restored file matched its snapshot with an independent inode. Temporary restore removed. Evidence: `data/verifications/2026-09-10-snapshot/launchd-worktree.json`. The job temporarily runs the reviewed snapshot worktree against the main data directory because another agent owns an in-progress integration merge in the shared checkout. Main-entry-point verification follows after merge. Source suite remains **552 passed, 1 optional tokenizer skip**, independently reviewed; these follow-up edits are documentation only.
+
+**2026-09-10 (snapshot review fixes)**: **552 passed, 1 skipped in 66.67s** in the snapshot worktree; existing optional tokenizer skip. Fifteen snapshot tests and ruff pass. Independent Codex review approved with zero remaining blockers after reproducing and verifying fixes for metadata-preserved content changes, restores nested in live data or other snapshots, and immutable macOS flags on copies. The protected-live-file test exercises real `uchg`, hardlinking, rotation, and restore without removing the live protection. After the content fix, a repeated live run captured 341 files, shared 333 ordinary files, made eight fresh SQLite backups, and restored both snapshots identically with independent inodes. Evidence: `data/verifications/2026-09-10-snapshot/real-run-after-review.json` and `pytest-reviewed.log`. The final launchd run will verify the merged entry point; no source push is included in this slice.
+
+**2026-09-10 (snapshot build and live restore)**: **548 passed, 1 skipped in 67.35s** in the snapshot worktree, which predates the wake-up branch; existing optional tokenizer skip. Eleven snapshot regressions passed after failing at import before implementation; ruff and launchd plist syntax clean. Two real snapshots into `~/kyra-snapshots` captured 339 files: 44 MB first copy, 1.2 MB additional allocation in the second, 331 unchanged files shared and eight fresh SQLite backups. Every SQLite copy passed integrity checks. Both restores into temporary directories matched all captured files by SHA-256 and had independent inodes; temporary restores removed. Evidence: `data/verifications/2026-09-10-snapshot/real-run.json` and `pytest-worktree.log`. Live stores were read through the backup path; no test fixtures were written into production data. Scheduled-job verification and independent review follow before completion.
 
 **2026-09-10 (wake-up native button acceptance)**: silent CLI preview exercised with Duc's real clicks: Snooze 10 min entered waiting, Wake now returned to ringing six seconds later, and Stop ended the process with exit status 0. The desktop-control tool could not select the `osascript` application; no automated pointer success is claimed. Evidence: `data/verifications/2026-09-10-wake-up-controls/button-acceptance.log`. The first preview only exercised Stop; the second completed the full sequence. No production stores or model calls involved. Source remains `b4f6177`, previously verified with **548 passed, 1 existing optional tokenizer skip**, ruff clean; this acceptance adds documentation only. Local merge authorized by Duc; no push.
 
