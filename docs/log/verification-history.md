@@ -54,6 +54,9 @@ unknown" wording, and no console errors. Proof: `data/verifications/working-loop
 worktree. Not yet exercised in the browser: a real run with a tier and a readiness badge; the in-process
 HTTP proofs from A01 and A02 cover those paths.
 
+## 2026-09-16: learning reels slice A built by Codex, reviewed and real-run by Claude
+
+Codex built `companion.reels`, the four tables and migration, and `scripts/reels.py` through the exec channel against the red tests; Claude fixed its own two conflicting fixtures, then ran the real path against a scratch `KYRA_DATA_DIR`: one oEmbed registration of a public MIT OpenCourseWare lecture URL (title and channel returned, `EMBED_ONLY`, only the oEmbed host contacted) and two Claude proposal calls on the fictional fixture transcript. The first was cut at 2.7 KB with a fenced reply and was rejected as `truncated`; after the fence unwrap and a 16000-token budget the second produced 2 moments that passed every guard, both judged approvable by a person with one note each (`docs/reels-eval.md`). Full suite with the local API token setting empty: **717 passed in 23.52s**; ruff clean; PII guard green. Then the remote branch turned out to carry a second, CI-green build of the same slice plus the master merge; Claude merged it in, kept that build (Codex's stays as commit `23c587e`), ported the fence unwrap, the 16000 budget and the CLI onto it, and re-ran the real path through `scripts/reels.py` in a separate process: `add` (oEmbed), `propose` (2 moments, 0 rejected), `approve`, `show`, `quiz` (correct, XP 8), `review`, `progress`. Evidence: `data/verifications/2026-09-16-reels-a/` (raw replies, script). Scratch directory removed; no real store touched.
 ## 2026-09-16: integrate the PR #5 repair with merged PR #4
 
 Duc authorized fixing and merging PR #5 after PR #4 entered master. The two textual conflicts retain

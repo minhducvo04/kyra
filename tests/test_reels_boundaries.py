@@ -1,4 +1,4 @@
-"""Two boundaries the learning-reels brief decided (docs/plans/YouTube_AI_Learning_Reels_Project_Brief,
+"""Two boundaries the learning-reels brief decided (data/private_docs/reels, private,
 decisions 3, 4 and 10) and AGENTS.md section 5 now lists: nothing in this repository uploads to
 YouTube, and an arbitrary YouTube source is embed-only, never downloaded. A sentence in a prompt
 cannot promise either; a scan of the tree can. These run green from the day they were written and
