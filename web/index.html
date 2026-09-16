@@ -36,6 +36,7 @@
         </button>
       </div>
       <span class="focus-chip" id="focus-chip" hidden aria-live="polite"></span>
+      <button class="jobs-toggle" id="console-toggle" type="button" aria-controls="console-panel" aria-expanded="false">CONSOLE</button>
       <button class="jobs-toggle" id="focus-toggle" type="button">FOCUS</button>
       <button class="jobs-toggle" id="search-toggle" type="button">SEARCH</button>
       <button class="jobs-toggle" id="tools-toggle" type="button">TOOLS</button>
@@ -46,6 +47,34 @@
       </div>
     </div>
   </header>
+
+  <aside class="jobs-panel" id="console-panel" aria-hidden="true" aria-label="Console" inert>
+    <div class="jobs-panel-header">
+      <span>CONSOLE</span>
+      <button id="console-close" type="button" aria-label="Close console">&times;</button>
+    </div>
+    <div class="jobs-tabs" role="tablist" aria-label="Console">
+      <button class="jobs-tab is-active" id="console-tab-tools" data-console-tab="tools" type="button" role="tab" aria-selected="true" aria-controls="console-tools">TOOLS</button>
+      <button class="jobs-tab" id="console-tab-agents" data-console-tab="agents" type="button" role="tab" aria-selected="false" aria-controls="console-agents" tabindex="-1">AGENTS</button>
+      <button class="jobs-tab" id="console-tab-runs" data-console-tab="runs" type="button" role="tab" aria-selected="false" aria-controls="console-runs" tabindex="-1">RUNS</button>
+    </div>
+    <section class="jobs-tab-panel is-active" id="console-tools" data-console-tab-panel="tools" role="tabpanel" aria-labelledby="console-tab-tools">
+      <div id="console-tool-list" aria-live="polite"></div>
+    </section>
+    <section class="jobs-tab-panel" id="console-agents" data-console-tab-panel="agents" role="tabpanel" aria-labelledby="console-tab-agents">
+      <button class="jobs-btn" id="console-agents-refresh" type="button">REFRESH</button>
+      <div id="console-repo"></div>
+      <div id="console-thread-list" aria-live="polite"></div>
+      <pre id="console-thread-text" tabindex="0" aria-label="Session thread" aria-live="polite"></pre>
+    </section>
+    <section class="jobs-tab-panel" id="console-runs" data-console-tab-panel="runs" role="tabpanel" aria-labelledby="console-tab-runs">
+      <button class="jobs-btn" id="console-runs-refresh" type="button">REFRESH</button>
+      <h3>Tool runs</h3>
+      <div id="console-run-list" aria-live="polite"></div>
+      <h3>Background jobs</h3>
+      <div id="console-job-list" aria-live="polite"></div>
+    </section>
+  </aside>
 
   <aside class="jobs-panel" id="jobs-panel" aria-hidden="true">
     <div class="jobs-panel-header">

@@ -20,6 +20,7 @@ FEEDS = {
 
 
 class TechNewsTool(Tool):
+    needs_confirmation = True
     name = "tech_news"
     description = (
         "Fetch today's top tech headlines from a fixed set of official RSS feeds "

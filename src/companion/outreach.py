@@ -377,6 +377,7 @@ class AddOutreachContactTool(Tool):
 
 
 class DraftOutreachNoteTool(Tool):
+    needs_confirmation = True
     name = "draft_outreach_note"
     description = "Draft the LinkedIn connection note (short) and follow-up for a contact in Duc's voice and save them. Duc sends them himself."
     input_schema = {
@@ -426,6 +427,7 @@ class DraftOutreachNoteTool(Tool):
 
 
 class CopyOutreachNoteTool(Tool):
+    needs_confirmation = True
     name = "copy_outreach_note"
     description = "Copy a contact's drafted note or follow-up to Duc's clipboard and return the profile URL; opens it only if asked. Sends nothing."
     input_schema = {

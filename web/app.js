@@ -882,10 +882,10 @@ jobsToggle.addEventListener("click", () => {
 });
 jobsClose.addEventListener("click", closeJobsPanel);
 
-document.querySelectorAll(".jobs-tab").forEach((tab) => {
+document.querySelectorAll("#jobs-panel .jobs-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
-    document.querySelectorAll(".jobs-tab").forEach((t) => t.classList.toggle("is-active", t === tab));
-    document.querySelectorAll(".jobs-tab-panel").forEach((p) => {
+    document.querySelectorAll("#jobs-panel .jobs-tab").forEach((t) => t.classList.toggle("is-active", t === tab));
+    document.querySelectorAll("#jobs-panel .jobs-tab-panel").forEach((p) => {
       p.classList.toggle("is-active", p.dataset.tabPanel === tab.dataset.tab);
     });
     if (tab.dataset.tab === "tracker") loadTrackerList();
@@ -3218,3 +3218,267 @@ focusRestore();
 // countdown, and the same call keeps the block state in step with the other front
 // doors for free.
 setInterval(focusSync, 5 * 60 * 1000);
+
+/* ---------------- console: registry, hand-offs and run receipts ---------------- */
+const consolePanel = document.getElementById("console-panel");
+const consoleToggle = document.getElementById("console-toggle");
+const consoleTabs = [...consolePanel.querySelectorAll("[data-console-tab]")];
+let consoleToolsLoaded = false;
+let consoleThreadRequest = 0;
+
+function consoleNode(tag, text = "", className = "") {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  node.className = className;
+  return node;
+}
+function consoleButton(text, onClick) {
+  const button = consoleNode("button", text, "jobs-btn");
+  button.type = "button";
+  button.addEventListener("click", onClick);
+  return button;
+}
+function closeConsolePanel() {
+  consolePanel.classList.remove("is-open");
+  consolePanel.setAttribute("aria-hidden", "true");
+  consolePanel.inert = true;
+  consoleToggle.classList.remove("is-active");
+  consoleToggle.setAttribute("aria-expanded", "false");
+  consoleToggle.focus();
+}
+function loadConsoleTab(name) {
+  if (name === "tools" && !consoleToolsLoaded) loadConsoleTools();
+  if (name === "agents") loadConsoleAgents();
+  if (name === "runs") loadConsoleRuns();
+}
+consoleToggle.addEventListener("click", () => {
+  if (consolePanel.classList.contains("is-open")) return closeConsolePanel();
+  closeJobsPanel(); closeToolsPanel(); closeSearchPanel(); closeFocusPanel();
+  consolePanel.inert = false;
+  consolePanel.classList.add("is-open");
+  consolePanel.setAttribute("aria-hidden", "false");
+  consoleToggle.classList.add("is-active");
+  consoleToggle.setAttribute("aria-expanded", "true");
+  const active = consoleTabs.find((tab) => tab.classList.contains("is-active"));
+  active.focus();
+  loadConsoleTab(active.dataset.consoleTab);
+});
+document.getElementById("console-close").addEventListener("click", closeConsolePanel);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && consolePanel.classList.contains("is-open")) closeConsolePanel();
+});
+consoleTabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => {
+    consoleTabs.forEach((other) => {
+      const active = other === tab;
+      other.classList.toggle("is-active", active);
+      other.setAttribute("aria-selected", String(active));
+      other.tabIndex = active ? 0 : -1;
+    });
+    consolePanel.querySelectorAll("[data-console-tab-panel]").forEach((panel) => {
+      panel.classList.toggle("is-active", panel.dataset.consoleTabPanel === tab.dataset.consoleTab);
+    });
+    loadConsoleTab(tab.dataset.consoleTab);
+  });
+  tab.addEventListener("keydown", (event) => {
+    const offsets = { ArrowRight: 1, ArrowLeft: -1, Home: -index, End: consoleTabs.length - 1 - index };
+    if (!(event.key in offsets)) return;
+    event.preventDefault();
+    const next = consoleTabs[(index + offsets[event.key] + consoleTabs.length) % consoleTabs.length];
+    next.click(); next.focus();
+  });
+});
+
+function consoleOpenPanel(destination) {
+  const [panel, tab] = destination.split("/");
+  const openers = { jobs: openJobsPanel, tools: openToolsPanel, search: openSearchPanel, focus: openFocusPanel };
+  if (!openers[panel]) return;
+  closeConsolePanel();
+  openers[panel]();
+  const attribute = panel === "jobs" ? "data-tab" : `data-${panel}-tab`;
+  const target = document.querySelector(`#${panel}-panel [${attribute}="${tab}"]`);
+  if (target) { target.click(); target.focus(); }
+  else document.getElementById(`${panel}-close`).focus();
+}
+
+function consoleRunForm(tool) {
+  const form = consoleNode("form", "", "console-run-form");
+  form.hidden = true;
+  const fields = [];
+  for (const [name, schema] of Object.entries(tool.input_schema.properties || {})) {
+    const required = (tool.input_schema.required || []).includes(name);
+    const label = consoleNode("label", "", "jobs-field");
+    label.append(consoleNode("span", `${name}${required ? " *" : " (optional)"}`));
+    let field;
+    if (schema.enum) {
+      field = document.createElement("select");
+      field.append(new Option("Choose…", ""));
+      schema.enum.forEach((value) => field.append(new Option(String(value), String(value))));
+    } else if (schema.type === "boolean") {
+      field = document.createElement("input");
+      field.type = "checkbox";
+    } else if (schema.type === "integer" || schema.type === "number") {
+      field = document.createElement("input");
+      field.type = "number";
+      field.step = schema.type === "integer" ? "1" : "any";
+      if (schema.minimum !== undefined) field.min = schema.minimum;
+      if (schema.maximum !== undefined) field.max = schema.maximum;
+    } else if (/_text$|_notes$/.test(name) || /text/i.test(schema.description || "")) {
+      field = document.createElement("textarea");
+      field.rows = 3;
+    } else {
+      field = document.createElement("input");
+      field.type = "text";
+    }
+    field.name = name;
+    // A required boolean may legitimately be false; HTML required would force true.
+    field.required = required && field.type !== "checkbox";
+    if (schema.default !== undefined) {
+      if (field.type === "checkbox") field.checked = schema.default;
+      else field.value = schema.default;
+    }
+    label.append(field);
+    if (schema.description) label.append(consoleNode("small", schema.description));
+    form.append(label);
+    fields.push({ name, schema, field });
+  }
+  if (tool.needs_confirmation) form.append(consoleNode("p", "This tool needs your confirmation before it runs.", "jobs-hint"));
+  const submit = consoleNode("button", "RUN", "jobs-btn");
+  submit.type = "submit";
+  const result = consoleNode("pre");
+  result.setAttribute("aria-live", "polite");
+  form.append(submit, result);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    if (tool.needs_confirmation && !confirm(`Run ${tool.name}? This may use model tokens, contact an external service or open a browser.`)) return;
+    const input = {};
+    for (const { name, schema, field } of fields) {
+      if (field.type === "checkbox") input[name] = field.checked;
+      else if (field.value !== "") input[name] = ["integer", "number"].includes(schema.type) ? Number(field.value) : field.value;
+    }
+    submit.disabled = true;
+    result.textContent = "Running…";
+    try {
+      const receipt = await readJson(await fetch(`/api/tools/${encodeURIComponent(tool.name)}/run`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input, confirmed: tool.needs_confirmation }),
+      }));
+      result.textContent = JSON.stringify(receipt, null, 2);
+    } catch (error) { result.textContent = error.message; }
+    finally { submit.disabled = false; }
+  });
+  return form;
+}
+
+async function loadConsoleTools() {
+  const list = document.getElementById("console-tool-list");
+  list.textContent = "Loading tools…";
+  try {
+    const { tools } = await readJson(await fetch("/api/tools"));
+    list.replaceChildren();
+    let group;
+    for (const tool of tools.sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name))) {
+      if (group !== tool.group) {
+        group = tool.group;
+        list.append(consoleNode("h3", group));
+      }
+      const row = consoleNode("article", "", "console-card");
+      row.dataset.tool = tool.name;
+      row.append(consoleNode("h4", tool.name), consoleNode("p", tool.description));
+      const actions = consoleNode("div", "", "console-actions");
+      if (tool.panel) actions.append(consoleButton("OPEN", () => consoleOpenPanel(tool.panel)));
+      const form = consoleRunForm(tool);
+      form.id = `console-form-${tool.name}`;
+      const run = consoleButton("RUN", () => {
+        form.hidden = !form.hidden;
+        run.setAttribute("aria-expanded", String(!form.hidden));
+        if (!form.hidden) form.querySelector("input, textarea, select, button").focus();
+      });
+      run.setAttribute("aria-expanded", "false");
+      run.setAttribute("aria-controls", form.id);
+      actions.append(run);
+      row.append(actions, form);
+      list.append(row);
+    }
+    consoleToolsLoaded = true;
+  } catch (error) {
+    list.textContent = error.message;
+    list.append(consoleButton("RETRY", loadConsoleTools));
+  }
+}
+
+async function loadConsoleAgents() {
+  const list = document.getElementById("console-thread-list");
+  const repo = document.getElementById("console-repo");
+  const text = document.getElementById("console-thread-text");
+  const refresh = document.getElementById("console-agents-refresh");
+  if (refresh.disabled) return;
+  refresh.disabled = true;
+  list.textContent = "Loading threads…";
+  repo.textContent = "";
+  text.textContent = "";
+  ++consoleThreadRequest;
+  try {
+    const data = await readJson(await fetch("/api/agents"));
+    repo.textContent = `${data.repo.branch} · ${data.repo.head} · ${data.repo.tree}\n${data.repo.subject}`;
+    list.replaceChildren();
+    if (!data.threads.length) list.textContent = "No session threads yet.";
+    for (const thread of data.threads) {
+      const card = consoleButton("", async () => {
+        const request = ++consoleThreadRequest;
+        text.textContent = "Loading thread…";
+        try {
+          const body = await readJson(await fetch(`/api/agents/${encodeURIComponent(thread.slug)}`));
+          if (request === consoleThreadRequest) text.textContent = body.text;
+        } catch (error) { if (request === consoleThreadRequest) text.textContent = error.message; }
+      });
+      card.className = "jobs-btn console-card console-thread";
+      card.append(consoleNode("strong", thread.slug), consoleNode("span", `${thread.agent || "Unknown agent"} · ${thread.stamp || thread.modified}`));
+      const badge = consoleNode("span", `Open for: ${thread.open_for || "not stated"}`, "console-badge");
+      badge.dataset.openFor = thread.open_for || "nothing";
+      card.append(badge, consoleNode("span", `Next: ${thread.next || "not stated"}`), consoleNode("span", `Suggested: ${thread.suggested || "not stated"}`));
+      list.append(card);
+    }
+  } catch (error) { list.textContent = error.message; }
+  finally { refresh.disabled = false; }
+}
+
+async function loadConsoleRuns() {
+  const runs = document.getElementById("console-run-list");
+  const jobs = document.getElementById("console-job-list");
+  const refresh = document.getElementById("console-runs-refresh");
+  if (refresh.disabled) return;
+  refresh.disabled = true;
+  runs.textContent = jobs.textContent = "Loading…";
+  await Promise.all([
+    (async () => {
+      try {
+        const data = await readJson(await fetch("/api/tools/runs"));
+        runs.replaceChildren();
+        if (!data.runs.length) runs.textContent = "No tool runs yet.";
+        for (const run of data.runs) {
+          const row = consoleNode("article", "", "console-card");
+          row.append(consoleNode("strong", `${run.tool} · ${run.ok ? "OK" : "ERROR"}`), consoleNode("p", run.started_at), consoleNode("pre", run.error || run.summary));
+          runs.append(row);
+        }
+      } catch (error) { runs.textContent = error.message; }
+    })(),
+    (async () => {
+      try {
+        const data = await readJson(await fetch("/api/jobs"));
+        jobs.replaceChildren();
+        if (!data.jobs.length) jobs.textContent = "No background jobs yet.";
+        for (const job of data.jobs) {
+          const row = consoleNode("article", "", "console-card");
+          row.append(consoleNode("strong", `#${job.id} ${job.kind} · ${job.status}`), consoleNode("p", `Created: ${job.created_at}\nFinished: ${job.finished_at || "pending"}`));
+          if (job.error) row.append(consoleNode("pre", job.error));
+          jobs.append(row);
+        }
+      } catch (error) { jobs.textContent = error.message; }
+    })(),
+  ]);
+  refresh.disabled = false;
+}
+document.getElementById("console-agents-refresh").addEventListener("click", loadConsoleAgents);
+document.getElementById("console-runs-refresh").addEventListener("click", loadConsoleRuns);

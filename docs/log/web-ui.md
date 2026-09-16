@@ -1,5 +1,9 @@
 # The browser HUD
 
+## 2026-09-16: console implementation for independent acceptance
+
+The CONSOLE adds registry-generated tool forms, read-only hand-off summaries and recent tool/job runs to close the three visibility gaps while retaining the existing panels. The server enforces explicit confirmation, limits list sizes and confines thread reads to the sessions directory; OPEN links reuse existing panel controls, and the old jobs tab listeners are now scoped to their own panel. In-process HTTP verification proved registry listing, a recorded local run, 409 confirmation rejection, encoded thread access, traversal rejection and job payload omission; migration and concurrent receipt checks passed against disposable data. All 643 non-console regression tests passed with one existing skip. One supplied console assertion conflicts with the reminder tool's existing signature, and its queued demo job contaminates two later tests; both later failures reproduce on the unchanged baseline. Browser execution was blocked by sandbox and browser policy, so phone wrapping and 44-pixel controls have static checks only. Evidence and reviewer details: `data/verifications/console/` and `data/private_docs/assignment-P01-result.md`; no production runtime data was used.
+
 ## 2026-09-10: suggestions in Tools
 
 The new Suggestions tab reads saved proposals and provides Add reminder and Dismiss with optional feedback. All source text uses textContent. Buttons wait for the server receipt; a failed action retains the row and offers retry. The controls meet a 44-pixel minimum height and fit a narrow phone viewport. Older servers explain that suggestions need an update, without affecting reminders.

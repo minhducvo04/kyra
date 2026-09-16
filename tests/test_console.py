@@ -205,8 +205,8 @@ def test_tools_run_bad_input_is_400_not_500(client):
 
 
 def test_tools_run_turns_a_tool_error_dict_into_400(client):
-    # complete_reminder on a missing id answers {"error": ...} to a model; HTTP must not say 200.
-    res = client.post("/api/tools/complete_reminder/run", json={"input": {"reminder_id": 999999}})
+    # update_outreach_status on a missing contact answers {"error": ...} to a model; HTTP must not say 200.
+    res = client.post("/api/tools/update_outreach_status/run", json={"input": {"id": 999999, "status": "sent"}})
     assert res.status_code == 400 and res.json()["error"]["code"] == "tool_error"
 
 
@@ -219,9 +219,17 @@ def test_tool_runs_endpoint_honours_limit(client):
 # ---- HTTP: jobs and agents -------------------------------------------------
 
 
-def test_jobs_list_never_returns_payload_or_result(client):
-    import companion.webapp as webapp
+def test_jobs_list_never_returns_payload_or_result(client, monkeypatch, tmp_path):
+    from sqlalchemy import create_engine
 
+    import companion.webapp as webapp
+    from companion.jobs import DbJobQueue
+    from companion.schema import metadata
+
+    # A private queue: a demo job left in the shared one would be claimed by later tests' worker runs.
+    eng = create_engine(f"sqlite:///{tmp_path / 'q.db'}", connect_args={"check_same_thread": False})
+    metadata.create_all(eng)
+    monkeypatch.setattr(webapp, "_queue", DbJobQueue(eng))
     webapp._queue.enqueue("demo", {"resume_text": "PRIVATE"})
     body = client.get("/api/jobs?limit=5").json()
     assert body["jobs"] and body["jobs"][0]["kind"] == "demo"

@@ -19,10 +19,11 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from functools import cache, cached_property
 from pathlib import Path
+from urllib.parse import unquote
 from uuid import UUID
 
 from anthropic import Anthropic
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -31,9 +32,9 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
-from companion import webauth
+from companion import session_log, webauth
 from companion.apply_pipeline import ApplyError, engine_for_url, run_apply_pipeline
 from companion.checkpoints import CheckpointConflict, CheckpointDraft, CheckpointStore, DbCheckpointStore
 from companion.config import require_api_key
@@ -1309,6 +1310,95 @@ def enqueue_apply_jobs(body: ApplyIn) -> dict:
         for u in urls
     ]
     return {"jobs": [{"id": i, "url": u, "kind": "apply", "status": "queued"} for i, u in zip(ids, urls, strict=True)]}
+
+
+# Console routes share the registry and the existing authentication middleware.
+CONSOLE_PANELS = {
+    **dict.fromkeys(("add_reminder", "list_reminders", "complete_reminder", "snooze_reminder"), "tools/reminders"),
+    **dict.fromkeys(("save_learning_item", "due_learning_reviews", "mark_learning_reviewed"), "tools/learning"),
+    **dict.fromkeys(("add_job_application", "list_job_applications", "update_job_application_status",
+                     "set_application_resume", "target_job_posting"), "jobs/tracker"),
+    **dict.fromkeys(("add_outreach_contact", "draft_outreach_note", "copy_outreach_note",
+                     "update_outreach_status", "list_outreach"), "jobs/outreach"),
+    **dict.fromkeys(("start_focus_block", "end_focus_block", "focus_status"), "focus/block"),
+    "draft_application_material": "jobs/draft",
+    "autofill_job_application": "jobs/autofill",
+    "analyze_job_posting": "jobs/apply",
+    "save_memory_note": "tools/memory",
+    "suggest_initiatives": "tools/initiatives",
+    "tech_news": "tools/news",
+    "science_facts": "tools/science",
+    "search_kyra_data": "search/search",
+}
+
+
+class ToolRunIn(BaseModel):
+    input: dict = Field(default_factory=dict)
+    confirmed: StrictBool = False
+
+
+@app.get("/api/tools")
+def console_tools() -> dict:
+    return {"tools": [
+        {**tool.to_schema(), "needs_confirmation": tool.needs_confirmation,
+         "group": type(tool).__module__.rsplit(".", 1)[-1], "panel": CONSOLE_PANELS.get(tool.name)}
+        for tool in _registry
+    ]}
+
+
+@app.post("/api/tools/{name}/run")
+def console_run_tool(name: str, body: ToolRunIn) -> dict:
+    tool = next((tool for tool in _registry if tool.name == name), None)
+    if tool is None:
+        raise ApiError(404, "unknown_tool", f"Unknown tool: {name}")
+    if tool.needs_confirmation and not body.confirmed:
+        raise ApiError(409, "confirmation_required", f"Confirm before running {name}.", {"tool": name})
+    try:
+        result, run_id = _registry.run_with_receipt(name, **body.input)
+    except TypeError as exc:
+        raise ApiError(400, "tool_input_invalid", str(exc)) from exc
+    if isinstance(result, dict) and "error" in result:
+        raise ApiError(400, "tool_error", str(result["error"]))
+    return {"tool": name, "result": result, "run_id": run_id}
+
+
+@app.get("/api/tools/runs")
+def console_tool_runs(limit: int = Query(50, ge=0, le=500)) -> dict:
+    return {"runs": [asdict(run) for run in _registry.audit.list(limit=limit)]}
+
+
+@app.get("/api/jobs")
+def console_jobs(limit: int = Query(20, ge=0, le=500)) -> dict:
+    fields = ("id", "kind", "status", "created_at", "started_at", "finished_at", "error")
+    return {"jobs": [{key: getattr(job, key) for key in fields} for job in _queue.list(limit=limit)]}
+
+
+def _console_thread_path(slug: str) -> Path:
+    # threads() supplies encoded filenames. Decode once, then use the same safe
+    # encoder as the writer; a raw traversal can never become a filesystem path.
+    safe = session_log.slug(unquote(slug))
+    path = session_log.SESSIONS_DIR / f"{safe}.md"
+    if not path.resolve().is_relative_to(session_log.SESSIONS_DIR.resolve()) or not path.is_file():
+        raise ApiError(404, "not_found", "Session thread not found.")
+    return path
+
+
+@app.get("/api/agents")
+def console_agents() -> dict:
+    rows = []
+    for slug, modified, _ in session_log.threads():
+        path = _console_thread_path(slug)
+        rows.append((path.stat().st_mtime_ns, {
+            "slug": slug, "modified": modified,
+            **session_log.summarize(path.read_text(encoding="utf-8")),
+        }))
+    return {"repo": session_log.facts(), "threads": [row for _, row in sorted(rows, key=lambda r: r[0], reverse=True)]}
+
+
+@app.get("/api/agents/{slug:path}")
+def console_agent(slug: str) -> dict:
+    path = _console_thread_path(slug)
+    return {"slug": path.stem, "text": path.read_text(encoding="utf-8")}
 
 
 @app.get("/api/jobs/{job_id}")

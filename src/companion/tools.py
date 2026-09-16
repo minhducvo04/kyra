@@ -4,8 +4,16 @@ so a Tool's schema is literally what goes in the `tools=` list of a
 Messages API call, no translation layer needed.
 """
 import json
+import logging
+import time
 from abc import ABC, abstractmethod
-from typing import Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from companion.tool_runs import ToolRunStore
+
+logger = logging.getLogger(__name__)
 
 
 class Tool(ABC):
@@ -15,6 +23,7 @@ class Tool(ABC):
     """
 
     terminal = False
+    needs_confirmation = False
 
     def render_result(self, result: Any) -> str:
         """Text returned directly for terminal tools, without another model call."""
@@ -39,7 +48,8 @@ class ToolRegistry:
     the agent loop. Not itself a Tool - this is the thing that calls Tools.
     """
 
-    def __init__(self, tools: list[Tool] | None = None):
+    def __init__(self, tools: list[Tool] | None = None, audit: "ToolRunStore | None" = None):
+        self.audit = audit
         self._tools: dict[str, Tool] = {t.name: t for t in (tools or [])}
 
     def register(self, tool: Tool) -> None:
@@ -54,11 +64,34 @@ class ToolRegistry:
         return [t.to_schema() for t in self._tools.values()]
 
     def run(self, name: str, /, **kwargs) -> Any:
-        # `name` is positional-only so a tool whose input schema has its own `name` field
-        # (add_outreach_contact) can be called - found the first time such a tool existed.
-        if name not in self._tools:
-            raise KeyError(f"no such tool: {name!r} (have: {sorted(self._tools)})")
-        return self._tools[name].run(**kwargs)
+        return self.run_with_receipt(name, **kwargs)[0]
+
+    def run_with_receipt(self, name: str, /, **kwargs) -> tuple[Any, int | None]:
+        """Execute once and return its audit id without racing another caller's run."""
+        started_at = datetime.now(UTC).isoformat()
+        started = time.perf_counter()
+        result, error, run_id = None, None, None
+        try:
+            if name not in self._tools:
+                raise KeyError(f"no such tool: {name!r} (have: {sorted(self._tools)})")
+            result = self._tools[name].run(**kwargs)
+            if isinstance(result, dict) and "error" in result:
+                error = str(result["error"])
+        except Exception as exc:
+            error = str(exc)
+            raise
+        finally:
+            if self.audit is not None:
+                try:
+                    run_id = self.audit.record(
+                        name, kwargs, ok=error is None,
+                        summary=json.dumps(result, ensure_ascii=False, default=str)[:300],
+                        error=error, duration_ms=(time.perf_counter() - started) * 1000,
+                        started_at=started_at,
+                    )
+                except Exception as exc:  # An audit failure must never change a tool's outcome.
+                    logger.warning("Could not record tool run %s (%s)", name, type(exc).__name__)
+        return result, run_id
 
     def __contains__(self, name: str) -> bool:
         return name in self._tools
