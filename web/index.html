@@ -54,13 +54,17 @@
       <button class="jobs-tab is-active" id="map-tab-features" data-map-tab="features" type="button" role="tab" aria-selected="true" aria-controls="map-features">FEATURES</button>
       <button class="jobs-tab" id="map-tab-memory" data-map-tab="memory" type="button" role="tab" aria-selected="false" aria-controls="map-memory" tabindex="-1">MEMORY</button>
     </div>
-    <section class="jobs-tab-panel is-active" id="map-features" role="tabpanel" aria-labelledby="map-tab-features">
+    <section class="jobs-tab-panel is-active" id="map-features" data-map-tab-panel="features" role="tabpanel" aria-labelledby="map-tab-features">
       <p class="jobs-hint" id="map-summary" aria-live="polite"></p>
       <svg id="feature-map" role="group" aria-label="Feature blueprint"></svg>
       <div id="map-slices" aria-live="polite" tabindex="-1"></div>
     </section>
-    <section class="jobs-tab-panel" id="map-memory" role="tabpanel" aria-labelledby="map-tab-memory">
-      <svg id="memory-map"></svg>
+    <section class="jobs-tab-panel" id="map-memory" data-map-tab-panel="memory" role="tabpanel" aria-labelledby="map-tab-memory">
+      <button class="jobs-btn" id="memory-map-refresh" type="button">REFRESH</button>
+      <p class="jobs-hint">Room size shows note count. Colour shows age: fresh, 30+ days, or unknown. Small nodes are threads.</p>
+      <div id="memory-map-summary" aria-live="polite"></div>
+      <svg id="memory-map" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 180" aria-label="Memory rooms and session threads"></svg>
+      <div id="memory-map-detail" aria-live="polite"></div>
     </section>
   </aside>
 

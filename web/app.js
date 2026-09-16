@@ -3488,11 +3488,14 @@ async function loadConsoleRuns() {
 document.getElementById("console-agents-refresh").addEventListener("click", loadConsoleAgents);
 document.getElementById("console-runs-refresh").addEventListener("click", loadConsoleRuns);
 
-/* ---------------- feature blueprint ---------------- */
+/* ---------------- feature blueprint and memory map ---------------- */
 const mapPanel = document.getElementById("map-panel");
 const mapToggle = document.getElementById("map-toggle");
 const mapTabs = [...mapPanel.querySelectorAll("[data-map-tab]")];
 let mapRequest = 0;
+const memoryMap = document.getElementById("memory-map");
+const mapSummary = document.getElementById("memory-map-summary");
+const mapDetail = document.getElementById("memory-map-detail");
 
 function closeMapPanel() {
   mapPanel.classList.remove("is-open");
@@ -3500,7 +3503,19 @@ function closeMapPanel() {
   mapPanel.inert = true;
   mapToggle.classList.remove("is-active");
   mapToggle.setAttribute("aria-expanded", "false");
-  mapToggle.focus();
+}
+function selectMapTab(tab) {
+  mapTabs.forEach((other) => {
+    const active = other === tab;
+    other.classList.toggle("is-active", active);
+    other.setAttribute("aria-selected", String(active));
+    other.tabIndex = active ? 0 : -1;
+  });
+  mapPanel.querySelectorAll("[data-map-tab-panel]").forEach((panel) => {
+    panel.classList.toggle("is-active", panel.dataset.mapTabPanel === tab.dataset.mapTab);
+  });
+  if (tab.dataset.mapTab === "features") loadFeatureMap();
+  if (tab.dataset.mapTab === "memory") loadMemoryMap();
 }
 mapToggle.addEventListener("click", () => {
   if (mapPanel.classList.contains("is-open")) return closeMapPanel();
@@ -3510,23 +3525,21 @@ mapToggle.addEventListener("click", () => {
   mapPanel.setAttribute("aria-hidden", "false");
   mapToggle.classList.add("is-active");
   mapToggle.setAttribute("aria-expanded", "true");
-  mapTabs.find((tab) => tab.classList.contains("is-active")).focus();
-  loadFeatureMap();
+  const active = mapTabs.find((tab) => tab.classList.contains("is-active"));
+  active.focus();
+  selectMapTab(active);
 });
-document.getElementById("map-close").addEventListener("click", closeMapPanel);
+document.getElementById("map-close").addEventListener("click", () => { closeMapPanel(); mapToggle.focus(); });
+["jobs", "tools", "search", "focus", "console"].forEach((name) => {
+  document.getElementById(`${name}-toggle`).addEventListener("click", closeMapPanel);
+});
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && mapPanel.classList.contains("is-open")) closeMapPanel();
+  if (event.key === "Escape" && mapPanel.classList.contains("is-open")) {
+    closeMapPanel(); mapToggle.focus();
+  }
 });
 mapTabs.forEach((tab, index) => {
-  tab.addEventListener("click", () => {
-    mapTabs.forEach((other) => {
-      const active = other === tab;
-      other.classList.toggle("is-active", active);
-      other.setAttribute("aria-selected", String(active));
-      other.tabIndex = active ? 0 : -1;
-      document.getElementById(`map-${other.dataset.mapTab}`).classList.toggle("is-active", active);
-    });
-  });
+  tab.addEventListener("click", () => selectMapTab(tab));
   tab.addEventListener("keydown", (event) => {
     const offsets = { ArrowRight: 1, ArrowLeft: -1, Home: -index, End: mapTabs.length - 1 - index };
     if (!(event.key in offsets)) return;
@@ -3607,3 +3620,57 @@ async function loadFeatureMap() {
     summary.textContent = `${error.message} Close and reopen MAP to retry.`;
   }
 }
+
+function memoryMapNode(tag, attributes, text = "") {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  Object.entries(attributes).forEach(([name, value]) => node.setAttribute(name, value));
+  node.textContent = text;
+  return node;
+}
+function drawMemoryMap(data) {
+  memoryMap.replaceChildren();
+  const rooms = new Map(data.rooms.map((room, i) => [room.name, { ...room, x: 90, y: 60 + i * 120 }]));
+  const threads = new Map(data.thread_nodes.map((thread, i) => [thread.name, { ...thread, x: 280, y: 60 + i * 60 }]));
+  memoryMap.setAttribute("viewBox", `0 0 360 ${Math.max(180, rooms.size * 120, threads.size * 60 + 60)}`);
+  data.links.forEach((link) => {
+    const room = rooms.get(link.room), thread = threads.get(link.thread);
+    if (room && thread) memoryMap.append(memoryMapNode("line", {
+      x1: room.x, y1: room.y, x2: thread.x, y2: thread.y, class: "memory-map-link",
+    }));
+  });
+  function drawNode(item, radius, label, age, detail) {
+    const node = memoryMapNode("g", { role: "button", tabindex: 0, "aria-label": label, "data-age": age });
+    node.append(memoryMapNode("circle", { cx: item.x, cy: item.y, r: radius }));
+    node.append(memoryMapNode("text", { x: item.x, y: item.y + radius + 16, "text-anchor": "middle" }, label));
+    node.addEventListener("click", () => { mapDetail.textContent = detail; });
+    node.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); mapDetail.textContent = detail; }
+    });
+    memoryMap.append(node);
+  }
+  const largest = Math.max(1, ...data.rooms.map((room) => room.count));
+  rooms.forEach((room) => drawNode(room, 12 + 28 * Math.sqrt(room.count / largest), room.name,
+    room.age_days === null ? "unknown" : room.age_days >= 30 ? "stale" : "fresh",
+    `${room.count} notes · Last updated: ${room.last_date ?? "unknown"} · Age: ${room.age_days ?? "unknown"} days · ${data.links.filter((link) => link.room === room.name).length} linked threads`));
+  let index = 0;
+  threads.forEach((thread) => drawNode(thread, 7, `Thread ${++index}`, "thread",
+    `Last updated: ${thread.last_date} · ${data.links.filter((link) => link.thread === thread.name).length} linked rooms`));
+}
+let memoryMapRequest = 0;
+async function loadMemoryMap() {
+  const request = ++memoryMapRequest;
+  mapSummary.textContent = "Loading memory map…";
+  mapDetail.textContent = "";
+  memoryMap.replaceChildren();
+  try {
+    const data = await readJson(await fetch("/api/memory/map"));
+    if (request !== memoryMapRequest) return;
+    drawMemoryMap(data);
+    const assignments = Object.entries(data.assignments).map(([status, count]) => `${status}: ${count}`).join(", ");
+    mapSummary.textContent = `${data.rooms.length} rooms · ${data.threads.count} threads · Exchanges: ${data.exchanges ?? "not opened"} · Assignments: ${assignments || "0"}`;
+    mapDetail.textContent = data.rooms.length || data.threads.count ? "Select a node for counts and dates." : "No memory notes or session threads yet.";
+  } catch (error) {
+    if (request === memoryMapRequest) mapSummary.textContent = `Could not load memory map: ${error.message}`;
+  }
+}
+document.getElementById("memory-map-refresh").addEventListener("click", loadMemoryMap);

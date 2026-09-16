@@ -73,6 +73,7 @@ from companion.jobs import DbJobQueue, Handler, start_inline_worker
 from companion.learning import LearningRequestConflict, LearningStore
 from companion.llm import AnthropicLLM, TurnCancelled, build_llm, voice_backends
 from companion.memory import ChromaMemoryStore
+from companion.memory_map import build_map
 from companion.memory_notes import SUGGESTED_CATEGORIES, MarkdownMemoryNotesStore
 from companion.news import TechNewsTool
 from companion.paths import DATA_DIR, WEB_DIR
@@ -642,6 +643,22 @@ class MemoryNoteIn(BaseModel):
 class MemoryNoteRef(BaseModel):
     category: str
     text: str
+
+
+@app.get("/api/memory/map")
+def memory_map() -> dict:
+    # Reading the cached property's dictionary must never open Chroma.
+    memory = vars(_rt).get("memory")
+    threads = session_log.threads()
+    controller = _loop_controller()
+    result = build_map(
+        notes=_memory_notes.list_notes(), threads=threads,
+        assignments=controller.store.list_assignments(owner=controller.owner),
+        exchanges=memory._collection.count() if memory is not None else None,
+    )
+    # Include unlinked threads for drawing, without reading any thread body into the response.
+    result["thread_nodes"] = [{"name": name, "last_date": modified} for name, modified, _ in threads]
+    return result
 
 
 @app.get("/api/memory-notes")

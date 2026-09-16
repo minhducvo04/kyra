@@ -1350,3 +1350,16 @@ body[data-focus-evening="true"] .hud-stage { filter: brightness(0.82); }
 .console-badge { color: var(--text-faint); }
 .console-badge[data-open-for="duc"] { color: var(--attention); }
 .console-badge:is([data-open-for="build"], [data-open-for="tests"], [data-open-for="review"], [data-open-for="critique"]) { color: var(--running); }
+
+/* Memory map uses the shared palette in both themes. */
+#map-panel button { min-height: 44px; }
+#memory-map { width: 100%; height: auto; flex-shrink: 0; overflow: visible; }
+#memory-map .memory-map-link { stroke: var(--border); }
+#memory-map g { cursor: pointer; }
+#memory-map circle { fill: var(--queued); stroke: var(--border); }
+#memory-map [data-age="fresh"] circle { fill: var(--done); }
+#memory-map [data-age="stale"] circle { fill: var(--attention); }
+#memory-map [data-age="thread"] circle { fill: var(--accent); }
+#memory-map g:focus circle { stroke: var(--text); stroke-width: 3; }
+#memory-map text { fill: var(--text); font-size: var(--text-xs); }
+#memory-map-summary, #memory-map-detail { font-size: var(--text-sm); overflow-wrap: anywhere; }
