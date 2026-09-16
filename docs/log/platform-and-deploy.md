@@ -58,6 +58,9 @@ This endpoint has its own loopback, Host and same-Origin checks regardless of th
 repository editing stay unavailable from the page. Native session resume, three-provider orchestration, cost routing,
 memory and Father policy remain future slices. The existing chat handoff stays draft-only. See `docs/working-loop.md`.
 
+## 2026-09-16: tenant configuration and training guard
+
+Added the default personal tenant and an immutable Father policy so entry points can share explicit restrictions. Settings reject unknown tenants and Father data paths resolving inside this checkout's personal data or an enclosing main checkout's data, including symlinks; both training CLIs refuse Father before parsing commands. Local-model and router restrictions are policy flags only in this slice, not runtime enforcement. Real subprocess runs refused personal data, nested scratch, symlink access and both training CLIs, while an external temporary directory passed startup and was removed afterwards. A scratch directory inside personal data remains forbidden. Proof: `data/verifications/father/f01-*.txt`. Tenant and startup checks: 12 passed; full suite: 649 passed, 1 skipped, 6 expected errors from the pending document-QA module; ruff clean. Tests were unchanged and no server was started.
 
 ## 2026-09-10: snapshot slice complete on local master
 

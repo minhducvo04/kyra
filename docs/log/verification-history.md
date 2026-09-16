@@ -74,6 +74,19 @@ through `live-run-5.json`, `codex-isolation-proof.json`, `full-tests-final.log`,
 Claude independently rechecked the fixes and approved this limited personal slice. No personal production data was
 used or modified. The live preview uses a separate scratch data directory and port.
 
+## 2026-09-16: Father drafting, one live Anthropic run
+
+The Northwind fixture workflow with a {{draft}} placeholder went through LLMDrafter with the real Anthropic backend: two calls (draft, then the humanizer critique), the second pass removed a stiff word and kept every fact, check_draft found nothing, the DOCX built and pandoc rendered one page; report findings empty, draft_provider anthropic. Proof: `data/verifications/father/f04-claude-live.json` in the worktree. Synthetic facts only; the Father tenant server still configures no drafter.
+
+## 2026-09-16: Father task cards in a real browser
+
+The Father tenant server ran on port 8422 with `KYRA_TENANT=father` and an external scratch data root (a
+placeholder key value satisfied the import; no call can succeed with it). In the browser: Start a task with
+the amount left blank produced a task in review with the finding "A required fact is missing."; Approve
+answered "Approval refused. Resolve the findings and review again." (the 409 is the only console entry);
+entering 1,250.00 and pressing Review cleared the findings; Approve then showed "Approved. Nothing has been
+sent." and History gained the row. Proof: `data/verifications/father/f03-claude-*` in the worktree. Word
+rendering still unverified; pandoc rendered the pages.
 
 ## 2026-09-10: snapshot merged and main scheduled entry point verified
 
