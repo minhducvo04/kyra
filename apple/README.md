@@ -4,11 +4,16 @@
 Anthropic key never leave it - and this is a third front door alongside the web HUD and the CLI, the same way
 `chat.py`, `voice_chat.py` and `webapp.py` are three doors onto one `ConversationManager`.
 
-## What works today, verified in the simulator
+## What the client supports
 
 - **Talking to her by typing**, streamed token by token, with the backend badge (`claude`, `claude · tool`) on
   each reply. SEND becomes STOP mid-reply, and stopping calls `/api/chat/cancel` so the Mac stops generating
   rather than only this end stopping listening.
+- **Talking to her out loud.** In Talk, tap **Talk**, allow microphone access, speak, then tap
+  **Send voice**. **Cancel** discards the recording; **Stop** interrupts the response. At one minute,
+  capture stops and keeps the recording ready to send or discard. Leaving Talk, backgrounding the app,
+  or an audio interruption discards capture. The Mac handles transcription and streams Kokoro audio
+  through the existing voice endpoint. There is no wake word or continuous listening.
 - **Hearing her.** Replies are spoken in her own Kokoro voice through `/api/speak`, one sentence at a time, so
   the first sentence starts while the rest is still being synthesised. Tap the orb to cut her off.
 - **A presence** with the same six states as the web HUD - idle, listening, thinking, speaking, interrupted,
@@ -26,10 +31,6 @@ Anthropic key never leave it - and this is a third front door alongside the web 
 
 ## What does not work yet
 
-- **Talking to her out loud.** Push-to-talk using the headset's microphones is on the branch
-  `prep/visionos-on-device-voice`, with `KyraVision/DEVICE-SETUP.md` next to it. It is unmerged because
-  `SFSpeechRecognizer` does not run in the visionOS simulator and the simulator has no microphone, so it
-  cannot be verified until the hardware exists. It does compile for the real device SDK.
 - Room-aware presence, immersion and ambient sensing. The queue volume uses Shared Space and needs no
   room, gaze or camera access. See
   `docs/plans/2026-09-08-ambient-assistant.md` for where that goes.

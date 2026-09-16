@@ -92,6 +92,27 @@ rendering still unverified; pandoc rendered the pages.
 
 The console worktree's HUD ran on port 8423 against its own data directory. CONSOLE opened with TOOLS grouped by module (28 tools, 8 marked as needing confirmation); list_reminders ran from its generated form and returned a receipt (run_id 1) that then appeared under RUNS; RUN on draft_outreach_note raised exactly one confirm dialog and Cancel produced no request to its endpoint; at 375 px `scrollWidth == clientWidth == 375` with the panel open; zero console errors. Codex's in-process HTTP proof and scratch migration live under `data/verifications/console/`.
 
+## 2026-09-16: headset reply with the opinion button
+
+Simulator app rebuilt and launched against a loop-enabled worktree server; a real Claude reply rendered with its badge and the Second opinion button (`data/verifications/2026-09-16-vision-orb/claude/v02-reply.png`). Swift tests 31 passed. Tap flow still owed.
+
+## 2026-09-16: visionOS orb and card, simulator idle state
+
+Real xcodebuild for the simulator succeeded and the installed app rendered the orb, control rail and conversation card in STANDBY on the booted Apple Vision Pro simulator (`data/verifications/2026-09-16-vision-orb/claude/idle.png`). Swift tests 27 passed after the source registration patch. Interaction states remain unverified until the native simulator control is configured.
+
+## 2026-09-15: layered visionOS app icon
+
+Real Xcode simulator build, separate com.kyra.IconPreview installation, and Home View rendering verified the new three-layer icon. Source layers checked at 1024 x 1024 with an opaque background and transparent foregrounds; Assets.car and CFBundleIcons were present in the built app. 22 native tests, Python suite and lint passed. Evidence in the primary checkout: data/verifications/2026-09-15-vision-icon/build.log, swift-tests.log, pytest.log and home-icon.png. Production app data was untouched; the preview uses its own bundle identifier. Physical headset appearance and independent review remain unverified.
+
+**2026-09-14 (native AVP voice)**: real signed device build and installation; 22 Swift tests;
+643 Python tests passed, one existing optional skip; ruff clean. The actual Swift multipart/SSE
+voice client completed a synthetic speech round trip through isolated Whisper, real Claude, Chroma
+and Kokoro, returning two WAV clips. The fixture used explicit cached model directories after Hub
+lookup failures. No production test conversations were created; scratch servers stopped. Final
+headset listening acceptance remains pending. Evidence: `data/verifications/2026-09-14-avp-voice/`,
+particularly `voice-smoke-success.log`, `signed-build-final.log`, and `device-install-final.log`.
+
+
 ## 2026-09-10: snapshot merged and main scheduled entry point verified
 
 Merged Claude's completed integration into the snapshot branch, preserving both sides of two log conflicts, then fast-forwarded local master to `e441bbf`. Enumerated 61 parent/file comparisons: no additions from either parent were lost. Combined suite: **643 passed, 1 skipped in 67.69s**; existing optional tokenizer skip, ruff and plist syntax clean. The main tree matches the verified branch.
