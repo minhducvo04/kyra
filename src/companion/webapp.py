@@ -37,6 +37,7 @@ from pydantic import BaseModel, Field, StrictBool
 
 from companion import session_log, webauth
 from companion.apply_pipeline import ApplyError, engine_for_url, run_apply_pipeline
+from companion.brief import check, short_name
 from companion.checkpoints import CheckpointConflict, CheckpointDraft, CheckpointStore, DbCheckpointStore
 from companion.config import require_api_key
 from companion.conversation import ConversationManager
@@ -2339,13 +2340,23 @@ def loop_advance_assignment(assignment_id: int, body: AssignmentAdvanceIn) -> di
 @app.get("/api/loop/usage")
 def loop_usage() -> dict:
     controller = _loop_controller()
-    return {"rows": controller.store.usage_ledger(owner=controller.owner)}
+    return {"rows": [{**row, "model_label": short_name(row["developer"])}
+                     for row in controller.store.usage_ledger(owner=controller.owner)]}
+
+
+def _loop_run_record(record, artifact=None) -> dict:
+    result = {**asdict(record), "model_label": short_name(record.developer)}
+    if record.status == "done" and artifact and artifact.get("output"):
+        result["brief"] = asdict(check(artifact["output"]))
+    return result
 
 
 @app.get("/api/loop/runs")
 def loop_runs(topic: str | None = None) -> dict:
     controller = _loop_controller()
-    return {"runs": [asdict(r) for r in controller.store.list_runs(owner=controller.owner, topic=topic)]}
+    return {"runs": [_loop_run_record(r, controller.store.read_artifact(r.id, owner=controller.owner)
+                                      if r.status == "done" else None)
+                     for r in controller.store.list_runs(owner=controller.owner, topic=topic)]}
 
 
 @app.get("/api/loop/runs/{run_id}")
@@ -2354,7 +2365,8 @@ def loop_run(run_id: int) -> dict:
     record = controller.store.get_run(run_id, owner=controller.owner)
     if not record:
         raise ApiError(404, "not_found", "Run not found")
-    return {"run": asdict(record), "artifact": controller.store.read_artifact(run_id, owner=controller.owner),
+    artifact = controller.store.read_artifact(run_id, owner=controller.owner)
+    return {"run": _loop_run_record(record, artifact), "artifact": artifact,
             "reviews": controller.store.reviews_for(run_id, owner=controller.owner),
             "readiness": controller.readiness(record),
             "reconciliations": controller.store.reconciliations_for(run_id, owner=controller.owner),
@@ -2364,7 +2376,7 @@ def loop_run(run_id: int) -> dict:
 def _enqueue_loop(record) -> dict:
     # The queue stores only an id, never prompts or model output.
     _queue.enqueue("loop_dispatch", {"run_id": record.id})
-    return {"run": asdict(record)}
+    return {"run": _loop_run_record(record)}
 
 
 @app.post("/api/loop/runs")

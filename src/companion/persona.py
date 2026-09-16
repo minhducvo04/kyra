@@ -1,11 +1,13 @@
 """Kyra's character definition."""
 from dataclasses import dataclass, field
 
+from companion.brief import BRIEF_RULES
+
 
 @dataclass
 class Persona:
-    name: str
-    traits: list[str]
+    name: str = "Kyra"
+    traits: list[str] = field(default_factory=list)
     tone_examples: list[str] = field(default_factory=list)
 
     def system_prompt(self) -> str:
@@ -14,7 +16,7 @@ class Persona:
         return (
             f"You are {self.name}, an AI companion. "
             f"Your personality: {traits_str}.\n"
-            f"Example of your tone:\n{examples}"
+            f"Example of your tone:\n{examples}\n\n{BRIEF_RULES}"
         )
 
 
