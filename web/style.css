@@ -1,5 +1,21 @@
 :root { --idle-speed: 140s; --mid-speed: 90s; --inner-speed: 46s; }
 
+#map-panel { z-index: 31; }
+#map-panel button, #map-toggle { min-height: 44px; }
+#map-close { min-width: 44px; }
+#feature-map { width: 100%; flex-shrink: 0; font: var(--text-sm) var(--font-mono); }
+#feature-map text { fill: var(--text); }
+#feature-map .map-status { fill: var(--text-dim); font-size: var(--text-xs); }
+.map-wire { fill: none; stroke: var(--accent-dim); stroke-width: 2; }
+.map-card { fill: var(--panel-2); stroke: var(--border); }
+.map-track { fill: var(--grid); }
+.map-progress { fill: var(--accent); }
+#feature-map [data-feature] { cursor: pointer; }
+#feature-map [data-feature]:is(:hover, :focus) .map-card { stroke: var(--accent); stroke-width: 2; }
+#map-slices { font-size: var(--text-sm); overflow-wrap: anywhere; }
+#map-slices h3 { font-size: inherit; }
+#map-slices li { margin-block: var(--space-2); }
+
 #initiative-list .jobs-tracker-item {
   display: flex;
   flex-direction: column;

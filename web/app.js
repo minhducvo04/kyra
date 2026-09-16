@@ -3487,3 +3487,123 @@ async function loadConsoleRuns() {
 }
 document.getElementById("console-agents-refresh").addEventListener("click", loadConsoleAgents);
 document.getElementById("console-runs-refresh").addEventListener("click", loadConsoleRuns);
+
+/* ---------------- feature blueprint ---------------- */
+const mapPanel = document.getElementById("map-panel");
+const mapToggle = document.getElementById("map-toggle");
+const mapTabs = [...mapPanel.querySelectorAll("[data-map-tab]")];
+let mapRequest = 0;
+
+function closeMapPanel() {
+  mapPanel.classList.remove("is-open");
+  mapPanel.setAttribute("aria-hidden", "true");
+  mapPanel.inert = true;
+  mapToggle.classList.remove("is-active");
+  mapToggle.setAttribute("aria-expanded", "false");
+  mapToggle.focus();
+}
+mapToggle.addEventListener("click", () => {
+  if (mapPanel.classList.contains("is-open")) return closeMapPanel();
+  closeJobsPanel(); closeToolsPanel(); closeSearchPanel(); closeFocusPanel(); closeConsolePanel();
+  mapPanel.inert = false;
+  mapPanel.classList.add("is-open");
+  mapPanel.setAttribute("aria-hidden", "false");
+  mapToggle.classList.add("is-active");
+  mapToggle.setAttribute("aria-expanded", "true");
+  mapTabs.find((tab) => tab.classList.contains("is-active")).focus();
+  loadFeatureMap();
+});
+document.getElementById("map-close").addEventListener("click", closeMapPanel);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && mapPanel.classList.contains("is-open")) closeMapPanel();
+});
+mapTabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => {
+    mapTabs.forEach((other) => {
+      const active = other === tab;
+      other.classList.toggle("is-active", active);
+      other.setAttribute("aria-selected", String(active));
+      other.tabIndex = active ? 0 : -1;
+      document.getElementById(`map-${other.dataset.mapTab}`).classList.toggle("is-active", active);
+    });
+  });
+  tab.addEventListener("keydown", (event) => {
+    const offsets = { ArrowRight: 1, ArrowLeft: -1, Home: -index, End: mapTabs.length - 1 - index };
+    if (!(event.key in offsets)) return;
+    event.preventDefault();
+    const next = mapTabs[(index + offsets[event.key] + mapTabs.length) % mapTabs.length];
+    next.click(); next.focus();
+  });
+});
+
+function mapSvg(tag, attrs, text = "") {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  node.textContent = text;
+  return node;
+}
+
+function showFeatureSlices(feature) {
+  const details = document.getElementById("map-slices");
+  const heading = document.createElement("h3");
+  heading.textContent = `${feature.name} · ${feature.percent}% · ${feature.status}`;
+  const list = document.createElement("ul");
+  for (const slice of feature.slices) {
+    const item = document.createElement("li");
+    item.textContent = `${slice.id}: ${slice.name} · ${slice.status}`;
+    list.append(item);
+  }
+  details.replaceChildren(heading, list);
+  details.focus();
+}
+
+async function loadFeatureMap() {
+  const request = ++mapRequest;
+  const svg = document.getElementById("feature-map");
+  const summary = document.getElementById("map-summary");
+  svg.replaceChildren();
+  document.getElementById("map-slices").replaceChildren();
+  summary.textContent = "Loading features…";
+  try {
+    const data = await readJson(await fetch("/api/features"));
+    if (request !== mapRequest) return;
+    summary.textContent = `${data.overall}% overall · Select a feature for its slices.`;
+    svg.setAttribute("viewBox", `0 0 340 ${Math.max(1, data.features.length) * 88 + 8}`);
+    const positions = new Map(data.features.map((feature, index) => [feature.id, 8 + index * 88]));
+    // Draw dependency wires first so the feature cards remain in front.
+    for (const feature of data.features) {
+      for (const dependency of feature.depends_on) {
+        const from = positions.get(dependency) + 34;
+        const to = positions.get(feature.id) + 34;
+        const wire = mapSvg("path", { d: `M 40 ${from} H 16 V ${to} H 40`, class: "map-wire" });
+        wire.append(mapSvg("title", {}, `${feature.name} depends on ${dependency}`));
+        svg.append(wire);
+      }
+    }
+    for (const feature of data.features) {
+      const node = mapSvg("g", {
+        transform: `translate(40 ${positions.get(feature.id)})`,
+        "data-feature": feature.id, "data-percent": feature.percent,
+        role: "button", tabindex: "0", "aria-controls": "map-slices",
+        "aria-label": `${feature.name}, ${feature.percent}%, ${feature.status}. Show slices`,
+      });
+      node.append(
+        mapSvg("rect", { width: 292, height: 68, rx: 4, class: "map-card" }),
+        mapSvg("text", { x: 12, y: 23 }, feature.name),
+        mapSvg("text", { x: 12, y: 43, class: "map-status" }, `${feature.percent}% · ${feature.status}`),
+        mapSvg("rect", { x: 12, y: 53, width: 268, height: 5, class: "map-track" }),
+        mapSvg("rect", { x: 12, y: 53, width: 268 * feature.percent / 100, height: 5, class: "map-progress" }),
+      );
+      node.addEventListener("click", () => showFeatureSlices(feature));
+      node.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        showFeatureSlices(feature);
+      });
+      svg.append(node);
+    }
+  } catch (error) {
+    if (request !== mapRequest) return;
+    summary.textContent = `${error.message} Close and reopen MAP to retry.`;
+  }
+}

@@ -45,6 +45,7 @@ from companion.db import engine_for_store
 from companion.default_tools import default_tool_registry
 from companion.doc_text import UnsupportedDocumentType, extract_text
 from companion.errors import ApiError, install_error_handlers
+from companion.features import feature_map, load_features
 from companion.focus import (
     FocusBlockRunning,
     FocusPlan,
@@ -420,6 +421,11 @@ def index() -> HTMLResponse:
         mtime = int((WEB_DIR / asset).stat().st_mtime)
         html = html.replace(f'/static/{asset}"', f'/static/{asset}?v={mtime}"')
     return HTMLResponse(html)
+
+
+@app.get("/api/features")
+def features() -> dict:
+    return feature_map(load_features())
 
 
 @app.get("/healthz")
