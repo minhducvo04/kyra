@@ -4,6 +4,18 @@
 
 The default registry now attaches a lazy ToolRunStore so registry callers record arguments, outcome, a 300-character result summary, start time and elapsed time in private runtime state. The console receives the id from its own execution rather than querying the latest row, and an audit failure logs its exception type without exposing arguments or changing the tool's result. The idempotent Alembic revision adds tool_runs; scratch migration, successful/error runs, eight concurrent receipt matches and startup-import checks were verified. Confirmation flags cover drafting, autofill, outreach copy, initiatives, posting fetch and the two RSS tools. Proof is under `data/verifications/console/`; the supplied test mismatch and acceptance limitations are recorded in `data/private_docs/assignment-P01-result.md`.
 
+## 2026-09-16: learning-reels library repairs the red-test PR
+
+PR #5 failed at collection because its planned `companion.reels` library was absent. The fix supplies
+the existing transcript/proposal/learning contract and four relational tables with an additive migration.
+There is no media download, upload, automatic release, new web route or dependency. The source adapter
+fetches only fixed-host oEmbed metadata and refuses redirects; learner state uses recorded answers.
+The CLI and HUD remain separate future slices, so this is a library repair rather than a complete reels UI.
+
+Claude independently confirmed two contradictory fixtures before correction: quoted facts were outside
+the alleged valid time span, and independent mastery scenarios reused a duplicate span. Both guards
+remain enforced. Detailed verification and private evidence paths are in `verification-history.md`.
+
 Book summarisation, RSS news, the Claude Code handoff tool.
 
 Entries below were moved verbatim from `CLAUDE.md` on 2026-09-09 (original order kept, newest work is usually nearer the top of each section). Add new entries at the top of this file, dated, with the *why*.

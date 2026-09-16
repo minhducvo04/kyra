@@ -1,0 +1,38 @@
+WEBVTT
+
+00:00.000 --> 00:15.000
+Welcome back to Northwind lecture three. Today we look at the step size in gradient descent.
+
+00:15.000 --> 00:32.000
+Recall the update rule. We move the parameters opposite the gradient, and the step size scales how far.
+
+00:32.000 --> 00:48.000
+Here is a concrete example. Take the function f of x equals x squared, and start at x equals four.
+
+00:48.000 --> 01:05.000
+With a step size of 0.1 the gradient at four is eight, so the update moves us from four to 3.2.
+
+01:05.000 --> 01:24.000
+Keep going and the values shrink toward zero. Each step is a bit smaller than the last one.
+
+01:24.000 --> 01:40.000
+Now watch what happens with a step size of 1.1. The first update takes us from four to negative 4.8.
+
+01:40.000 --> 01:58.000
+The next one lands at 5.76. The distance from the minimum grows on every step instead of shrinking.
+
+01:58.000 --> 02:15.000
+That is the surprising part. A larger step does not mean faster progress. Past a threshold it diverges.
+
+02:15.000 --> 02:32.000
+A common misconception is that the algorithm is broken. It is not. The step simply overshoots the minimum.
+
+02:32.000 --> 02:50.000
+The threshold here is a step size of one, because the gradient of x squared is two x and two times one is two.
+
+02:50.000 --> 03:10.000
+So for this function any step size above one makes each update cross the minimum by more than it came.
+
+03:10.000 --> 03:25.000
+Next time we look at how to pick a step size when you do not know the function's curvature in advance.
+
