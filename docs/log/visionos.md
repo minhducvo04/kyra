@@ -1,5 +1,9 @@
 # The visionOS client
 
+## 2026-09-16: orb and collapsible conversation card
+
+Talk now keeps a breathing sphere and persistent Talk, Text and Stop controls beside a collapsible transcript card. The view stores its transcript in the tested OrbPresentation model; hiding the card preserves both conversation and draft. AVAudioPlayer metering drives the speaking pulse, resets between clips and on Stop, and continues updating the level readout with Reduce Motion enabled while the orb stays still. Pending microphone permission and an unsent captured clip keep Stop available. Removed the oversized icon preview; the prior Home View proof remains referenced below. Verification: 27 native tests passed, including the 22 existing cases; 643 Python tests passed with one optional skip; ruff passed. All native sources compiled and linked directly into an arm64 visionOS simulator executable. The full Xcode build failed in asset compilation after CoreSimulatorService became unavailable, so visual acceptance remains unverified. The new source still needs Xcode project registration; that file was outside the assigned edit scope, and a ready patch is retained with the evidence at `data/verifications/2026-09-16-vision-orb/` in this worktree. Changes remain unstaged for independent review.
+
 ## 2026-09-15: a layered orb app icon
 
 The client referenced AppIcon without shipping an asset catalog. Added original cyan sphere artwork with an open orbit to match the companion direction, using an opaque background and two transparent 1024 x 1024 sRGB layers. Native drawing source is in apple/Design/generate_app_icon.swift so the artwork remains editable without a new dependency. The system applies its circular mask and layer depth. The catalog is now included in app resources and excluded from the state-test Swift package.

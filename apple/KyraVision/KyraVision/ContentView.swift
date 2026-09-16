@@ -1,21 +1,14 @@
 import SwiftUI
 import AVFoundation
 
-struct Line: Identifiable {
-    enum Who { case duc, kyra, system }
-    let id = UUID()
-    let who: Who
-    var text: String
-    var badge: String?
-}
-
 struct ContentView: View {
     let client: KyraClient
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var textFocused: Bool
 
-    @State private var lines: [Line] = []
+    @State private var presentation = OrbPresentation()
     @State private var draft = ""
-    @State private var presence: Presence = .idle
     @State private var backend = "…"
     @State private var showSettings = false
     @State private var turn: Task<Void, Never>?
@@ -27,16 +20,43 @@ struct ContentView: View {
     private var answering: Bool { turn != nil }
 
     var body: some View {
-        VStack(spacing: 0) {
-            PresenceReadout(presence: presence)
-                .padding(.top, 26)
-                .padding(.bottom, 8)
-                // Tapping her is how you cut her off - the mic button does the
-                // same job on the web, and on a headset the orb is what you look at.
-                .onTapGesture { if speech.isSpeaking { stop() } }
-            transcript
-            composer
+        HStack(spacing: 16) {
+            VStack(spacing: 18) {
+                PresenceReadout(presentation: presentation, playbackLevel: speech.playbackLevel)
+                    .onTapGesture { if speech.isSpeaking { stop() } }
+                controls
+            }
+            .frame(width: 180)
+            .frame(maxHeight: .infinity)
+
+            if !presentation.cardHidden {
+                VStack(spacing: 0) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Conversation").font(.headline)
+                            Text(presentation.presence.label)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button {
+                            textFocused = false
+                            presentation.hideCard()
+                        } label: {
+                            Image(systemName: "chevron.right")
+                        }
+                        .accessibilityLabel("Hide conversation")
+                    }
+                    .padding(16)
+                    transcript
+                    composer
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 28))
+            }
         }
+        .padding(20)
+        .onChange(of: reduceMotion, initial: true) { presentation.reduceMotion = reduceMotion }
         .ornament(attachmentAnchor: .scene(.top)) {
             // The backend badge lives on an ornament rather than in the window,
             // so it never competes with the conversation for attention.
@@ -51,7 +71,7 @@ struct ContentView: View {
         .onDisappear { stop() }
         .onChange(of: speech.error) {
             if let error = speech.error {
-                lines.append(Line(who: .system, text: "Could not play the reply: \(error)"))
+                presentation.lines.append(TranscriptLine(who: "system", text: "Could not play the reply: \(error)"))
             }
         }
         .onChange(of: scenePhase) {
@@ -62,12 +82,13 @@ struct ContentView: View {
                type == AVAudioSession.InterruptionType.began.rawValue { stop() }
         }
         .onChange(of: voice.phase) {
-            if voice.phase == .ready { presence = .idle }
+            // A captured clip still belongs to the active listening interaction until sent or cancelled.
+            if voice.phase == .ready { presentation.presence = .listening }
         }
         .onChange(of: voice.error) {
             if let error = voice.error {
-                lines.append(Line(who: .system, text: error))
-                presence = .failed
+                presentation.lines.append(TranscriptLine(who: "system", text: error))
+                presentation.presence = .failed
             }
         }
         .onAppear {
@@ -87,10 +108,10 @@ struct ContentView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
-                    ForEach(lines) { line in
+                    ForEach(presentation.lines) { line in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 8) {
-                                Text(tag(for: line.who))
+                                Text(line.who.uppercased())
                                     .font(.system(.caption2, design: .monospaced))
                                     .foregroundStyle(.tertiary)
                                 if let badge = line.badge {
@@ -104,76 +125,111 @@ struct ContentView: View {
                                 // Body text, not the 13px mono the web HUD uses:
                                 // a headset is further from the eye than a laptop.
                                 .font(.system(.body))
-                                .foregroundStyle(line.who == .system ? .secondary : .primary)
+                                .foregroundStyle(line.who == "system" ? .secondary : .primary)
                                 .textSelection(.enabled)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .id(line.id)
                     }
                 }
-                .padding(28)
+                .padding(20)
             }
-            .onChange(of: lines.last?.text) {
-                if let last = lines.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
+            .onAppear {
+                if let last = presentation.lines.last { proxy.scrollTo(last.id, anchor: .bottom) }
+            }
+            .onChange(of: presentation.lines.last?.text) {
+                if let last = presentation.lines.last {
+                    if reduceMotion { proxy.scrollTo(last.id, anchor: .bottom) }
+                    else { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
+                }
             }
         }
     }
 
-    private var composer: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                if voice.phase != .idle {
-                    Text(voice.phase == .recording ? "Listening… Tap Send voice when finished." :
-                         voice.phase == .ready ? "One minute recorded. Send voice or Cancel." : "Waiting for microphone permission…")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Button("Cancel") { voice.cancel(); presence = .idle }
-                    if voice.phase == .recording || voice.phase == .ready {
-                        Button("Send voice", systemImage: "arrow.up") { sendVoice() }
-                            .buttonStyle(.borderedProminent)
-                            .frame(minWidth: 120, minHeight: 60)
+    // This rail stays mounted when the card is hidden, including its Stop button.
+    private var controls: some View {
+        VStack(spacing: 12) {
+            ForEach(presentation.visibleControls, id: \.self) { control in
+                switch control {
+                case .talk:
+                    Button("Talk", systemImage: "mic.fill") {
+                        presentation.showCard()
+                        textFocused = false
+                        startRecording()
                     }
-                } else {
-                    TextField("Message Kyra", text: $draft, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(.system(.body))
-                        .lineLimit(1...4)
-                        .padding(.horizontal, 18).padding(.vertical, 14)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 22))
-                        .onSubmit(send)
-                    Button("Talk", systemImage: "mic.fill") { startRecording() }
-                        .disabled(!connected || answering)
-                        .frame(minWidth: 90, minHeight: 60)
-                    Button(answering ? "Stop" : "Send") {
-                        answering ? stop() : send()
+                    .disabled(!connected || answering)
+                case .text:
+                    Button("Text", systemImage: "text.bubble") {
+                        if voice.phase != .idle {
+                            voice.cancel()
+                            presentation.presence = .idle
+                        }
+                        presentation.showCard()
+                        textFocused = true
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(answering ? .red : .accentColor)
-                    .disabled(!answering && (draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connected))
-                    .frame(minWidth: 90, minHeight: 60)
+                case .stop:
+                    Button("Stop", systemImage: "stop.fill", action: stop)
+                        .tint(.red)
+                        .disabled(!presentation.stopEnabled)
                 }
             }
         }
-        .padding(20)
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+    }
+
+    private var composer: some View {
+        VStack(spacing: 12) {
+            if voice.phase != .idle {
+                Text(voice.phase == .recording ? "Listening… Tap Send voice when finished." :
+                     voice.phase == .ready ? "One minute recorded. Send voice or Cancel." : "Waiting for microphone permission…")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack {
+                    Button("Cancel") { voice.cancel(); presentation.presence = .idle }
+                    if voice.phase == .recording || voice.phase == .ready {
+                        Button("Send voice", systemImage: "arrow.up") { sendVoice() }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+            } else {
+                TextField("Message Kyra", text: $draft, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(.body))
+                    .lineLimit(1...4)
+                    .padding(.horizontal, 18).padding(.vertical, 14)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 22))
+                    .focused($textFocused)
+                    .onSubmit(send)
+                Button("Send", systemImage: "arrow.up", action: send)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(answering || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connected)
+            }
+        }
+        .padding(16)
     }
 
     private func startRecording() {
         guard !answering, voice.phase == .idle, connected else { return }
-        turnID = UUID()
+        let id = UUID()
+        turnID = id
         speech.stop()
+        presentation.presence = .listening
         Task {
+            guard turnID == id else { return }
             await voice.start()
-            if voice.phase == .recording { presence = .listening }
+            guard turnID == id else { return }
+            if voice.phase == .recording { presentation.presence = .listening }
         }
     }
 
     private func sendVoice() {
         guard let wav = voice.finish() else {
-            presence = .failed
+            presentation.presence = .failed
             return
         }
         let id = UUID()
         turnID = id
-        presence = .thinking
+        presentation.presence = .thinking
         turn = Task {
             defer { if turnID == id { turn = nil } }
             var heardSpeech = false
@@ -183,32 +239,32 @@ struct ContentView: View {
                     switch event {
                     case .transcript(let text):
                         heardSpeech = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        if heardSpeech { lines.append(Line(who: .duc, text: text)) }
+                        if heardSpeech { presentation.lines.append(TranscriptLine(who: "you", text: text)) }
                     case .audio(let clip):
-                        presence = .speaking
+                        presentation.presence = .speaking
                         speech.enqueue(clip)
                     case .done(let reply):
                         if !reply.reply.isEmpty {
-                            lines.append(Line(who: .kyra, text: reply.reply, badge: reply.badge))
+                            presentation.lines.append(TranscriptLine(who: "kyra", text: reply.reply, badge: reply.badge))
                         }
                     }
                 }
                 try Task.checkCancellation()
                 if !heardSpeech {
-                    lines.append(Line(who: .system, text: "I didn’t hear any words. Tap Talk and try again."))
+                    presentation.lines.append(TranscriptLine(who: "system", text: "I didn’t hear any words. Tap Talk and try again."))
                 }
                 while speech.isSpeaking {
                     try await Task.sleep(for: .milliseconds(120))
                 }
                 guard turnID == id else { return }
-                presence = .idle
+                presentation.presence = .idle
             } catch is CancellationError {
                 // Stop discards queued clips and invalidates this turn.
             } catch {
                 guard turnID == id else { return }
                 speech.stop()
-                lines.append(Line(who: .system, text: error.localizedDescription))
-                presence = .failed
+                presentation.lines.append(TranscriptLine(who: "system", text: error.localizedDescription))
+                presentation.presence = .failed
             }
         }
     }
@@ -245,21 +301,13 @@ struct ContentView: View {
         .frame(minWidth: 520, minHeight: 380)
     }
 
-    private func tag(for who: Line.Who) -> String {
-        switch who {
-        case .duc: "YOU"
-        case .kyra: "KYRA"
-        case .system: "SYSTEM"
-        }
-    }
-
     private func refreshBackend() async {
         guard connected else { return }
         do {
             backend = try await client.backend()
         } catch {
             backend = "offline"
-            presence = .failed
+            if !answering, voice.phase == .idle { presentation.presence = .failed }
         }
     }
 
@@ -269,8 +317,8 @@ struct ContentView: View {
         let id = UUID()
         turnID = id
         draft = ""
-        lines.append(Line(who: .duc, text: message))
-        presence = .thinking
+        presentation.lines.append(TranscriptLine(who: "you", text: message))
+        presentation.presence = .thinking
 
         turn = Task {
             defer { if turnID == id { turn = nil } }
@@ -281,30 +329,30 @@ struct ContentView: View {
                 let out = try await client.send(message) { delta in
                     Task { @MainActor in
                         guard turnID == id else { return }
-                        if let index = replyIndex, index < lines.count {
-                            lines[index].text += delta
+                        if let index = replyIndex, index < presentation.lines.count {
+                            presentation.lines[index].text += delta
                         } else {
-                            lines.append(Line(who: .kyra, text: delta))
-                            replyIndex = lines.count - 1
+                            presentation.lines.append(TranscriptLine(who: "kyra", text: delta))
+                            replyIndex = presentation.lines.count - 1
                         }
                     }
                 }
                 try Task.checkCancellation()
                 guard turnID == id else { return }
-                if let index = replyIndex, index < lines.count {
-                    lines[index].text = out.reply   // authoritative, e.g. a truncation marker
-                    lines[index].badge = out.badge
+                if let index = replyIndex, index < presentation.lines.count {
+                    presentation.lines[index].text = out.reply   // authoritative, e.g. a truncation marker
+                    presentation.lines[index].badge = out.badge
                 } else {
-                    lines.append(Line(who: .kyra, text: out.reply, badge: out.badge))
+                    presentation.lines.append(TranscriptLine(who: "kyra", text: out.reply, badge: out.badge))
                 }
-                presence = .idle
+                presentation.presence = .idle
                 await speakReply(out.reply, id: id)
             } catch is CancellationError {
                 // stop() already set .interrupted.
             } catch {
                 guard turnID == id else { return }
-                lines.append(Line(who: .system, text: error.localizedDescription))
-                presence = .failed
+                presentation.lines.append(TranscriptLine(who: "system", text: error.localizedDescription))
+                presentation.presence = .failed
             }
         }
     }
@@ -314,7 +362,7 @@ struct ContentView: View {
     /// turn: the reply is already on screen, so a silent answer beats an error.
     private func speakReply(_ reply: String, id: UUID) async {
         guard !reply.isEmpty else { return }
-        presence = .speaking
+        presentation.presence = .speaking
         do {
             try await client.speak(reply) { wav in
                 Task { @MainActor in
@@ -322,18 +370,18 @@ struct ContentView: View {
                     speech.enqueue(wav)
                 }
             }
-            while speech.isSpeaking, turnID == id, presence == .speaking {
+            while speech.isSpeaking, turnID == id, presentation.presence == .speaking {
                 try await Task.sleep(for: .milliseconds(120))
             }
         } catch {
             // fall through - she just does not say this one out loud
         }
-        if turnID == id, presence == .speaking { presence = .idle }
+        if turnID == id, presentation.presence == .speaking { presentation.presence = .idle }
     }
 
     private func stop() {
         let hadTurn = answering
-        guard hadTurn || voice.phase != .idle || speech.isSpeaking else { return }
+        guard hadTurn || voice.phase != .idle || speech.isSpeaking || presentation.stopEnabled else { return }
         turnID = UUID()
         voice.cancel()
         speech.stop()
@@ -343,9 +391,9 @@ struct ContentView: View {
         // generating and would file the whole reply into memory as if it had
         // been heard. /api/chat/cancel is the half that actually stops it.
         if hadTurn { Task { await client.cancel() } }
-        if hadTurn, let last = lines.indices.last, lines[last].who == .kyra {
-            lines[last].badge = "interrupted"
+        if hadTurn, let last = presentation.lines.indices.last, presentation.lines[last].who == "kyra" {
+            presentation.lines[last].badge = "interrupted"
         }
-        presence = .interrupted
+        presentation.presence = .interrupted
     }
 }

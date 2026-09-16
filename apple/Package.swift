@@ -11,7 +11,7 @@ let package = Package(
                           "PresenceOrb.swift", "SpeechPlayer.swift", "TodayView.swift",
                           "WorkspaceView.swift", "LearningLabView.swift"],
                 sources: ["QueueSimulation.swift", "WorkspaceState.swift", "LearningLab.swift",
-                          "VoiceInput.swift", "VoiceStream.swift"]),
+                          "VoiceInput.swift", "VoiceStream.swift", "OrbPresentation.swift"]),
         .testTarget(name: "KyraQueueLabTests", dependencies: ["KyraQueueLab"], path: "Tests")
     ]
 )

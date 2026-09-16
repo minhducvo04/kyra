@@ -16,9 +16,11 @@ import Observation
 @MainActor
 final class SpeechPlayer: NSObject {
     private(set) var isSpeaking = false
+    private(set) var playbackLevel: Double = 0
     private(set) var error: String?
     private var queue: [Data] = []
     private var player: AVAudioPlayer?
+    private var metering: Task<Void, Never>?
 
     func enqueue(_ wav: Data) {
         error = nil
@@ -27,6 +29,7 @@ final class SpeechPlayer: NSObject {
     }
 
     func stop() {
+        stopMetering()
         queue.removeAll()
         player?.stop()
         player = nil
@@ -34,6 +37,7 @@ final class SpeechPlayer: NSObject {
     }
 
     private func playNext() {
+        stopMetering()
         guard !queue.isEmpty else {
             player = nil
             isSpeaking = false
@@ -47,13 +51,35 @@ final class SpeechPlayer: NSObject {
             try AVAudioSession.sharedInstance().setActive(true)
             let next = try AVAudioPlayer(data: wav)
             next.delegate = self
+            next.isMeteringEnabled = true
             player = next
             isSpeaking = true
             guard next.play() else { throw VoiceFailure("Audio playback could not start.") }
+            startMetering(next)
         } catch {
             self.error = error.localizedDescription
             player = nil
             playNext()
+        }
+    }
+
+    private func stopMetering() {
+        metering?.cancel()
+        metering = nil
+        playbackLevel = 0
+    }
+
+    private func startMetering(_ activePlayer: AVAudioPlayer) {
+        metering = Task { @MainActor [weak self, weak activePlayer] in
+            while !Task.isCancelled {
+                guard let self, let activePlayer, self.player === activePlayer else { return }
+                activePlayer.updateMeters()
+                // Convert decibels to linear amplitude; silence stays still.
+                let decibels = activePlayer.averagePower(forChannel: 0)
+                self.playbackLevel = decibels <= -60 ? 0 : min(1, pow(10, Double(decibels) / 20))
+                do { try await Task.sleep(for: .milliseconds(50)) }
+                catch { return }
+            }
         }
     }
 }
