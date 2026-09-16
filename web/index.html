@@ -10,6 +10,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='25' x='4' font-size='24' fill='%2329d8ff'%3E%E2%97%88%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="/static/tokens.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -17,12 +18,12 @@
   <div class="scanlines" aria-hidden="true"></div>
   <div class="vignette" aria-hidden="true"></div>
 
-  <header class="hud-header">
-    <div class="wordmark">
-      <span class="wordmark-mark" aria-hidden="true">◈</span>
-      <span class="wordmark-text">KYRA</span>
-      <span class="wordmark-sub">COMPANION&nbsp;SYSTEM</span>
-    </div>
+<header class="app-header">
+  <a class="app-brand" href="/" aria-label="Kyra home"><span aria-hidden="true">◈</span>KYRA</a>
+  <span class="app-page">Talk</span>
+  <nav aria-label="Main navigation"><a href="/" aria-current="page">Talk</a><a href="/loop">Loop</a></nav>
+  <div class="app-status"><span class="status-dot" aria-hidden="true"></span><span id="status-text">ONLINE</span></div>
+</header>
     <div class="header-controls">
       <div class="backend-toggle" role="group" aria-label="Model backend">
         <button class="backend-btn is-active" data-backend="auto" id="btn-auto" type="button">
@@ -39,15 +40,9 @@
       <button class="jobs-toggle" id="console-toggle" type="button" aria-controls="console-panel" aria-expanded="false">CONSOLE</button>
       <button class="jobs-toggle" id="focus-toggle" type="button">FOCUS</button>
       <button class="jobs-toggle" id="search-toggle" type="button">SEARCH</button>
-      <a class="jobs-toggle" href="/loop">LOOP</a>
       <button class="jobs-toggle" id="tools-toggle" type="button">TOOLS</button>
       <button class="jobs-toggle" id="jobs-toggle" type="button">JOBS</button>
-      <div class="status">
-        <span class="status-dot"></span>
-        <span id="status-text">ONLINE</span>
-      </div>
     </div>
-  </header>
 
   <aside class="jobs-panel" id="console-panel" aria-hidden="true" aria-label="Console" inert>
     <div class="jobs-panel-header">

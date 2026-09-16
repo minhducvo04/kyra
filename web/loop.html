@@ -1,15 +1,21 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Kyra · Working loop</title><link rel="stylesheet" href="/static/loop.css"><script src="/static/loop.js" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Kyra · Loop</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/loop.css"><script src="/static/loop.js" defer></script></head>
 <body>
-<header><a href="/">KYRA</a><span>Working loop</span><small>Personal · On this Mac</small></header>
+<header class="app-header">
+  <a class="app-brand" href="/" aria-label="Kyra home"><span aria-hidden="true">◈</span>KYRA</a>
+  <span class="app-page">Loop</span>
+  <nav aria-label="Main navigation"><a href="/">Talk</a><a href="/loop" aria-current="page">Loop</a></nav>
+  <div class="app-status"><span class="status-dot" aria-hidden="true"></span><span>On this Mac</span></div>
+</header>
 <main>
-<aside><h2>Your topics</h2><label for="filter">Find a topic</label><input id="filter" type="search" placeholder="Search saved topics"><div id="topics"></div><button id="new-topic" type="button">+ New topic</button></aside>
 <section class="workspace">
-<div class="intro"><p class="eyebrow">TWO MODELS. VISIBLE CONTRIBUTIONS.</p><h1>A second pair of eyes.</h1><p>Ask one model, then have the other check its exact answer.</p></div>
+<div class="intro"><h1>Ask a model and review its answer.</h1></div>
+<p id="notice" role="status" aria-live="polite"></p>
+<div class="history-heading"><h2>Contributions</h2><span id="count"></span></div><div id="runs"><p class="empty">Choose a topic or start a new one.</p></div>
 <div id="continuation" hidden><p id="continuation-label"></p><button id="fresh-request" type="button">Start a fresh conversation instead</button></div>
 <form id="request"><div class="row"><label>Topic<input id="topic" required maxlength="160" placeholder="What are you working on?"></label><label>Start with<select id="choice"><option value="codex-default">Codex · Astra · High</option><option value="claude-fable-high">Claude · Fable 5.1 · High</option></select></label><label>Tier<select id="tier"><option value="casual">Casual</option><option value="work" selected>Work</option><option value="life_changing">Life changing</option></select></label></div><label>Your request<textarea id="prompt" required maxlength="65536" rows="5" placeholder="Describe the task and what a good result needs to include."></textarea></label><div class="form-footer"><small>Uses your signed-in plans. Answers and review comments are saved privately.</small><button id="run" type="submit">Run model</button></div></form>
-<p id="notice" role="status" aria-live="polite"></p>
 <section id="assignments" aria-labelledby="assignments-heading">
 <div class="history-heading"><h2 id="assignments-heading">Assignments</h2><button id="refresh-assignments" type="button">Refresh</button></div>
 <p class="meta">Record the scope and progress of a task. Advancing records your declaration and does not run work or approve a review.</p>
@@ -25,8 +31,8 @@
 <p id="assignments-notice" role="status"></p><div id="assignment-rows"></div>
 </section>
 <section id="usage" aria-labelledby="usage-heading"><div class="history-heading"><h2 id="usage-heading">USAGE</h2><button id="refresh-usage" type="button">Refresh</button></div><p class="meta">All saved topics. Token totals cover reported usage only; runs without usage are unknown. Provider-reported cost is not a subscription charge.</p><p id="usage-notice" role="status"></p><div id="usage-rows"></div></section>
-<div class="history-heading"><h2>Contributions</h2><span id="count"></span></div><div id="runs"><p class="empty">Choose a topic or start a new one.</p></div>
 </section>
+<aside><h2>Your topics</h2><label for="filter">Find a topic</label><input id="filter" type="search" placeholder="Search saved topics"><div id="topics"></div><button id="new-topic" type="button">+ New topic</button></aside>
 </main><footer>Models can explain their conclusions here. Full internal reasoning is not available. Reviews are comments, not a guarantee of correctness.</footer>
 <dialog id="reconcile-dialog">
 <form id="reconcile-form">

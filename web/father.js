@@ -1,5 +1,6 @@
 "use strict";
 const byId = id => document.getElementById(id);
+const statusClass = {review: "needs-you", approved: "done", changes_requested: "needs-you"};
 const statusLabels = {review: "Ready for review", approved: "Approved", changes_requested: "Changes requested"};
 const findingLabels = {
   dash: "Replace the dash in the document.",
@@ -84,7 +85,9 @@ async function refresh() {
   byId("history").replaceChildren();
   data.tasks.forEach(task => {
     const card = node("div", "", "task");
-    card.append(node("p", title(task)), node("span", statusLabels[task.status], `badge ${task.status}`));
+    const status = statusClass[task.status] || "needs-you";
+    card.append(node("p", title(task)), node("span", status.replaceAll("-", " "), `status-badge status-${status}`),
+      node("p", statusLabels[task.status] || "Check this task."));
     if (task.decided_at) card.append(node("p", new Date(task.decided_at).toLocaleString()));
     if (task.note) card.append(node("p", task.note));
     const button = node("button", "Review");

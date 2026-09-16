@@ -2,8 +2,8 @@
 const $ = id => document.getElementById(id);
 let records = [], selected = "", busy = false, reconciliationTarget = null, continuationTarget = null;
 const cards = new Map();
-const statusLabel = {queued:"Queued", dispatching:"Running", done:"Complete", failed:"Failed",
-  unreconciled:"Needs checking", mismatch:"Model changed"};
+const statusClass = {queued:"queued", dispatching:"running", done:"done", failed:"failed",
+  unreconciled:"needs-you", mismatch:"needs-you"};
 const errorLabel = {
   continuation_refused:"This contribution can no longer be continued. Start a fresh conversation.",
   review_context_unavailable:"An earlier turn is missing or changed. Restore its saved content before requesting this review.",
@@ -51,8 +51,9 @@ async function inspect(record) {
   const detail = await readJson(`/api/loop/runs/${record.id}`);
   const card = el("article", undefined, "card"); card.id = `run-${record.id}`;
   const top = el("div", undefined, "card-top");
+  const status = statusClass[record.status] || "needs-you";
   top.append(el("strong", `${modelName(record)} ${record.review_subject_id ? "· Review" : "· Answer"}`),
-    el("span", statusLabel[record.status] || record.status, `badge ${record.status}`));
+    el("span", status.replaceAll("-", " "), `status-badge status-${status}`));
   card.append(top, el("p", `#${record.id} · ${record.requested_model} · ${record.effort || "default effort"}`, "meta"));
   card.append(el("p", `Tier: ${tierLabel[detail.readiness.tier]} · ${detail.readiness.ready ? "Ready for your decision." : detail.readiness.reasons.map(reason => readinessReason[reason] || reason).join(" ")}`, "meta"));
   if (record.review_subject_id) card.append(el("p", `Review of contribution #${record.review_subject_id}. No automatic approval.`, "meta"));
@@ -146,7 +147,7 @@ async function inspect(record) {
 }
 async function render() {
   const topic = selected;
-  const visible = records.filter(r => r.topic === topic).reverse();
+  const visible = records.filter(r => r.topic === topic);
   $("count").textContent = `${visible.length} saved`;
   const nodes = [];
   for (const record of visible) {
@@ -157,7 +158,7 @@ async function render() {
     if (previous) previous.querySelectorAll("details").forEach((d, i) => { detail.querySelectorAll("details")[i].open = d.open; });
     cards.set(record.id, detail); nodes.push(detail);
   }
-  $("runs").replaceChildren(...(nodes.length ? nodes : [el("p", "No contributions yet. Send the first request above.", "empty")]));
+  $("runs").replaceChildren(...(nodes.length ? nodes : [el("p", "No contributions yet. Send the first request below.", "empty")]));
 }
 async function refreshUsage() {
   $("refresh-usage").disabled = true;
