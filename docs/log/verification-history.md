@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: headset reply with the opinion button
+
+Simulator app rebuilt and launched against a loop-enabled worktree server; a real Claude reply rendered with its badge and the Second opinion button (`data/verifications/2026-09-16-vision-orb/claude/v02-reply.png`). Swift tests 31 passed. Tap flow still owed.
+
 ## 2026-09-16: visionOS orb and card, simulator idle state
 
 Real xcodebuild for the simulator succeeded and the installed app rendered the orb, control rail and conversation card in STANDBY on the booted Apple Vision Pro simulator (`data/verifications/2026-09-16-vision-orb/claude/idle.png`). Swift tests 27 passed after the source registration patch. Interaction states remain unverified until the native simulator control is configured.

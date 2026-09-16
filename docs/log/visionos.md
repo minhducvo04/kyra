@@ -1,5 +1,16 @@
 # The visionOS client
 
+## 2026-09-16: the opinion button on a real reply in the simulator
+
+Rebuilt with xcodebuild (BUILD SUCCEEDED), installed on the booted Apple Vision Pro simulator and launched
+with `-kyra.baseURL http://127.0.0.1:8421 -kyra.ask "Say hello in one short sentence."` against the
+working-loop worktree's server. The ornament read AUTO, the transcript showed the question and a real
+Claude reply with its `claude · tool` badge, and the Second opinion button rendered under the reply.
+Proof: `data/verifications/2026-09-16-vision-orb/claude/v02-reply.png`. The tap itself, the pending caption
+and the OpenAI review line remain unverified until the native simulator control is configured. The
+worktree server had no Kokoro voice model, so the spoken reply failed server-side; the text path was
+unaffected.
+
 ## 2026-09-16: second opinions from the conversation card
 
 Each Kyra answer now offers a second opinion through the existing working-loop API, with the original request, answer and its SHA-256 bound into the prompt. The card shows the pending developer, polls every two seconds, and appends a developer-badged review explicitly captioned as a comment, never an approval. Stop cancels polling and invalidates late results; failed or uncertain runs name their status without automatic retry. The pure model is registered in SwiftPM and Xcode. Native sources compiled and linked for the visionOS simulator; xcodebuild failed during asset compilation after CoreSimulatorService became unavailable. Swift tests executed 31 cases with one failure: the supplied hash expectation for “4” disagrees with CryptoKit, Python hashlib and shasum. Tests remain unchanged. Loopback port 8420 was unreachable, so no live review or card rendering is claimed. The backend's current loopback-only policy also prevents physical-headset LAN access. Evidence and the review handoff are at `data/verifications/2026-09-16-vision-second-opinion/` and `data/private_docs/assignment-V02-result.md`; changes remain unstaged for independent review.
