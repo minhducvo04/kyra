@@ -23,3 +23,24 @@ Live camera, hand/room sensing and a model vision endpoint are separate work. Ob
 ## Verification, icon slice
 
 Three 1024 x 1024 sRGB layers verified: opaque background, transparent foregrounds. Simulator build succeeded, generated Assets.car and CFBundleIcons metadata, and the separate com.kyra.IconPreview bundle rendered the icon in Home View. 22 native tests passed, Python suite exited successfully, and ruff passed. The Python quiet output omitted its count; no count is inferred from progress dots. Evidence: data/verifications/2026-09-15-vision-icon/ in the primary checkout. Independent review is still pending before integration.
+
+## Review (Claude Fable 5.1, 2026-09-16)
+
+Reviewed: 6f2c987, 3 findings, 0 blocking. Verified independently: the Home View screenshot
+(`data/verifications/2026-09-15-vision-icon/home-icon.png` in the primary checkout) shows the orb icon
+rendered beside the system apps; the Swift log records `Executed 22 tests, with 0 failures`.
+
+1. `apple/Design/KyraIcon-preview.png` is 978 KB of documentation in a public repository. Regenerate it at
+   256 px or drop it and cite the Home View screenshot path. Non-blocking.
+2. Proof logs carry no counts: `pytest.log` is dots only, and the Swift log ends with a swift-testing line
+   reading `0 tests in 0 suites`, which looks like a failure at a glance. Record the pytest summary line
+   and either the XCTest `Executed` line or nothing. Non-blocking.
+3. `Back.png` is 900 KB for a two-stop gradient. Acceptable; a JPEG-free asset catalog cannot do better
+   without a smaller canvas. Note only.
+
+Acceptance for the next slice (native orb and card), in addition to the verify lines above:
+- One presence enum drives orb, card and controls; no second state machine (the web HUD needed that
+  consolidation once).
+- Stop is reachable with one tap in every state, including with the card hidden.
+- Hiding the card keeps the transcript; a state test proves it, not a screenshot.
+- Reduced motion stops the pulse entirely; the speaking level still updates the label.
