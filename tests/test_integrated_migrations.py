@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, inspect, select, text
 from companion.schema import metadata
 
 
-@pytest.mark.parametrize("revision", ["base", "95948f84f255", "b721d430a9ef", "c910a21d8f04"])
+@pytest.mark.parametrize("revision", ["base", "95948f84f255", "b721d430a9ef", "c910a21d8f04", "e916a01b2c34", "b916d30f5a64"])
 @pytest.mark.parametrize("startup_first", [False, True])
 def test_upgrade_preserves_both_histories(tmp_path, monkeypatch, revision, startup_first):
     url = f"sqlite:///{tmp_path / 'integrated.db'}"
@@ -37,6 +37,13 @@ def test_upgrade_preserves_both_histories(tmp_path, monkeypatch, revision, start
                             reason=None, reminder_id=1, last_seen="2026-09-10"),
         "initiative_reminder_receipts": dict(initiative_id="fixture", reminder_id=1),
         "initiative_snapshot": dict(id=0, day="2026-09-10"),
+        "reel_sources": dict(id=1, body='{"kind":"post","title":"Migration fixture"}',
+                             transcript="Fictional transcript", transcript_sha256="0" * 64, created_at="2026-09-16"),
+        "loop_runs": dict.fromkeys([c.name for c in metadata.tables["loop_runs"].columns]) | dict(
+            id=1, owner="personal", project="kyra", topic="migration fixture", choice_key="codex-default",
+            provider="codex", developer="OpenAI", host="local", method="subscription",
+            requested_model="gpt-6-astra", status="queued", input_sha256="0" * 64,
+            artifact_dir="fixture", policy_version="2026-09-15.2", created_at="2026-09-16"),
     }
     existing = set(inspect(engine).get_table_names())
     with engine.begin() as conn:

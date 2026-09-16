@@ -1,5 +1,45 @@
 # Verification history
 
+## 2026-09-16: integrate the PR #5 repair with merged PR #4
+
+Duc authorized fixing and merging PR #5 after PR #4 entered master. The two textual conflicts retain
+both branches' additions in the schema and this log. Removed lines were enumerated across all 32 merge
+paths: the only nonblank replacement expands the SQLAlchemy import list without dropping any imported name.
+Private audit: `data/verifications/reels-ci/pr5-merge-no-loss.json` in the fix worktree.
+
+The independent Alembic histories initially made eight existing upgrade checks fail. No-op merge revision
+`f916b02c3d45` joins reels head `e916a01b2c34` and working-loop head `b916d30f5a64` without rewriting either.
+Existing upgrade tests now also start from both heads and preserve seeded source/run rows. Focused checks:
+**87 passed in 1.49s**; lint clean. A real Alembic CLI upgrade of a new scratch database reached the single
+head, created both sets of tables and produced an empty metadata diff (`merge-runtime/proof.json`). No
+production database was migrated. Claude independently approved the merge content, requiring all resolved
+files and the new revision to be staged together before commit. Combined full suite: **843 passed,
+1 existing optional tokenizer skip in 71.93s**; proof `merged-full-suite.txt`.
+
+## 2026-09-16: PR #5 learning-reels CI repair
+
+The failed GitHub job stopped at `ModuleNotFoundError: companion.reels`; the failure was reproduced
+locally before implementing the existing red contract. Final Python run: **717 passed, 1 existing
+optional tokenizer skip in 68.39s**; `ruff check src scripts tests` clean. Reels, boundary, schema-upgrade
+and startup checks passed. Existing migration tests compare final metadata and preserve prior rows.
+
+Claude Fable 5.1 High independently approved the library and migration with no blocking findings.
+Two contradictory fixtures were corrected with Claude's confirmation, keeping duplicate and evidence
+guards intact. Two further parser findings were reproduced red and fixed green: a clock line inside
+plain text is not a transcript header, and a clip may begin before the first caption.
+
+A real Fable proposal over the fictional Northwind transcript passed all guards, saved to a scratch
+SQLite store and completed initial, transfer and delayed recall through persisted mastery. Delayed
+review used injected synthetic timestamps, not a claim of waiting 25 hours. Two earlier live responses
+were correctly rejected (Markdown wrapping/moved bounds, then an array type error); prompts were
+clarified, not parsers relaxed. Raw outputs and receipts are kept privately. Claude Code also reported
+auxiliary Haiku usage; the record is not a claim that every harness operation used Fable.
+
+Evidence: `.claude/worktrees/fix-reels-ci/data/verifications/reels-ci/` holds `full-suite-final.txt`,
+`review-regressions-red.txt`, `review-regressions-green.txt`, `claude-review.md`, `live-proof.json` and
+provider receipts. No personal database was read or changed. No push, production migration or deployment.
+CLI and HUD integration are outside this CI repair.
+
 ## 2026-09-15: prior-turn review evidence and stale-context refusal
 
 Claude's 14 acceptance cases pass (13 initially failed; the oversized-subject refusal already existed). All loop,
