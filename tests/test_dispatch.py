@@ -102,6 +102,15 @@ def test_plan_creates_a_bound_claude_run(dp, wl, tmp_path, repo):
         d.plan(a.id)
 
 
+def test_plan_prompt_states_tools_are_unavailable(dp, wl, tmp_path):
+    store = wl.DbLoopStore(tmp_path / "loop.db", artifacts_dir=tmp_path / "artifacts")
+    assignment = _assignment(store)
+    dispatcher = _dispatcher(dp, wl, store, ScriptedRunner([]), tmp_path, tmp_path)
+    run = dispatcher.plan(assignment.id)
+    prompt = store.read_artifact(run.id, owner="duc")["prompt"]
+    assert "No tools, files or commands are available." in prompt
+
+
 def test_build_is_gated_then_runs_codex_in_a_fresh_worktree(dp, wl, tmp_path, repo):
     store = wl.DbLoopStore(tmp_path / "loop.db", artifacts_dir=tmp_path / "artifacts")
     a = _assignment(store)

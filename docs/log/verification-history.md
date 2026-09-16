@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: D02 dispatch prompt regression
+
+The new stored-prompt assertion failed before the fix and passed afterward; all six dispatch tests passed using disposable databases and scripted providers. No live model behavior is claimed. Full-suite evidence and the requested fresh live dispatch are recorded in `data/private_docs/assignment-D02-result.md`.
+
 ## 2026-09-16: job tracker drag in a real browser
 
 On the integration branch server (8424, worktree data) a fictional Northwind application was added through the TRACKER form, appeared in the `applied` column, and a scripted drag (dragstart, dragover, drop with a DataTransfer) onto `interviewing` posted to the status endpoint (200), reloaded the list into the new column and updated the row's menu; zero console errors; at 375 px the nine columns wrap with `scrollWidth == clientWidth`. Codex built W6 in the desktop chat task (f76c876, 956 passed). Nit for a later pass: at the panel's desktop width the 18rem columns show two at a time.
