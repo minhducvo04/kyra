@@ -32,6 +32,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 import pytest  # noqa: E402
 
 
+def pytest_configure(config):
+    try:
+        from companion.test_impact import HistoryPlugin
+    except ImportError:
+        return
+    config.pluginmanager.register(HistoryPlugin(), "test-impact-history")
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _cleanup_scratch():
     yield
