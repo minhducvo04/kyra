@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: create_all race gone on a fresh database
+
+After P02c the personal server restarted on the integration branch with the scratch loop database removed; the first load of `/loop` fired runs, assignments and usage at once and all three answered 200, with zero 500s and zero tracebacks in `data/verifications/design-pass/server-8424-after-fix.log`. Race test 2 passed five runs in a row; full suite 845 passed.
+
 ## 2026-09-16: design pass in a real browser at two widths
 
 On the integration branch, the personal server (8424) and the Father tenant server (8425) served `/`, `/loop` and `/father`. At 1280 px all three carry the same header and nav and the loop and Father pages show results above their forms; at 375 px every page measures `scrollWidth == clientWidth == 375`, the loop contributions sit above the request form (241 px against 315 px) and the Father tasks above the start form (349 px against 1608 px). Measurements: `data/verifications/design-pass/browser-pass.json`. One console error surfaced a real defect: three simultaneous loop requests on a fresh data directory raced `metadata.create_all` and one answered 500; a red test reproduces it (`tests/test_store_creation_race.py`) and the fix is P02c.
