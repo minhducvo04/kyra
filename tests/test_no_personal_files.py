@@ -6,8 +6,8 @@ identifier into the tracked Xcode project. Discipline did not hold that line eit
 a post-condition beside `test_no_third_party_pii.py` (AGENTS.md section 2, rule 7).
 
 Path rules: under `docs/`, no file whose name says brief, handoff, personal or private; no personal
-document extension anywhere (the ignore list already covers them). Content rules: no non-empty
-`DEVELOPMENT_TEAM` in a tracked Xcode project; no personal email address (spelled backwards here,
+document extension anywhere (the ignore list already covers them). Content rules, checked in the index so a
+local signed build does not fail the suite: no non-empty `DEVELOPMENT_TEAM` in a tracked Xcode project; no personal email address (spelled backwards here,
 as the PII guard does, so this file never carries the literal). `data/` is gitignored and is where
 these things legitimately live.
 """
@@ -16,7 +16,7 @@ import subprocess
 
 _DOC_NAME = re.compile(r"(brief|handoff|personal|private)", re.I)
 _DOC_EXT = (".doc", ".docx", ".pdf", ".pages", ".key", ".numbers", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".rtf", ".tex")
-_TEAM = re.compile(r'DEVELOPMENT_TEAM\s*=\s*"?[A-Z0-9]{6,}"?\s*;')
+_TEAM = 'DEVELOPMENT_TEAM[[:space:]]*=[[:space:]]*"?[A-Z0-9]{6,}"?[[:space:]]*;'  # POSIX ERE for git grep
 _REVERSED_EMAILS = ["moc.liamg@llabcudmot"]
 
 
@@ -33,19 +33,18 @@ def test_no_personal_document_paths_are_tracked():
                      + ". Move them under data/private_docs/ and reference the path.")
 
 
+def _git_grep_cached(pattern: str, *pathspecs: str, ignore_case: bool = False) -> list[str]:
+    """Lines in the *index* that match: what a commit would carry, not local working-tree state
+    (a signed Xcode build writes the team id into the working copy without staging it)."""
+    args = ["git", "grep", "--cached", "-n", "-E"] + (["-i"] if ignore_case else []) + [pattern, "--", *pathspecs]
+    out = subprocess.run(args, capture_output=True, text=True)
+    assert out.returncode in (0, 1), out.stderr
+    return [line.split(":", 2)[0] + ":" + line.split(":", 2)[1] for line in out.stdout.splitlines()]
+
+
 def test_no_personal_identifiers_in_tracked_files():
-    emails = [e[::-1] for e in _REVERSED_EMAILS]
-    pattern = re.compile("|".join(re.escape(e) for e in emails), re.I)
-    hits = []
-    for path in _tracked():
-        if path == "tests/test_no_personal_files.py":
-            continue
-        try:
-            text = open(path, encoding="utf-8", errors="ignore").read()
-        except (OSError, IsADirectoryError):
-            continue
-        for i, line in enumerate(text.splitlines(), 1):
-            if pattern.search(line) or (path.endswith("project.pbxproj") and _TEAM.search(line)):
-                hits.append(f"{path}:{i}")
+    emails = "|".join(re.escape(e[::-1]) for e in _REVERSED_EMAILS)
+    hits = _git_grep_cached(emails, ".", ":!tests/test_no_personal_files.py", ignore_case=True)
+    hits += _git_grep_cached(_TEAM, "*.pbxproj")
     assert not hits, ("A personal identifier is in a tracked file of a public repository: " + ", ".join(hits)
                       + ". Remove it; an Apple team id belongs in the local Xcode signing settings, not the project.")
