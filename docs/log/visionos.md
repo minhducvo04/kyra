@@ -1,5 +1,15 @@
 # The visionOS client
 
+## 2026-09-16: orb and card seen in the simulator
+
+Claude built the app with xcodebuild for the visionOS 26.5 simulator (BUILD SUCCEEDED, one warning),
+installed it on the booted Apple Vision Pro simulator and launched it. The window shows the sphere with
+its orbit, STANDBY / awaiting input, the Talk, Text and Stop rail with Stop disabled, and the Conversation
+card with its hide chevron and composer. Proof: `data/verifications/2026-09-16-vision-orb/claude/idle.png`
+and `xcodebuild.log` in this worktree. Not yet exercised: taps (hide card, Talk, Text), the speaking pulse
+and Reduce Motion, because the native simulator control needs `xcode-select` to point at Xcode, which
+only Duc can run. An older window from a previous install stayed open behind the new one.
+
 ## 2026-09-16: orb and collapsible conversation card
 
 Talk now keeps a breathing sphere and persistent Talk, Text and Stop controls beside a collapsible transcript card. The view stores its transcript in the tested OrbPresentation model; hiding the card preserves both conversation and draft. AVAudioPlayer metering drives the speaking pulse, resets between clips and on Stop, and continues updating the level readout with Reduce Motion enabled while the orb stays still. Pending microphone permission and an unsent captured clip keep Stop available. Removed the oversized icon preview; the prior Home View proof remains referenced below. Verification: 27 native tests passed, including the 22 existing cases; 643 Python tests passed with one optional skip; ruff passed. All native sources compiled and linked directly into an arm64 visionOS simulator executable. The full Xcode build failed in asset compilation after CoreSimulatorService became unavailable, so visual acceptance remains unverified. The new source still needs Xcode project registration; that file was outside the assigned edit scope, and a ready patch is retained with the evidence at `data/verifications/2026-09-16-vision-orb/` in this worktree. Changes remain unstaged for independent review.
