@@ -9,6 +9,7 @@ features:
       - {id: A02, name: Tiers and readiness, status: done}
       - {id: A03, name: Assignment records, status: done}
       - {id: W2, name: Dispatch from the page, status: done}
+      - {id: D06, name: Second build after a real run, status: building}
       - {id: W3, name: Brief answers by model, status: done}
   - id: father
     name: Father's assistant

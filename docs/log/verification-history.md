@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: first assignment dispatched from the Kyra page, end to end
+
+On the integration branch server (8424, worktree data) assignment D01 (casual, one sentence in `docs/working-loop.md`) went through the page's API: Plan queued a Claude run (claude-fable-5-1, 216 s, done); Build with `confirmed: true` created worktree `data/working_loop/worktrees/D01` on branch `session/2026-09-16-D01`, ran `codex exec` there (50 s), changed exactly the allowed file and wrote the result file (receipt with its hash); Review queued a Claude run (12 s, done). All three appeared as cards on `/loop`. Proof: `data/verifications/w2/first-real-dispatch.json`. Three defects surfaced and were assigned: the plan and review prompts never said tools were disabled, so both models answered with tool-call text (D02, fixed and re-verified: a second plan came back as numbered steps in 16 s); the build card showed the raw JSON stream (D03, D05); the managed Codex state directory rejects its own files after the first real run, so a second build was refused and left its worktree bound (D06).
+
 ## 2026-09-16: D05 tool-using build message extraction
 
 The new stored-output regression failed before the fix, then passed with command events, earlier messages and malformed trailing lines. All eight dispatch tests passed with disposable Git worktrees and SQLite stores, using scripted providers. No live model call was made; full-suite evidence is `/private/tmp/kyra-D05-pytest.log`, with results in `data/private_docs/assignment-D05-result.md`.
