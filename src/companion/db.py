@@ -13,11 +13,25 @@ explicit engine (test fixtures that share one Postgres).
 """
 from functools import cache
 from pathlib import Path
+from threading import Lock
 
 from sqlalchemy import Engine, create_engine
+from sqlalchemy.exc import OperationalError
 
 from companion.schema import metadata
 from companion.settings import get_settings
+
+_create_all_lock = Lock()
+
+
+def create_tables(engine: Engine) -> None:
+    """Serialize first-use DDL, tolerating creation by another process."""
+    with _create_all_lock:
+        try:
+            metadata.create_all(engine)
+        except OperationalError as exc:
+            if "already exists" not in str(exc):
+                raise
 
 
 def sqlite_url(path: Path | str) -> str:
@@ -65,5 +79,5 @@ def engine_for_store(default_path: Path, explicit: Path | str | None = None) -> 
     else:
         url = get_settings().database_url or sqlite_url(default_path)
     engine = _engine_for(normalize_db_url(url))
-    metadata.create_all(engine)
+    create_tables(engine)
     return engine

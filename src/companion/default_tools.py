@@ -12,6 +12,7 @@ from companion.job_autofill import job_autofill_tools
 from companion.job_posting_fetch import TargetPostingTool
 from companion.learning import learning_tools
 from companion.llm import AnthropicLLM
+from companion.memory_map import MemorySource
 from companion.memory_notes import MarkdownMemoryNotesStore, memory_note_tools
 from companion.news import TechNewsTool
 from companion.outreach import outreach_tools
@@ -19,6 +20,7 @@ from companion.posting_signals import AnalyzePostingTool
 from companion.reminders import RemindersStore, reminder_tools
 from companion.science import ScienceFactsTool
 from companion.search import SearchKyraDataTool
+from companion.tool_runs import ToolRunStore
 from companion.tools import ToolRegistry
 
 
@@ -53,8 +55,9 @@ def default_tool_registry(draft_backend: AnthropicLLM | None = None) -> ToolRegi
         + focus_tools()
         + [SearchKyraDataTool()]  # opens its index on first use, not here
         + [SuggestInitiativesTool(
-            sources=[RemindersSource(reminders), ProjectNotesSource(), PatternsSource(), GitSource()],
+            sources=[RemindersSource(reminders), ProjectNotesSource(), PatternsSource(), GitSource(), MemorySource()],
             llm=draft_backend,
         )]
-        + [TechNewsTool(), ScienceFactsTool()]
+        + [TechNewsTool(), ScienceFactsTool()],
+        audit=ToolRunStore(),
     )

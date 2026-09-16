@@ -4,8 +4,22 @@
     {
       "name": "kyra-web-ui",
       "runtimeExecutable": ".venv/bin/python",
-      "runtimeArgs": ["scripts/web_ui.py", "--port", "8420"],
+      "runtimeArgs": [
+        "scripts/web_ui.py",
+        "--port",
+        "8420"
+      ],
       "port": 8420
+    },
+    {
+      "name": "kyra-worktree-8421",
+      "runtimeExecutable": "/Users/minhducvo/Projects/kyra/.venv/bin/python",
+      "runtimeArgs": [
+        "scripts/web_ui.py",
+        "--port",
+        "8421"
+      ],
+      "port": 8421
     }
   ]
 }

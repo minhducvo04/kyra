@@ -64,3 +64,18 @@ apple/**/*.xcodeproj/project.xcworkspace/xcuserdata/
 *.odt
 *.rtf
 *.tex
+
+# Test impact history (companion.test_impact), private runtime state
+.pytest_history.jsonl
+
+# Personal planning and briefs never enter the public tree (AGENTS.md section 2, rule 7).
+# Put them under data/private_docs/ and reference the path. These patterns catch the
+# names such files have carried before they were caught by hand.
+docs/**/*Brief*
+docs/**/*brief*
+docs/**/*Handoff*
+docs/**/*handoff*
+docs/**/*personal*
+docs/**/*private*
+docs/private/
+*.private.md

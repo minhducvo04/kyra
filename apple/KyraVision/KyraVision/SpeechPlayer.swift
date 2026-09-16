@@ -16,15 +16,20 @@ import Observation
 @MainActor
 final class SpeechPlayer: NSObject {
     private(set) var isSpeaking = false
+    private(set) var playbackLevel: Double = 0
+    private(set) var error: String?
     private var queue: [Data] = []
     private var player: AVAudioPlayer?
+    private var metering: Task<Void, Never>?
 
     func enqueue(_ wav: Data) {
+        error = nil
         queue.append(wav)
         if player == nil { playNext() }
     }
 
     func stop() {
+        stopMetering()
         queue.removeAll()
         player?.stop()
         player = nil
@@ -32,6 +37,7 @@ final class SpeechPlayer: NSObject {
     }
 
     private func playNext() {
+        stopMetering()
         guard !queue.isEmpty else {
             player = nil
             isSpeaking = false
@@ -39,28 +45,57 @@ final class SpeechPlayer: NSObject {
         }
         let wav = queue.removeFirst()
         do {
-            // Ambient rather than playback: on a headset Kyra is one thing in the
-            // room, not the thing you stopped everything else for.
-            try? AVAudioSession.sharedInstance().setCategory(.ambient, mode: .spokenAudio)
-            try? AVAudioSession.sharedInstance().setActive(true)
+            // Spoken audio supports playback; mixing keeps other apps audible.
+            // Set this explicitly after microphone capture leaves the record category.
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: .mixWithOthers)
+            try AVAudioSession.sharedInstance().setActive(true)
             let next = try AVAudioPlayer(data: wav)
             next.delegate = self
+            next.isMeteringEnabled = true
             player = next
             isSpeaking = true
-            next.play()
+            guard next.play() else { throw VoiceFailure("Audio playback could not start.") }
+            startMetering(next)
         } catch {
-            // One unplayable clip should not silence the rest of the sentence.
+            self.error = error.localizedDescription
+            player = nil
             playNext()
+        }
+    }
+
+    private func stopMetering() {
+        metering?.cancel()
+        metering = nil
+        playbackLevel = 0
+    }
+
+    private func startMetering(_ activePlayer: AVAudioPlayer) {
+        metering = Task { @MainActor [weak self, weak activePlayer] in
+            while !Task.isCancelled {
+                guard let self, let activePlayer, self.player === activePlayer else { return }
+                activePlayer.updateMeters()
+                // Convert decibels to linear amplitude; silence stays still.
+                let decibels = activePlayer.averagePower(forChannel: 0)
+                self.playbackLevel = decibels <= -60 ? 0 : min(1, pow(10, Double(decibels) / 20))
+                do { try await Task.sleep(for: .milliseconds(50)) }
+                catch { return }
+            }
         }
     }
 }
 
 extension SpeechPlayer: AVAudioPlayerDelegate {
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        Task { @MainActor [weak self] in self?.playNext() }
+        Task { @MainActor [weak self] in
+            guard let self, self.player === player else { return }
+            self.playNext()
+        }
     }
 
     nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
-        Task { @MainActor [weak self] in self?.playNext() }
+        Task { @MainActor [weak self] in
+            guard let self, self.player === player else { return }
+            self.playNext()
+        }
     }
 }

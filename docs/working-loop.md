@@ -2,7 +2,7 @@
 
 Kyra's `/loop` page makes separate calls through the locally installed Codex and Claude Code CLIs. A user can
 ask one model for an answer and ask the other to review that exact answer. The personal loop produces text and
-review comments, with separate owner decisions. It cannot edit repositories or run tools from the page.
+review comments, with separate owner decisions. Assignment builds can edit their own repository worktrees.
 
 ## Use it
 
@@ -19,6 +19,31 @@ finds installed binaries on PATH or in their macOS vendor application locations.
 
 The topic list groups the latest 100 saved contributions. Older receipts remain in the database. An ordinary request
 starts a fresh conversation. Choosing a topic groups contributions; it does not silently send that topic's history.
+
+Choose a tier for each new request: **Casual**, **Work** (the default), or **Life changing**. Reviews and
+follow-ups inherit that tier. Each card shows whether the answer is ready for your decision, or whether it is
+incomplete, has no review, or has only stale reviews. A current review of any verdict makes a completed answer
+ready for your decision; this does not approve it or change the existing independent-review rule. Migration
+`c916d40f6b75` adds the tier and labels existing receipts as Work.
+
+The **Assignments** section records a task's goal, allowed files, acceptance checks and tier. Add a record,
+then explicitly advance it through assigned, built, reviewed and committed, one step at a time. Built links
+an owned run and can record a result hash; committed requires a 7 to 40 character hexadecimal commit hash.
+Manual advances are declarations, not verified build or review outcomes, and never dispatch work.
+Migration `d916e50a7c86` adds the assignment table while preserving existing receipts.
+
+## Dispatch an assignment
+
+**Plan** queues Claude with the goal, allowed files and acceptance checks. Once its answer completes, **Build**
+requires confirmation and queues Codex in `data/working_loop/worktrees/<code>` on a new dated `session/` branch.
+Codex receives a private brief, empty stdin and a workspace-write sandbox; it can use tools in that worktree.
+**Review** sends Claude the diff from the recorded starting commit, including new files, with an omission note
+if it exceeds the prompt limit. Each page action asks for confirmation. The build job returns a receipt with
+its exit code, changed paths (excluding private `data/`) and whether the result file exists; the card shows it
+when the job completes, and the job retains it. A `built` assignment records a finished attempt, including a
+nonzero exit; inspect the run status and receipt. Nothing commits, pushes or approves a review automatically.
+Codes used for dispatch contain letters, digits, underscores or hyphens and start with a letter or digit.
+Migration `f916a61b8d97` adds nullable plan/review run links and the worktree path. Existing databases need upgrading.
 
 ## Continuing an answer
 
@@ -52,6 +77,11 @@ upgraded to `a916c29e4f53` with all eight prior receipts preserved. The later co
 
 ## What the receipts prove
 
+The **USAGE** section totals all saved runs for the local owner by provider, developer, model and effort;
+**Refresh** reloads the totals. It uses the served model when reported, otherwise the requested model.
+Token totals cover known receipts only, with runs without usage counted separately. The only cost shown
+is provider-reported USD from saved per-model receipts; no pricing or subscription charge is calculated.
+
 - The controller selected an exact approved provider/model/effort and launched its configured CLI. Model prose
   cannot create another run or a review receipt. Only OpenAI and Anthropic are approved in this slice.
 - Claude's served-model field comes from its actual assistant event. Codex's current JSON stream does not report
@@ -81,7 +111,7 @@ use subscription allowance again; the old run cannot be dispatched again.
 
 ## Failure and data handling
 
-A conditional database update claims each queued run once before execution. Model tools, plugins and external tool
+A conditional database update claims each queued run once before execution. For ordinary answers, plans and reviews, model tools, plugins and external tool
 servers are disabled; prompts travel on standard input in an empty scratch directory. A process has a timeout and
 an output limit, and cleanup terminates its process group. The child environment retains OS account identity for
 macOS Keychain sign-in, but excludes inherited API keys and alternative provider endpoints. Codex uses a dedicated private state directory at
@@ -114,5 +144,5 @@ Claude Fable High wrote the acceptance suite; Codex reviewed that contract and i
 reviews implementation and adds regression tests. Private real-run evidence and the native Claude conversation
 reference live under `data/verifications/working-loop/` in the isolated working-loop worktree.
 
-Third-company integration, automatic planning/execution stages, comparative cost routing, shared memory and Father's
+Third-company integration, unattended planning/execution stages, comparative cost routing, shared memory and Father's
 interface remain later slices. None is represented as active by this page.

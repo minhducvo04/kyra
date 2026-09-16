@@ -29,6 +29,8 @@ from companion.router_ft import (
     split,
     write_mlx_dataset,
 )
+from companion.settings import get_settings
+from companion.tenant import refuse_training
 
 SYNTH = FT_DIR / "synthetic.jsonl"
 
@@ -122,6 +124,7 @@ def cmd_eval(args):
 
 
 def main():
+    refuse_training(get_settings())
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     g = sub.add_parser("gen")

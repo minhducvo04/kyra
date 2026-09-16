@@ -1,34 +1,13 @@
 import SwiftUI
 
-/// What Kyra is doing, as one value.
-///
-/// A companion's first job is to show its state - idle, listening, thinking,
-/// speaking, interrupted, failed (docs/plans/2026-09-07-human-interface.md,
-/// point 1). The web HUD learned this the hard way: before it had one state
-/// machine, the core ring knew two states and the mic button five, set from a
-/// dozen scattered assignments. Same vocabulary here, so the two front doors
-/// describe her the same way.
-enum Presence: String {
-    case idle, listening, thinking, speaking, interrupted, failed
-
-    var label: String {
-        switch self {
-        case .idle: "STANDBY"
-        case .listening: "LISTENING"
-        case .thinking: "PROCESSING"
-        case .speaking: "SPEAKING"
-        case .interrupted: "INTERRUPTED"
-        case .failed: "FAULT"
-        }
-    }
-
+extension Presence {
     var detail: String {
         switch self {
         case .idle: "awaiting input"
         case .listening: "go ahead"
         case .thinking: "querying model…"
         case .speaking: "tap to interrupt"
-        case .interrupted: "listening again"
+        case .interrupted: "tap Talk or Text to continue"
         case .failed: "check the connection"
         }
     }
@@ -38,17 +17,6 @@ enum Presence: String {
         case .failed: .red
         case .interrupted: .secondary
         default: .cyan
-        }
-    }
-
-    /// Seconds per revolution of the outer ring. Thinking is the only state
-    /// that should feel busy; the rest are meant to be ignorable.
-    var period: Double {
-        switch self {
-        case .thinking: 6
-        case .speaking: 14
-        case .listening: 20
-        default: 90
         }
     }
 
@@ -70,64 +38,72 @@ enum Presence: String {
 /// RealityKit: this lives in a window, and a particle system belongs in a
 /// volume later, if it earns one.
 struct PresenceOrb: View {
-    let presence: Presence
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let presentation: OrbPresentation
+    var playbackLevel: Double = 0
+
+    private var presence: Presence { presentation.presence }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0,
+                                paused: presentation.reduceMotion || presence != .idle)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
-            let turn = reduceMotion ? 0 : (t / presence.period).truncatingRemainder(dividingBy: 1) * 360
-            // One breath every few seconds, faster while she is thinking.
-            let breathe = reduceMotion ? 0.5
-                : (sin(t * (presence == .thinking ? 3.0 : 1.2)) + 1) / 2
+            let breath = presentation.reduceMotion || presence != .idle
+                ? 0 : (sin(t * .pi / 3) + 1) / 2
+            let pulse = presentation.pulseAmplitude(level: playbackLevel)
 
             ZStack {
                 Circle()
-                    .stroke(presence.tint.opacity(0.25), lineWidth: 1)
-                    .frame(width: 148, height: 148)
+                    .fill(presence.tint.opacity(0.12))
+                    .frame(width: 144, height: 144)
+                    .blur(radius: 12)
 
                 Circle()
-                    .trim(from: 0, to: 0.62)
-                    .stroke(presence.tint.opacity(0.8), style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                    .frame(width: 120, height: 120)
-                    .rotationEffect(.degrees(turn))
+                    .fill(RadialGradient(colors: [.white.opacity(0.95), presence.tint,
+                                                  presence.tint.opacity(0.3), .black.opacity(0.75)],
+                                         center: .init(x: 0.32, y: 0.24),
+                                         startRadius: 0, endRadius: 130))
+                    .overlay {
+                        Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1)
+                    }
+                    .frame(width: 112, height: 112)
 
-                Circle()
-                    .trim(from: 0, to: 0.28)
-                    .stroke(.white.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                    .frame(width: 92, height: 92)
-                    .rotationEffect(.degrees(-turn * 1.7))
-
-                Circle()
-                    .fill(presence.tint.opacity(0.25 + 0.35 * breathe))
-                    .frame(width: 26 + 8 * breathe, height: 26 + 8 * breathe)
-                    .blur(radius: 6)
-
-                Circle()
-                    .fill(presence.tint)
-                    .frame(width: 9, height: 9)
-                    .opacity(0.6 + 0.4 * breathe)
+                Ellipse()
+                    .trim(from: 0.08, to: 0.9)
+                    .stroke(presence.tint.opacity(0.7), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .frame(width: 152, height: 58)
+                    .rotationEffect(.degrees(-24))
             }
-            .shadow(color: presence.tint.opacity(presence.glow), radius: 22)
-            .frame(width: 160, height: 160)
+            .scaleEffect(1 + 0.035 * breath + 0.12 * pulse)
+            .shadow(color: presence.tint.opacity(presence.glow), radius: 18 + 10 * pulse)
+            .frame(width: 180, height: 180)
         }
         .accessibilityLabel("Kyra is \(presence.rawValue)")
     }
 }
 
 struct PresenceReadout: View {
-    let presence: Presence
+    let presentation: OrbPresentation
+    var playbackLevel: Double = 0
+
+    private var presence: Presence { presentation.presence }
 
     var body: some View {
         VStack(spacing: 10) {
-            PresenceOrb(presence: presence)
+            PresenceOrb(presentation: presentation, playbackLevel: playbackLevel)
             Text(presence.label)
                 .font(.system(.caption, design: .monospaced))
                 .tracking(2)
                 .foregroundStyle(presence == .failed ? Color.red : .primary)
             Text(presence.detail)
                 .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            if presence == .speaking {
+                Text("Voice \(Int(min(1, max(0, playbackLevel)) * 100))%")
+                    .font(.system(.caption2, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

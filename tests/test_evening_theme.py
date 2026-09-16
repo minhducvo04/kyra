@@ -21,7 +21,7 @@ those is active. Comparing only against `:root` made the test vacuous - it passe
 with the very defect that prompted it. The evening accent is therefore compared
 against the *dimmest* accent any backend can be showing.
 
-Parsed from web/style.css rather than duplicated here, so editing the palette
+Parsed from web/tokens.css rather than duplicated here, so editing the palette
 without re-checking it fails.
 """
 import re
@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-CSS = Path(__file__).resolve().parent.parent / "web" / "style.css"
+CSS = Path(__file__).resolve().parent.parent / "web" / "tokens.css"
 TOKENS = ("--void", "--panel", "--panel-2", "--grid", "--text", "--text-dim", "--text-faint", "--accent")
 
 

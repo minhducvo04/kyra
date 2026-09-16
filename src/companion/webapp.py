@@ -20,10 +20,11 @@ from datetime import UTC, datetime
 from functools import cache, cached_property
 from pathlib import Path
 from typing import Literal
+from urllib.parse import unquote
 from uuid import UUID
 
 from anthropic import Anthropic
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -32,10 +33,11 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
-from companion import webauth
+from companion import session_log, webauth
 from companion.apply_pipeline import ApplyError, engine_for_url, run_apply_pipeline
+from companion.brief import check, short_name
 from companion.checkpoints import CheckpointConflict, CheckpointDraft, CheckpointStore, DbCheckpointStore
 from companion.config import require_api_key
 from companion.conversation import ConversationManager
@@ -43,6 +45,7 @@ from companion.db import engine_for_store
 from companion.default_tools import default_tool_registry
 from companion.doc_text import UnsupportedDocumentType, extract_text
 from companion.errors import ApiError, install_error_handlers
+from companion.features import feature_map, load_features
 from companion.focus import (
     FocusBlockRunning,
     FocusPlan,
@@ -70,6 +73,7 @@ from companion.jobs import DbJobQueue, Handler, start_inline_worker
 from companion.learning import LearningRequestConflict, LearningStore
 from companion.llm import AnthropicLLM, TurnCancelled, build_llm, voice_backends
 from companion.memory import ChromaMemoryStore
+from companion.memory_map import build_map
 from companion.memory_notes import SUGGESTED_CATEGORIES, MarkdownMemoryNotesStore
 from companion.news import TechNewsTool
 from companion.paths import DATA_DIR, WEB_DIR
@@ -139,8 +143,13 @@ async def _require_api_token(request: Request, call_next):
     Duc's profile, outreach contacts and memory notes, and every chat turn spends
     his key. Still not multi-user auth: one token, one tenant, no accounts.
     """
-    token = get_settings().api_token
+    settings = get_settings()
+    token = settings.api_token
     path = request.url.path
+    if (path.rstrip("/") == "/father" or path == "/api/father" or path.startswith("/api/father/")
+            or path in {"/static/father.html", "/static/father.js", "/static/father.css"}):
+        if settings.tenant != "father":
+            return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": "Not found"}})
     if not token or path in _OPEN_PATHS or path.startswith("/static/"):
         return await call_next(request)
     if _authorized(request, token):
@@ -296,6 +305,105 @@ class LoginIn(BaseModel):
     token: str
 
 
+def _father_store():
+    from companion.father import FatherTaskStore, WorkflowStore
+
+    settings = get_settings()
+    if settings.tenant != "father":
+        raise ApiError(404, "not_found", "Not found")
+    root = settings.data_dir.resolve()
+    return FatherTaskStore(root, WorkflowStore(root))
+
+
+class FatherTaskIn(BaseModel):
+    slug: str
+    facts: dict[str, str]
+
+
+class FatherFactsIn(BaseModel):
+    facts: dict[str, str]
+
+
+class FatherDecisionIn(BaseModel):
+    decision: str
+    note: str = ""
+
+
+@app.get("/father")
+def father_page() -> FileResponse:
+    if get_settings().tenant != "father":
+        raise ApiError(404, "not_found", "Not found")
+    return FileResponse(WEB_DIR / "father.html")
+
+
+@app.get("/api/father/workflows")
+def father_workflows() -> dict:
+    return {"workflows": [{"slug": v.slug, "version": v.version, "title": v.title,
+                           "required_facts": v.required_facts} for v in _father_store().workflows.list()]}
+
+
+@app.get("/api/father/tasks")
+def father_tasks_list() -> dict:
+    return {"tasks": [asdict(task) for task in _father_store().list()]}
+
+
+@app.post("/api/father/tasks")
+def father_start_task(body: FatherTaskIn) -> dict:
+    store = _father_store()
+    try:
+        return asdict(store.start_task(body.slug, body.facts))
+    except ValueError as exc:
+        raise ApiError(400, "invalid_workflow", str(exc)) from exc
+
+
+@app.get("/api/father/tasks/{task_id}")
+def father_task(task_id: int) -> dict:
+    store = _father_store()
+    task = store.get(task_id)
+    if task is None:
+        raise ApiError(404, "not_found", "Task not found")
+    version = store.workflows.get(task.slug, task.version)
+    return {**asdict(task), "required_facts": version.required_facts if version else list(task.facts)}
+
+
+@app.put("/api/father/tasks/{task_id}/facts")
+def father_update_facts(task_id: int, body: FatherFactsIn) -> dict:
+    store = _father_store()
+    try:
+        return asdict(store.update_facts(task_id, body.facts))
+    except KeyError as exc:
+        raise ApiError(404, "not_found", "Task not found") from exc
+    except ValueError as exc:
+        raise ApiError(409, "task_changed", str(exc)) from exc
+
+
+@app.post("/api/father/tasks/{task_id}/decision")
+def father_decide(task_id: int, body: FatherDecisionIn) -> dict:
+    from companion.father import ApprovalRefused
+
+    store = _father_store()
+    try:
+        return asdict(store.decide(task_id, body.decision, body.note))
+    except ApprovalRefused as exc:
+        raise ApiError(409, "approval_refused", str(exc)) from exc
+    except KeyError as exc:
+        raise ApiError(404, "not_found", "Task not found") from exc
+    except ValueError as exc:
+        raise ApiError(409, "invalid_decision", str(exc)) from exc
+
+
+@app.get("/api/father/tasks/{task_id}/pages/{page_number}")
+def father_page_image(task_id: int, page_number: int) -> FileResponse:
+    store = _father_store()
+    task = store.get(task_id)
+    if task is None or not 1 <= page_number <= len(task.report["rendered_pages"]):
+        raise ApiError(404, "not_found", "Page not found")
+    path = Path(task.report["rendered_pages"][page_number - 1]).resolve()
+    if not path.is_relative_to(store.out_dir.resolve()) or not path.is_file():
+        raise ApiError(404, "not_found", "Page not found")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/")
 def index() -> HTMLResponse:
     """Serves index.html with each static asset's real file mtime
@@ -314,6 +422,11 @@ def index() -> HTMLResponse:
         mtime = int((WEB_DIR / asset).stat().st_mtime)
         html = html.replace(f'/static/{asset}"', f'/static/{asset}?v={mtime}"')
     return HTMLResponse(html)
+
+
+@app.get("/api/features")
+def features() -> dict:
+    return feature_map(load_features())
 
 
 @app.get("/healthz")
@@ -530,6 +643,22 @@ class MemoryNoteIn(BaseModel):
 class MemoryNoteRef(BaseModel):
     category: str
     text: str
+
+
+@app.get("/api/memory/map")
+def memory_map() -> dict:
+    # Reading the cached property's dictionary must never open Chroma.
+    memory = vars(_rt).get("memory")
+    threads = session_log.threads()
+    controller = _loop_controller()
+    result = build_map(
+        notes=_memory_notes.list_notes(), threads=threads,
+        assignments=controller.store.list_assignments(owner=controller.owner),
+        exchanges=memory._collection.count() if memory is not None else None,
+    )
+    # Include unlinked threads for drawing, without reading any thread body into the response.
+    result["thread_nodes"] = [{"name": name, "last_date": modified} for name, modified, _ in threads]
+    return result
 
 
 @app.get("/api/memory-notes")
@@ -1217,7 +1346,7 @@ HANDLERS: dict[str, Handler] = {"latex_resume": _run_latex_resume_job, "apply": 
 
 @app.on_event("startup")
 def _start_worker() -> None:
-    if get_settings().inline_worker:
+    if get_settings().tenant != "father" and get_settings().inline_worker:
         start_inline_worker(_queue, HANDLERS)
         logger.info("inline job worker started")
 
@@ -1232,7 +1361,7 @@ def _warm_up_router() -> None:
     warm-up must never stop the app starting, since the classifier would load on
     demand anyway.
     """
-    if not get_settings().warm_up_router:
+    if get_settings().tenant == "father" or not get_settings().warm_up_router:
         return
 
     def run() -> None:
@@ -1310,6 +1439,95 @@ def enqueue_apply_jobs(body: ApplyIn) -> dict:
         for u in urls
     ]
     return {"jobs": [{"id": i, "url": u, "kind": "apply", "status": "queued"} for i, u in zip(ids, urls, strict=True)]}
+
+
+# Console routes share the registry and the existing authentication middleware.
+CONSOLE_PANELS = {
+    **dict.fromkeys(("add_reminder", "list_reminders", "complete_reminder", "snooze_reminder"), "tools/reminders"),
+    **dict.fromkeys(("save_learning_item", "due_learning_reviews", "mark_learning_reviewed"), "tools/learning"),
+    **dict.fromkeys(("add_job_application", "list_job_applications", "update_job_application_status",
+                     "set_application_resume", "target_job_posting"), "jobs/tracker"),
+    **dict.fromkeys(("add_outreach_contact", "draft_outreach_note", "copy_outreach_note",
+                     "update_outreach_status", "list_outreach"), "jobs/outreach"),
+    **dict.fromkeys(("start_focus_block", "end_focus_block", "focus_status"), "focus/block"),
+    "draft_application_material": "jobs/draft",
+    "autofill_job_application": "jobs/autofill",
+    "analyze_job_posting": "jobs/apply",
+    "save_memory_note": "tools/memory",
+    "suggest_initiatives": "tools/initiatives",
+    "tech_news": "tools/news",
+    "science_facts": "tools/science",
+    "search_kyra_data": "search/search",
+}
+
+
+class ToolRunIn(BaseModel):
+    input: dict = Field(default_factory=dict)
+    confirmed: StrictBool = False
+
+
+@app.get("/api/tools")
+def console_tools() -> dict:
+    return {"tools": [
+        {**tool.to_schema(), "needs_confirmation": tool.needs_confirmation,
+         "group": type(tool).__module__.rsplit(".", 1)[-1], "panel": CONSOLE_PANELS.get(tool.name)}
+        for tool in _registry
+    ]}
+
+
+@app.post("/api/tools/{name}/run")
+def console_run_tool(name: str, body: ToolRunIn) -> dict:
+    tool = next((tool for tool in _registry if tool.name == name), None)
+    if tool is None:
+        raise ApiError(404, "unknown_tool", f"Unknown tool: {name}")
+    if tool.needs_confirmation and not body.confirmed:
+        raise ApiError(409, "confirmation_required", f"Confirm before running {name}.", {"tool": name})
+    try:
+        result, run_id = _registry.run_with_receipt(name, **body.input)
+    except TypeError as exc:
+        raise ApiError(400, "tool_input_invalid", str(exc)) from exc
+    if isinstance(result, dict) and "error" in result:
+        raise ApiError(400, "tool_error", str(result["error"]))
+    return {"tool": name, "result": result, "run_id": run_id}
+
+
+@app.get("/api/tools/runs")
+def console_tool_runs(limit: int = Query(50, ge=0, le=500)) -> dict:
+    return {"runs": [asdict(run) for run in _registry.audit.list(limit=limit)]}
+
+
+@app.get("/api/jobs")
+def console_jobs(limit: int = Query(20, ge=0, le=500)) -> dict:
+    fields = ("id", "kind", "status", "created_at", "started_at", "finished_at", "error")
+    return {"jobs": [{key: getattr(job, key) for key in fields} for job in _queue.list(limit=limit)]}
+
+
+def _console_thread_path(slug: str) -> Path:
+    # threads() supplies encoded filenames. Decode once, then use the same safe
+    # encoder as the writer; a raw traversal can never become a filesystem path.
+    safe = session_log.slug(unquote(slug))
+    path = session_log.SESSIONS_DIR / f"{safe}.md"
+    if not path.resolve().is_relative_to(session_log.SESSIONS_DIR.resolve()) or not path.is_file():
+        raise ApiError(404, "not_found", "Session thread not found.")
+    return path
+
+
+@app.get("/api/agents")
+def console_agents() -> dict:
+    rows = []
+    for slug, modified, _ in session_log.threads():
+        path = _console_thread_path(slug)
+        rows.append((path.stat().st_mtime_ns, {
+            "slug": slug, "modified": modified,
+            **session_log.summarize(path.read_text(encoding="utf-8")),
+        }))
+    return {"repo": session_log.facts(), "threads": [row for _, row in sorted(rows, key=lambda r: r[0], reverse=True)]}
+
+
+@app.get("/api/agents/{slug:path}")
+def console_agent(slug: str) -> dict:
+    path = _console_thread_path(slug)
+    return {"slug": path.stem, "text": path.read_text(encoding="utf-8")}
 
 
 @app.get("/api/jobs/{job_id}")
@@ -2078,6 +2296,7 @@ def _loop_controller():
 
 
 class LoopRunIn(BaseModel):
+    tier: str = "work"
     model_config = {"extra": "forbid"}
     choice: str
     prompt: str = Field(min_length=1, max_length=65536)
@@ -2093,10 +2312,136 @@ def loop_page() -> HTMLResponse:
     return HTMLResponse(html)
 
 
+class AssignmentIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    code: str
+    title: str
+    goal: str
+    allowed_files: list[str]
+    acceptance: list[str]
+    tier: str = "work"
+
+
+class AssignmentAdvanceIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    status: str
+    builder_run_id: int | None = None
+    result_sha256: str | None = None
+    commit_hash: str | None = None
+
+
+@app.get("/api/loop/assignments")
+def loop_assignments() -> dict:
+    controller = _loop_controller()
+    return {"assignments": [asdict(a) for a in controller.store.list_assignments(owner=controller.owner)]}
+
+
+@app.post("/api/loop/assignments")
+def loop_create_assignment(body: AssignmentIn) -> dict:
+    from companion.working_loop import PolicyRefused
+    controller = _loop_controller()
+    try:
+        assignment = controller.store.create_assignment(owner=controller.owner, **body.model_dump())
+    except PolicyRefused as exc:
+        raise ApiError(400, "policy_refused", str(exc)) from None
+    return {"assignment": asdict(assignment)}
+
+
+@app.post("/api/loop/assignments/{assignment_id}/advance")
+def loop_advance_assignment(assignment_id: int, body: AssignmentAdvanceIn) -> dict:
+    from companion.working_loop import PolicyRefused
+    controller = _loop_controller()
+    try:
+        assignment = controller.store.advance_assignment(assignment_id, owner=controller.owner, **body.model_dump())
+    except PolicyRefused as exc:
+        raise ApiError(400, "policy_refused", str(exc)) from None
+    except LookupError:
+        raise ApiError(404, "not_found", "Assignment not found") from None
+    return {"assignment": asdict(assignment)}
+
+
+@app.get("/api/loop/usage")
+def loop_usage() -> dict:
+    controller = _loop_controller()
+    return {"rows": [{**row, "model_label": short_name(row["developer"])}
+                     for row in controller.store.usage_ledger(owner=controller.owner)]}
+
+
+def _loop_run_record(record, artifact=None) -> dict:
+    result = {**asdict(record), "model_label": short_name(record.developer)}
+    if record.status == "done" and artifact and artifact.get("output"):
+        result["brief"] = asdict(check(artifact["output"]))
+    return result
+
+
+def _loop_dispatcher():
+    from companion.dispatch import Dispatcher
+    controller = _loop_controller()
+    return Dispatcher(controller.store, controller.runner, owner=controller.owner,
+                      repo_root=WEB_DIR.parent, worktrees_dir=DATA_DIR / "working_loop" / "worktrees")
+
+
+def _assignment_stage(assignment_id, stage):
+    from companion.working_loop import PolicyRefused
+    dispatcher = _loop_dispatcher()
+    try:
+        run = getattr(dispatcher, stage)(assignment_id)
+    except PolicyRefused as exc:
+        raise ApiError(400, "policy_refused", str(exc)) from None
+    except LookupError:
+        raise ApiError(404, "not_found", "Assignment not found") from None
+    return {"assignment": asdict(dispatcher.store.get_assignment(assignment_id, owner=dispatcher.owner)),
+            **_enqueue_loop(run)}
+
+
+@app.post("/api/loop/assignments/{assignment_id}/plan")
+def loop_plan_assignment(assignment_id: int) -> dict:
+    return _assignment_stage(assignment_id, "plan")
+
+
+class AssignmentBuildIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    confirmed: StrictBool
+
+
+@app.post("/api/loop/assignments/{assignment_id}/build")
+def loop_build_assignment(assignment_id: int, body: AssignmentBuildIn) -> dict:
+    from companion.working_loop import PolicyRefused
+    dispatcher = _loop_dispatcher()
+    try:
+        assignment, _, _ = dispatcher.check_build(assignment_id, confirmed=body.confirmed)
+    except PolicyRefused as exc:
+        if str(exc) == "confirmation_required":
+            raise ApiError(409, "confirmation_required", str(exc)) from None
+        raise ApiError(400, "policy_refused", str(exc)) from None
+    except LookupError:
+        raise ApiError(404, "not_found", "Assignment not found") from None
+    job_id = _queue.enqueue("loop_build", {"assignment_id": assignment_id, "confirmed": body.confirmed})
+    return {"assignment": asdict(assignment), "receipt": None, "job_id": job_id}
+
+
+@app.post("/api/loop/assignments/{assignment_id}/review")
+def loop_review_assignment(assignment_id: int) -> dict:
+    return _assignment_stage(assignment_id, "review")
+
+
+def _run_loop_build_job(payload, on_progress):
+    dispatcher = _loop_dispatcher()
+    receipt = dispatcher.build(payload["assignment_id"], confirmed=payload["confirmed"])
+    on_progress(f"Build exited with code {receipt.returncode}")
+    return {"assignment": asdict(dispatcher.store.get_assignment(receipt.assignment_id, owner=dispatcher.owner)),
+            "receipt": asdict(receipt)}
+
+
+HANDLERS["loop_build"] = _run_loop_build_job
+
+
 @app.get("/api/loop/runs")
 def loop_runs(topic: str | None = None) -> dict:
     controller = _loop_controller()
-    return {"runs": [asdict(r) for r in controller.store.list_runs(owner=controller.owner, topic=topic)]}
+    return {"runs": [_loop_run_record(r, controller.store.read_artifact(r.id, owner=controller.owner)
+                                      if r.status == "done" else None)
+                     for r in controller.store.list_runs(owner=controller.owner, topic=topic)]}
 
 
 @app.get("/api/loop/runs/{run_id}")
@@ -2105,8 +2450,10 @@ def loop_run(run_id: int) -> dict:
     record = controller.store.get_run(run_id, owner=controller.owner)
     if not record:
         raise ApiError(404, "not_found", "Run not found")
-    return {"run": asdict(record), "artifact": controller.store.read_artifact(run_id, owner=controller.owner),
+    artifact = controller.store.read_artifact(run_id, owner=controller.owner)
+    return {"run": _loop_run_record(record, artifact), "artifact": artifact,
             "reviews": controller.store.reviews_for(run_id, owner=controller.owner),
+            "readiness": controller.readiness(record),
             "reconciliations": controller.store.reconciliations_for(run_id, owner=controller.owner),
             "can_reconcile": controller.can_reconcile(record), "can_continue": controller.can_continue(record)}
 
@@ -2114,7 +2461,7 @@ def loop_run(run_id: int) -> dict:
 def _enqueue_loop(record) -> dict:
     # The queue stores only an id, never prompts or model output.
     _queue.enqueue("loop_dispatch", {"run_id": record.id})
-    return {"run": asdict(record)}
+    return {"run": _loop_run_record(record)}
 
 
 @app.post("/api/loop/runs")
@@ -2122,7 +2469,7 @@ def loop_create(body: LoopRunIn) -> dict:
     from companion.working_loop import PolicyRefused
     try:
         record = _loop_controller().request(project=body.project, topic=body.topic,
-                                            choice_key=body.choice, prompt=body.prompt)
+                                            choice_key=body.choice, prompt=body.prompt, tier=body.tier)
     except PolicyRefused as exc:
         raise ApiError(400, "policy_refused", str(exc)) from None
     return _enqueue_loop(record)

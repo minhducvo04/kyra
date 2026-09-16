@@ -1,5 +1,66 @@
 # The visionOS client
 
+## 2026-09-16: the opinion button on a real reply in the simulator
+
+Rebuilt with xcodebuild (BUILD SUCCEEDED), installed on the booted Apple Vision Pro simulator and launched
+with `-kyra.baseURL http://127.0.0.1:8421 -kyra.ask "Say hello in one short sentence."` against the
+working-loop worktree's server. The ornament read AUTO, the transcript showed the question and a real
+Claude reply with its `claude · tool` badge, and the Second opinion button rendered under the reply.
+Proof: `data/verifications/2026-09-16-vision-orb/claude/v02-reply.png`. The tap itself, the pending caption
+and the OpenAI review line remain unverified until the native simulator control is configured. The
+worktree server had no Kokoro voice model, so the spoken reply failed server-side; the text path was
+unaffected.
+
+## 2026-09-16: second opinions from the conversation card
+
+Each Kyra answer now offers a second opinion through the existing working-loop API, with the original request, answer and its SHA-256 bound into the prompt. The card shows the pending developer, polls every two seconds, and appends a developer-badged review explicitly captioned as a comment, never an approval. Stop cancels polling and invalidates late results; failed or uncertain runs name their status without automatic retry. The pure model is registered in SwiftPM and Xcode. Native sources compiled and linked for the visionOS simulator; xcodebuild failed during asset compilation after CoreSimulatorService became unavailable. Swift tests executed 31 cases with one failure: the supplied hash expectation for “4” disagrees with CryptoKit, Python hashlib and shasum. Tests remain unchanged. Loopback port 8420 was unreachable, so no live review or card rendering is claimed. The backend's current loopback-only policy also prevents physical-headset LAN access. Evidence and the review handoff are at `data/verifications/2026-09-16-vision-second-opinion/` and `data/private_docs/assignment-V02-result.md`; changes remain unstaged for independent review.
+
+## 2026-09-16: orb and card seen in the simulator
+
+Claude built the app with xcodebuild for the visionOS 26.5 simulator (BUILD SUCCEEDED, one warning),
+installed it on the booted Apple Vision Pro simulator and launched it. The window shows the sphere with
+its orbit, STANDBY / awaiting input, the Talk, Text and Stop rail with Stop disabled, and the Conversation
+card with its hide chevron and composer. Proof: `data/verifications/2026-09-16-vision-orb/claude/idle.png`
+and `xcodebuild.log` in this worktree. Not yet exercised: taps (hide card, Talk, Text), the speaking pulse
+and Reduce Motion, because the native simulator control needs `xcode-select` to point at Xcode, which
+only Duc can run. An older window from a previous install stayed open behind the new one.
+
+## 2026-09-16: orb and collapsible conversation card
+
+Talk now keeps a breathing sphere and persistent Talk, Text and Stop controls beside a collapsible transcript card. The view stores its transcript in the tested OrbPresentation model; hiding the card preserves both conversation and draft. AVAudioPlayer metering drives the speaking pulse, resets between clips and on Stop, and continues updating the level readout with Reduce Motion enabled while the orb stays still. Pending microphone permission and an unsent captured clip keep Stop available. Removed the oversized icon preview; the prior Home View proof remains referenced below. Verification: 27 native tests passed, including the 22 existing cases; 643 Python tests passed with one optional skip; ruff passed. All native sources compiled and linked directly into an arm64 visionOS simulator executable. The full Xcode build failed in asset compilation after CoreSimulatorService became unavailable, so visual acceptance remains unverified. The new source still needs Xcode project registration; that file was outside the assigned edit scope, and a ready patch is retained with the evidence at `data/verifications/2026-09-16-vision-orb/` in this worktree. Changes remain unstaged for independent review.
+
+## 2026-09-15: a layered orb app icon
+
+The client referenced AppIcon without shipping an asset catalog. Added original cyan sphere artwork with an open orbit to match the companion direction, using an opaque background and two transparent 1024 x 1024 sRGB layers. Native drawing source is in apple/Design/generate_app_icon.swift so the artwork remains editable without a new dependency. The system applies its circular mask and layer depth. The catalog is now included in app resources and excluded from the state-test Swift package.
+
+Verified by a real visionOS simulator build, compiled icon metadata, separate preview installation, and Home View screenshot. All 22 native tests passed; the Python suite and lint passed. Evidence: data/verifications/2026-09-15-vision-icon/ in the primary checkout. The native floating orb/card remains a later slice on this branch; no chat or voice behavior changed. Independent review is pending before integration.
+
+## 2026-09-14: native microphone input for the headset
+
+Duc reached the physical client's connection screen and requested voice input without keyboard dictation.
+Talk now records mono 16 kHz PCM WAV through AVAudioRecorder, then Send voice uses the existing
+`/api/voice/stream` endpoint for transcription, the spoken response register and sentence-by-sentence Kokoro
+playback. The microphone permission request is explicit; no speech-recognition service, new backend route,
+wake word or continuous listening was added. Cancel, leaving Talk, backgrounding and audio interruptions
+discard capture. At 60 seconds the native recorder stops and preserves the clip for explicit Send or Cancel.
+
+A small recording interface permits hermetic tests of denied permission, a cancelled pending permission,
+failed capture, single-use finish and the duration-limit receipt. Stream tests cover multipart binary bytes,
+transcript/audio/done events without blank SSE separators, malformed completion and server errors. Turn IDs
+and player identity checks prevent old callbacks from reviving stopped playback. Playback now uses the
+supported playback/spokenAudio category/mode with mixing and reports activation/play errors. Settings
+provided at launch persist through the same UserDefaults storage already used by the settings fields.
+
+Verification: 22 native tests passed; 643 Python tests passed with one existing optional skip; ruff clean;
+real signed visionOS build and installation succeeded. A compiled copy of the actual Swift transport sent
+synthetic speech to an isolated real backend and received transcription, a Claude response and two WAV
+clips. Cached speech and embedding directories were supplied explicitly in that verification fixture after
+model-hub lookup failures; production code and model configuration were not changed. Scratch servers were
+stopped afterwards; test conversations remain confined to scratch data. Physical-device voice requests
+reached the normal server; user confirmation of audible playback on the final build remains pending.
+Evidence: `data/verifications/2026-09-14-avp-voice/` (Swift red/green logs, signed build/install logs,
+`VoiceClientSmoke.swift`, `voice-smoke-success.log`, and independent Claude review records).
+
 ## 2026-09-10: sourced suggestions in Today
 
 Today now reads the daily proposal list and shows title, first step, rationale, estimated time and an evidence disclosure. Add reminder returns an undated reminder receipt; Dismiss accepts optional feedback. A request in flight disables that row, and a failed request keeps it available for retry. Interrupted acceptance offers Finish adding reminder. Refresh reloads current state. A server without the endpoint shows an upgrade message while reminders and reviews remain usable. No transport-security exception was added.

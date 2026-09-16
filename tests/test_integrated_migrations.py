@@ -46,6 +46,14 @@ def test_upgrade_preserves_both_histories(tmp_path, monkeypatch, revision, start
             artifact_dir="fixture", policy_version="2026-09-15.2", created_at="2026-09-16"),
     }
     existing = set(inspect(engine).get_table_names())
+    # Seed only the columns that exist at this revision; later revisions add columns with
+    # server defaults (loop_runs.tier), which the upgrade fills in and the check below ignores.
+    for name in fixtures:
+        if name in existing:
+            present = {c["name"] for c in inspect(engine).get_columns(name)}
+            fixtures[name] = {k: v for k, v in fixtures[name].items() if k in present}
+            if name == "loop_runs" and "tier" in present:
+                fixtures[name]["tier"] = "work"
     with engine.begin() as conn:
         for name, row in fixtures.items():
             if name in existing:
@@ -58,5 +66,6 @@ def test_upgrade_preserves_both_histories(tmp_path, monkeypatch, revision, start
         )
         for name, row in fixtures.items():
             if name in existing:
-                assert dict(conn.execute(select(metadata.tables[name])).one()._mapping) == row
+                stored = dict(conn.execute(select(metadata.tables[name])).one()._mapping)
+                assert {k: stored[k] for k in row} == row
     engine.dispose()

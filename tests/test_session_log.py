@@ -28,11 +28,13 @@ def test_the_sessions_directory_is_under_the_overridable_data_dir():
 
 
 def test_append_is_append_only_and_keeps_every_earlier_block():
-    session_log.append("claude", "review", "first", branch="thread-a")
-    session_log.append("codex", "build", "second", branch="thread-a")
+    # Sentinel bodies: the block header quotes the current commit subject, which once contained
+    # the word "second" and put it ahead of the first body.
+    session_log.append("claude", "review", "body-one-7f3a", branch="thread-a")
+    session_log.append("codex", "build", "body-two-7f3a", branch="thread-a")
     text = session_log.read("thread-a")
     assert text.count("## claude") == 1 and text.count("## codex") == 1
-    assert text.index("first") < text.index("second")
+    assert text.index("body-one-7f3a") < text.index("body-two-7f3a")
     assert "Open for: review" in text and "Open for: build" in text
 
 

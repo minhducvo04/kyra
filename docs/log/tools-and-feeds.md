@@ -1,5 +1,9 @@
 # Small tools and feeds
 
+## 2026-09-16: shared tool-run audit
+
+The default registry now attaches a lazy ToolRunStore so registry callers record arguments, outcome, a 300-character result summary, start time and elapsed time in private runtime state. The console receives the id from its own execution rather than querying the latest row, and an audit failure logs its exception type without exposing arguments or changing the tool's result. The idempotent Alembic revision adds tool_runs; scratch migration, successful/error runs, eight concurrent receipt matches and startup-import checks were verified. Confirmation flags cover drafting, autofill, outreach copy, initiatives, posting fetch and the two RSS tools. Proof is under `data/verifications/console/`; the supplied test mismatch and acceptance limitations are recorded in `data/private_docs/assignment-P01-result.md`.
+
 ## 2026-09-16: learning-reels library repairs the red-test PR
 
 PR #5 failed at collection because its planned `companion.reels` library was absent. The fix supplies

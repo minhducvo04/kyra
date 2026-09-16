@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1000000000000000000117 /* SecondOpinion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000017 /* SecondOpinion.swift */; };
+		A1000000000000000000116 /* OrbPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000016 /* OrbPresentation.swift */; };
+		A1000000000000000000115 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000015 /* Assets.xcassets */; };
 		A1000000000000000000101 /* KyraVisionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001 /* KyraVisionApp.swift */; };
 		A1000000000000000000102 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002 /* ContentView.swift */; };
 		A1000000000000000000103 /* KyraClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000003 /* KyraClient.swift */; };
@@ -18,9 +21,14 @@
 		A1000000000000000000110 /* LearningLabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000010 /* LearningLabView.swift */; };
 		A1000000000000000000111 /* WorkspaceState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000011 /* WorkspaceState.swift */; };
 		A1000000000000000000112 /* LearningLab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000012 /* LearningLab.swift */; };
+		A1000000000000000000113 /* VoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000013 /* VoiceInput.swift */; };
+		A1000000000000000000114 /* VoiceStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000014 /* VoiceStream.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A1000000000000000000017 /* SecondOpinion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondOpinion.swift; sourceTree = "<group>"; };
+		A1000000000000000000016 /* OrbPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbPresentation.swift; sourceTree = "<group>"; };
+		A1000000000000000000015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1000000000000000000000 /* KyraVision.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KyraVision.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000001 /* KyraVisionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KyraVisionApp.swift; sourceTree = "<group>"; };
 		A1000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -33,6 +41,8 @@
 		A1000000000000000000010 /* LearningLabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningLabView.swift; sourceTree = "<group>"; };
 		A1000000000000000000011 /* WorkspaceState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceState.swift; sourceTree = "<group>"; };
 		A1000000000000000000012 /* LearningLab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningLab.swift; sourceTree = "<group>"; };
+		A1000000000000000000013 /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
+		A1000000000000000000014 /* VoiceStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceStream.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -57,6 +67,11 @@
 		A1000000000000000000301 /* KyraVision */ = {
 			isa = PBXGroup;
 			children = (
+				A1000000000000000000017 /* SecondOpinion.swift */,
+				A1000000000000000000016 /* OrbPresentation.swift */,
+				A1000000000000000000015 /* Assets.xcassets */,
+				A1000000000000000000013 /* VoiceInput.swift */,
+				A1000000000000000000014 /* VoiceStream.swift */,
 				A1000000000000000000001 /* KyraVisionApp.swift */,
 				A1000000000000000000002 /* ContentView.swift */,
 				A1000000000000000000003 /* KyraClient.swift */,
@@ -138,6 +153,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000000000000000000115 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -148,6 +164,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000000000000000000117 /* SecondOpinion.swift in Sources */,
+				A1000000000000000000116 /* OrbPresentation.swift in Sources */,
+				A1000000000000000000113 /* VoiceInput.swift in Sources */,
+				A1000000000000000000114 /* VoiceStream.swift in Sources */,
 				A1000000000000000000101 /* KyraVisionApp.swift in Sources */,
 				A1000000000000000000102 /* ContentView.swift in Sources */,
 				A1000000000000000000103 /* KyraClient.swift in Sources */,

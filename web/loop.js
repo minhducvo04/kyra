@@ -2,8 +2,8 @@
 const $ = id => document.getElementById(id);
 let records = [], selected = "", busy = false, reconciliationTarget = null, continuationTarget = null;
 const cards = new Map();
-const statusLabel = {queued:"Queued", dispatching:"Running", done:"Complete", failed:"Failed",
-  unreconciled:"Needs checking", mismatch:"Model changed"};
+const statusClass = {queued:"queued", dispatching:"running", done:"done", failed:"failed",
+  unreconciled:"needs-you", mismatch:"needs-you"};
 const errorLabel = {
   continuation_refused:"This contribution can no longer be continued. Start a fresh conversation.",
   review_context_unavailable:"An earlier turn is missing or changed. Restore its saved content before requesting this review.",
@@ -19,8 +19,10 @@ const errorLabel = {
   served_model_mismatch:"The provider reported a different model from the one requested.",
   malformed_stream:"The model app returned an incomplete or unexpected receipt."
 };
+const tierLabel = {casual:"Casual", work:"Work", life_changing:"Life changing"};
+const readinessReason = {not_complete:"Answer is not complete.", no_review:"No review yet.", review_stale:"All reviews are stale; request a new review."};
 const pending = r => ["queued", "dispatching"].includes(r.status);
-const modelName = r => r.developer === "Anthropic" ? "Claude" : "Codex";
+const modelName = r => r.model_label;
 const contextLabel = context => context
   ? `${context.turns.length} earlier turn${context.turns.length === 1 ? "" : "s"} included${context.omitted ? "; additional earlier turns omitted" : "; none omitted"}.`
   : "Earlier-turn context was not recorded for this review.";
@@ -49,9 +51,11 @@ async function inspect(record) {
   const detail = await readJson(`/api/loop/runs/${record.id}`);
   const card = el("article", undefined, "card"); card.id = `run-${record.id}`;
   const top = el("div", undefined, "card-top");
+  const status = statusClass[record.status] || "needs-you";
   top.append(el("strong", `${modelName(record)} ${record.review_subject_id ? "· Review" : "· Answer"}`),
-    el("span", statusLabel[record.status] || record.status, `badge ${record.status}`));
-  card.append(top, el("p", `#${record.id} · ${record.requested_model} · ${record.effort || "default effort"}`, "meta"));
+    el("span", status.replaceAll("-", " "), `status-badge status-${status}`));
+  card.append(top, el("p", `#${record.id} · ${record.effort || "default effort"}`, "meta"));
+  card.append(el("p", `Tier: ${tierLabel[detail.readiness.tier]} · ${detail.readiness.ready ? "Ready for your decision." : detail.readiness.reasons.map(reason => readinessReason[reason] || reason).join(" ")}`, "meta"));
   if (record.review_subject_id) card.append(el("p", `Review of contribution #${record.review_subject_id}. No automatic approval.`, "meta"));
   if (record.review_subject_id) card.append(el("p", contextLabel(record.review_context), "meta"));
   if (record.continued_from_run_id) card.append(el("p", `Continues contribution #${record.continued_from_run_id}. ${record.status === "done" ? "Same provider conversation verified." : "See the receipt for continuation status."}`, "meta"));
@@ -98,7 +102,7 @@ async function inspect(record) {
     card.append(button);
   }
   if (record.status === "done") {
-    const reviewButton = el("button", `Ask ${record.developer === "Anthropic" ? "Codex" : "Claude"} to review`);
+    const reviewButton = el("button", `Ask ${record.model_label === "Claude" ? "Codex" : "Claude"} to review`);
     reviewButton.onclick = async () => {
       reviewButton.disabled = true;
       try { await readJson(`/api/loop/runs/${record.id}/review`, {method:"POST"}); await refresh(); }
@@ -115,6 +119,7 @@ async function inspect(record) {
       $("topic").disabled = true; $("choice").disabled = true;
       $("continuation").hidden = false;
       $("continuation-label").textContent = `Following up on ${modelName(record)} contribution #${record.id}. The same conversation will receive your request.`;
+      $("tier").value = record.tier; $("tier").disabled = true;
       $("run").textContent = "Send follow-up"; $("prompt").focus();
       $("request").scrollIntoView({behavior:"smooth", block:"start"});
     };
@@ -123,7 +128,7 @@ async function inspect(record) {
   const request = el("details"); request.append(el("summary", "Request sent"), el("pre", detail.artifact.prompt, "receipt"));
   const receipt = el("details");
   receipt.append(el("summary", "Execution receipt"), el("pre", [
-    `Developer: ${record.developer} · Host: ${record.host} · Method: ${record.method}`,
+    `Model: ${record.model_label} · Method: ${record.method}`,
     `Requested: ${record.requested_model}`,
     `Reported by provider: ${record.served_model || "Not supplied by this CLI"}`,
     `Session: ${record.provider_session_id || "Not received"}`,
@@ -142,7 +147,7 @@ async function inspect(record) {
 }
 async function render() {
   const topic = selected;
-  const visible = records.filter(r => r.topic === topic).reverse();
+  const visible = records.filter(r => r.topic === topic);
   $("count").textContent = `${visible.length} saved`;
   const nodes = [];
   for (const record of visible) {
@@ -153,21 +158,39 @@ async function render() {
     if (previous) previous.querySelectorAll("details").forEach((d, i) => { detail.querySelectorAll("details")[i].open = d.open; });
     cards.set(record.id, detail); nodes.push(detail);
   }
-  $("runs").replaceChildren(...(nodes.length ? nodes : [el("p", "No contributions yet. Send the first request above.", "empty")]));
+  $("runs").replaceChildren(...(nodes.length ? nodes : [el("p", "No contributions yet. Send the first request below.", "empty")]));
 }
+async function refreshUsage() {
+  $("refresh-usage").disabled = true;
+  try {
+    const {rows} = await readJson("/api/loop/usage");
+    const nodes = rows.map(row => {
+      const card = el("article", undefined, "card");
+      card.append(el("strong", `${row.model_label} · ${row.effort || "default effort"}`),
+        el("p", `Runs: ${row.runs} · Done: ${row.done} · Failed: ${row.failed} · Other: ${row.other} · Runs without usage: ${row.runs_without_usage}`),
+        el("p", `Reported tokens: input uncached ${row.input_uncached} · cached read ${row.input_cached_read} · cache write ${row.cache_write} · output ${row.output}`),
+        el("p", `Provider-reported cost (USD): ${row.provider_reported_cost_usd === null ? "Not supplied" : row.provider_reported_cost_usd}`, "meta"));
+      return card;
+    });
+    $("usage-rows").replaceChildren(...(nodes.length ? nodes : [el("p", "No saved runs yet.", "empty")]));
+    $("usage-notice").textContent = "";
+  } catch (error) { $("usage-notice").textContent = `Usage could not refresh: ${error.message}. Displayed totals may be outdated.`; }
+  finally { $("refresh-usage").disabled = false; }
+}
+$("refresh-usage").onclick = refreshUsage;
 async function refresh() {
   if (busy) return;
   busy = true;
   try {
     records = (await readJson("/api/loop/runs")).runs;
     if (!selected && records.length && !$("topic").value) { selected = records[0].topic; $("topic").value = selected; }
-    showTopics(); await render();
+    showTopics(); await render(); await refreshUsage();
   } catch (error) { $("notice").textContent = error.message; }
   finally { busy = false; }
 }
 $("filter").oninput = showTopics;
 function resetContinuation() {
-  continuationTarget = null; $("continuation").hidden = true;
+  continuationTarget = null; $("continuation").hidden = true; $("tier").disabled = false;
   $("topic").disabled = false; $("choice").disabled = false; $("run").textContent = "Run model";
 }
 $("fresh-request").onclick = resetContinuation;
@@ -177,7 +200,7 @@ $("request").onsubmit = async event => {
   try {
     const topic = $("topic").value.trim();
     const url = continuationTarget ? `/api/loop/runs/${continuationTarget}/continue` : "/api/loop/runs";
-    const body = continuationTarget ? {prompt:$("prompt").value} : {choice:$("choice").value, prompt:$("prompt").value, topic};
+    const body = continuationTarget ? {prompt:$("prompt").value} : {choice:$("choice").value, prompt:$("prompt").value, topic, tier:$("tier").value};
     await readJson(url, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
     selected = topic; $("prompt").value = ""; resetContinuation(); await refresh();
   } catch (error) { $("notice").textContent = `${error.message}. Check saved contributions before submitting again.`; }
@@ -196,3 +219,122 @@ $("reconcile-form").onsubmit = async event => {
   } catch (error) { $("reconcile-error").textContent = error.message; }
   finally { $("save-reconcile").disabled = false; }
 };
+
+const assignmentNext = {assigned:"built", built:"reviewed", reviewed:"committed"};
+const assignmentJobs = new Map(), assignmentReceipts = new Map();
+async function watchAssignmentBuild(assignmentId, jobId) {
+  assignmentJobs.set(assignmentId, jobId);
+  try {
+    let job;
+    do {
+      job = await readJson(`/api/jobs/${jobId}`);
+      if (["queued", "running"].includes(job.status)) await new Promise(resolve => setTimeout(resolve, 1500));
+    } while (["queued", "running"].includes(job.status));
+    if (job.status === "failed") throw new Error(job.error || "Build failed. Inspect the saved run before retrying.");
+    assignmentReceipts.set(assignmentId, job.result.receipt);
+    assignmentJobs.delete(assignmentId);
+    await refreshAssignments(); await refresh();
+  } catch (error) {
+    assignmentJobs.delete(assignmentId);
+    $("assignments-notice").textContent = error.message;
+  }
+}
+async function refreshAssignments() {
+  $("refresh-assignments").disabled = true;
+  try {
+    const {assignments} = await readJson("/api/loop/assignments");
+    const nodes = assignments.map(assignment => {
+      const card = el("article", undefined, "card");
+      card.append(el("strong", `${assignment.code}: ${assignment.title}`),
+        el("p", `${assignment.status} · ${tierLabel[assignment.tier]}`, "meta"), el("p", assignment.goal));
+      for (const [heading, items] of [["Allowed files", assignment.allowed_files], ["Acceptance checks", assignment.acceptance]]) {
+        const list = el("ul"); items.forEach(item => list.append(el("li", item)));
+        card.append(el("h3", heading), list);
+      }
+      card.append(el("pre", [
+        `Plan run: ${assignment.plan_run_id ?? "Not recorded"}`,
+        `Builder run: ${assignment.builder_run_id ?? "Not recorded"}`,
+        `Review run: ${assignment.review_run_id ?? "Not recorded"}`,
+        `Worktree: ${assignment.worktree || "Not created"}`,
+        `Result SHA-256: ${assignment.result_sha256 || "Not recorded"}`,
+        `Commit: ${assignment.commit_hash || "Not recorded"}`,
+        `Created: ${assignment.created_at} · Updated: ${assignment.updated_at}`
+      ].join("\n"), "receipt"));
+      const receipt = assignmentReceipts.get(assignment.id);
+      if (receipt) card.append(el("pre", JSON.stringify(receipt, null, 2), "receipt"));
+      const controls = el("div");
+      for (const [action, label, disabled] of [
+        ['plan', "Plan", assignment.status !== "assigned" || assignment.plan_run_id !== null],
+        ['build', "Build", assignment.status !== "assigned" || !assignment.plan_run_id || !!assignment.worktree],
+        ['review', "Review", assignment.status !== "built"]
+      ]) {
+        const button = el("button", label); button.type = "button"; button.dataset.action = action;
+        button.disabled = disabled || assignmentJobs.has(assignment.id);
+        button.onclick = async () => {
+          if (!confirm(action === "build" ? `Build ${assignment.code} with Codex in a new worktree?`
+            : `Ask Claude to ${action} ${assignment.code}?`)) return;
+          button.disabled = true; $("assignments-notice").textContent = "";
+          try {
+            const result = await readJson(`/api/loop/assignments/${assignment.id}/${action}`, {method:"POST",
+              headers:{"Content-Type":"application/json"}, ...(action === "build" ? {body:JSON.stringify({confirmed:true})} : {})});
+            if (result.job_id) watchAssignmentBuild(assignment.id, result.job_id);
+            selected = `assignment:${assignment.code}`; $("topic").value = selected;
+            await refreshAssignments(); await refresh();
+          } catch (error) { $("assignments-notice").textContent = error.message; button.disabled = false; }
+        };
+        controls.append(button);
+      }
+      card.append(controls);
+      if (assignmentJobs.has(assignment.id)) card.append(el("p", "Build queued or running. Waiting for its receipt.", "meta"));
+      const next = assignmentNext[assignment.status];
+      if (next) {
+        const form = el("form");
+        const fields = {};
+        const addField = (key, label, type, pattern) => {
+          const wrapper = el("label", label), input = el("input");
+          input.type = type; input.required = true;
+          if (pattern) input.pattern = pattern;
+          if (type === "number") { input.min = "1"; input.step = "1"; }
+          wrapper.append(input); form.append(wrapper); fields[key] = input;
+        };
+        if (next === "built") {
+          addField("builder_run_id", "Builder run id", "number");
+          addField("result_sha256", "Result SHA-256", "text", "[0-9a-fA-F]{64}");
+        }
+        if (next === "committed") addField("commit_hash", "Commit hash", "text", "[0-9a-fA-F]{7,40}");
+        const button = el("button", `Advance to ${next}`); button.type = "submit";
+        form.append(button);
+        form.onsubmit = async event => {
+          event.preventDefault(); button.disabled = true;
+          try {
+            const body = {status:next};
+            for (const [key, input] of Object.entries(fields)) body[key] = key === "builder_run_id" ? Number(input.value) : input.value.trim();
+            await readJson(`/api/loop/assignments/${assignment.id}/advance`, {method:"POST",
+              headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+            await refreshAssignments();
+          } catch (error) { $("assignments-notice").textContent = error.message; }
+          finally { button.disabled = false; }
+        };
+        card.append(form);
+      }
+      return card;
+    });
+    $("assignment-rows").replaceChildren(...(nodes.length ? nodes : [el("p", "No assignments yet.", "empty")]));
+    $("assignments-notice").textContent = "";
+  } catch (error) { $("assignments-notice").textContent = `Assignments could not refresh: ${error.message}. Displayed records may be outdated.`; }
+  finally { $("refresh-assignments").disabled = false; }
+}
+$("refresh-assignments").onclick = refreshAssignments;
+$("assignment-form").onsubmit = async event => {
+  event.preventDefault(); $("save-assignment").disabled = true;
+  const lines = id => $(id).value.split("\n").map(line => line.trim()).filter(Boolean);
+  try {
+    await readJson("/api/loop/assignments", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({
+      code:$("assignment-code").value.trim(), title:$("assignment-title").value.trim(), goal:$("assignment-goal").value.trim(),
+      allowed_files:lines("assignment-files"), acceptance:lines("assignment-acceptance"), tier:$("assignment-tier").value
+    })});
+    $("assignment-form").reset(); await refreshAssignments();
+  } catch (error) { $("assignments-notice").textContent = error.message; }
+  finally { $("save-assignment").disabled = false; }
+};
+refreshAssignments();

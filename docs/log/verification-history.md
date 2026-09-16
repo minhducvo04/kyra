@@ -1,5 +1,59 @@
 # Verification history
 
+## 2026-09-16: second dispatch from the page after the four fixes
+
+With D02, D03, D05 and D06 loaded, assignment D04 went through the page's API on the integration server: Plan (claude-fable-5-1, 16 s) returned numbered steps with a verification line each and no tool markup; Build with `confirmed: true` created its worktree and ran `codex exec` in 48 s, changed only the allowed file, and the card stored Codex's final message rather than the stream; Review (claude-fable-5-1, 24 s) returned a verdict that named the evidence it lacked. The managed Codex state directory, populated by the first real run, passed the preflight. Proof: `data/verifications/w2/second-dispatch-after-fixes.json`; the D01 and D04 worktrees remain under the loop data directory for inspection.
+
+## 2026-09-16: D06 repeated dispatch preflight
+
+Two new hermetic regressions failed before the fix and passed afterward: populated Codex state with continued refusal of custom instructions/configuration, and preflight failures that remove the worktree/branch, clear the binding and allow a successful retry. All 12 dispatch/process tests passed. The actual managed state passed preflight without starting a provider; a previously stranded assignment was recovered after preserving its setup and confirming no source changes. Evidence: `/private/tmp/kyra-D06-state-proof.log`, `/private/tmp/kyra-D06-recovery.log`, `/private/tmp/kyra-D06-pytest.log`; private details: `data/private_docs/assignment-D06-result.md`.
+
+## 2026-09-16: first assignment dispatched from the Kyra page, end to end
+
+On the integration branch server (8424, worktree data) assignment D01 (casual, one sentence in `docs/working-loop.md`) went through the page's API: Plan queued a Claude run (claude-fable-5-1, 216 s, done); Build with `confirmed: true` created worktree `data/working_loop/worktrees/D01` on branch `session/2026-09-16-D01`, ran `codex exec` there (50 s), changed exactly the allowed file and wrote the result file (receipt with its hash); Review queued a Claude run (12 s, done). All three appeared as cards on `/loop`. Proof: `data/verifications/w2/first-real-dispatch.json`. Three defects surfaced and were assigned: the plan and review prompts never said tools were disabled, so both models answered with tool-call text (D02, fixed and re-verified: a second plan came back as numbered steps in 16 s); the build card showed the raw JSON stream (D03, D05); the managed Codex state directory rejects its own files after the first real run, so a second build was refused and left its worktree bound (D06).
+
+## 2026-09-16: D05 tool-using build message extraction
+
+The new stored-output regression failed before the fix, then passed with command events, earlier messages and malformed trailing lines. All eight dispatch tests passed with disposable Git worktrees and SQLite stores, using scripted providers. No live model call was made; full-suite evidence is `/private/tmp/kyra-D05-pytest.log`, with results in `data/private_docs/assignment-D05-result.md`.
+
+## 2026-09-16: D03 build output extraction
+
+One new hermetic test reproduced raw JSON in stored build output before the fix, then verified final message text, the full private stream and its receipt path. All seven dispatch tests passed with real disposable Git worktrees and databases, using scripted provider output. Runtime fallback evidence is `/private/tmp/kyra-D03-runtime.log`; full results are in `data/private_docs/assignment-D03-result.md`. No live model call was made.
+
+## 2026-09-16: D02 dispatch prompt regression
+
+The new stored-prompt assertion failed before the fix and passed afterward; all six dispatch tests passed using disposable databases and scripted providers. No live model behavior is claimed. Full-suite evidence and the requested fresh live dispatch are recorded in `data/private_docs/assignment-D02-result.md`.
+
+## 2026-09-16: job tracker drag in a real browser
+
+On the integration branch server (8424, worktree data) a fictional Northwind application was added through the TRACKER form, appeared in the `applied` column, and a scripted drag (dragstart, dragover, drop with a DataTransfer) onto `interviewing` posted to the status endpoint (200), reloaded the list into the new column and updated the row's menu; zero console errors; at 375 px the nine columns wrap with `scrollWidth == clientWidth`. Codex built W6 in the desktop chat task (f76c876, 956 passed). Nit for a later pass: at the panel's desktop width the 18rem columns show two at a time.
+
+## 2026-09-16: MAP panel in a real browser
+
+On the integration branch server (8424, worktree data): MAP opened on the features tab with seven nodes carrying their percentages (loop 60, father 80, headset 67, console 50, memory 0, ci 0, reels 0 at the time), two dependency wires, and a click on a node listed its slices with statuses; the memory tab drew the scratch data's one thread and reported zero rooms and exchanges not opened; at 375 px with the panel open `scrollWidth == clientWidth == 375`; the server log has no 500. A read-only run of the map over the real notes printed room counts and ages only. Full suite 877 passed, ruff clean, one Alembic head.
+
+## 2026-09-16: create_all race gone on a fresh database
+
+After P02c the personal server restarted on the integration branch with the scratch loop database removed; the first load of `/loop` fired runs, assignments and usage at once and all three answered 200, with zero 500s and zero tracebacks in `data/verifications/design-pass/server-8424-after-fix.log`. Race test 2 passed five runs in a row; full suite 845 passed.
+
+## 2026-09-16: design pass in a real browser at two widths
+
+On the integration branch, the personal server (8424) and the Father tenant server (8425) served `/`, `/loop` and `/father`. At 1280 px all three carry the same header and nav and the loop and Father pages show results above their forms; at 375 px every page measures `scrollWidth == clientWidth == 375`, the loop contributions sit above the request form (241 px against 315 px) and the Father tasks above the start form (349 px against 1608 px). Measurements: `data/verifications/design-pass/browser-pass.json`. One console error surfaced a real defect: three simultaneous loop requests on a fresh data directory raced `metadata.create_all` and one answered 500; a red test reproduces it (`tests/test_store_creation_race.py`) and the fix is P02c.
+
+## 2026-09-16: integration branch of the four overnight branches
+
+`session/2026-09-16-integration` merges working-loop, father, console and vision-orb-interface onto master, local only. Conflicts were in settings.py (loop fields beside the tenant validator), schema.py (three appended tables and one import line), webapp.py (one import) and the two logs that every branch prepends; each kept both sides. The lost-nothing check enumerated every file each branch changed and found no line any branch had that the merged tree lacks. Three Alembic heads were merged by ecb1b431ebce. Full suite 835 passed in 32.12s, ruff clean, Swift 31 passed. Master is untouched; merging it is Duc's.
+
+## 2026-09-16: loop usage ledger and tiers in a real browser
+
+The working-loop worktree's server ran on port 8421 against the worktree's own data directory (never the
+personal `data/`), started outside the preview tool because that tool reads the main checkout's launch
+config; the wrong server it started on 8420 was stopped within seconds. `/loop` rendered the Tier select
+(Casual, Work, Life changing), the USAGE section with its Refresh control and the "runs without usage are
+unknown" wording, and no console errors. Proof: `data/verifications/working-loop/browser-8421-*` in the
+worktree. Not yet exercised in the browser: a real run with a tier and a readiness badge; the in-process
+HTTP proofs from A01 and A02 cover those paths.
+
 ## 2026-09-16: learning reels slice A built by Codex, reviewed and real-run by Claude
 
 Codex built `companion.reels`, the four tables and migration, and `scripts/reels.py` through the exec channel against the red tests; Claude fixed its own two conflicting fixtures, then ran the real path against a scratch `KYRA_DATA_DIR`: one oEmbed registration of a public MIT OpenCourseWare lecture URL (title and channel returned, `EMBED_ONLY`, only the oEmbed host contacted) and two Claude proposal calls on the fictional fixture transcript. The first was cut at 2.7 KB with a fenced reply and was rejected as `truncated`; after the fence unwrap and a 16000-token budget the second produced 2 moments that passed every guard, both judged approvable by a person with one note each (`docs/reels-eval.md`). Full suite with the local API token setting empty: **717 passed in 23.52s**; ruff clean; PII guard green. Then the remote branch turned out to carry a second, CI-green build of the same slice plus the master merge; Claude merged it in, kept that build (Codex's stays as commit `23c587e`), ported the fence unwrap, the 16000 budget and the CLI onto it, and re-ran the real path through `scripts/reels.py` in a separate process: `add` (oEmbed), `propose` (2 moments, 0 rejected), `approve`, `show`, `quiz` (correct, XP 8), `review`, `progress`. Evidence: `data/verifications/2026-09-16-reels-a/` (raw replies, script). Scratch directory removed; no real store touched.
@@ -106,6 +160,44 @@ worktree's `data/verifications/working-loop/`: `seeded-defect-red.log`, `seeded-
 through `live-run-5.json`, `codex-isolation-proof.json`, `full-tests-final.log`, and `claude-build-review.md`.
 Claude independently rechecked the fixes and approved this limited personal slice. No personal production data was
 used or modified. The live preview uses a separate scratch data directory and port.
+
+## 2026-09-16: Father drafting, one live Anthropic run
+
+The Northwind fixture workflow with a {{draft}} placeholder went through LLMDrafter with the real Anthropic backend: two calls (draft, then the humanizer critique), the second pass removed a stiff word and kept every fact, check_draft found nothing, the DOCX built and pandoc rendered one page; report findings empty, draft_provider anthropic. Proof: `data/verifications/father/f04-claude-live.json` in the worktree. Synthetic facts only; the Father tenant server still configures no drafter.
+
+## 2026-09-16: Father task cards in a real browser
+
+The Father tenant server ran on port 8422 with `KYRA_TENANT=father` and an external scratch data root (a
+placeholder key value satisfied the import; no call can succeed with it). In the browser: Start a task with
+the amount left blank produced a task in review with the finding "A required fact is missing."; Approve
+answered "Approval refused. Resolve the findings and review again." (the 409 is the only console entry);
+entering 1,250.00 and pressing Review cleared the findings; Approve then showed "Approved. Nothing has been
+sent." and History gained the row. Proof: `data/verifications/father/f03-claude-*` in the worktree. Word
+rendering still unverified; pandoc rendered the pages.
+
+## 2026-09-16: CONSOLE panel in a real browser
+
+The console worktree's HUD ran on port 8423 against its own data directory. CONSOLE opened with TOOLS grouped by module (28 tools, 8 marked as needing confirmation); list_reminders ran from its generated form and returned a receipt (run_id 1) that then appeared under RUNS; RUN on draft_outreach_note raised exactly one confirm dialog and Cancel produced no request to its endpoint; at 375 px `scrollWidth == clientWidth == 375` with the panel open; zero console errors. Codex's in-process HTTP proof and scratch migration live under `data/verifications/console/`.
+
+## 2026-09-16: headset reply with the opinion button
+
+Simulator app rebuilt and launched against a loop-enabled worktree server; a real Claude reply rendered with its badge and the Second opinion button (`data/verifications/2026-09-16-vision-orb/claude/v02-reply.png`). Swift tests 31 passed. Tap flow still owed.
+
+## 2026-09-16: visionOS orb and card, simulator idle state
+
+Real xcodebuild for the simulator succeeded and the installed app rendered the orb, control rail and conversation card in STANDBY on the booted Apple Vision Pro simulator (`data/verifications/2026-09-16-vision-orb/claude/idle.png`). Swift tests 27 passed after the source registration patch. Interaction states remain unverified until the native simulator control is configured.
+
+## 2026-09-15: layered visionOS app icon
+
+Real Xcode simulator build, separate com.kyra.IconPreview installation, and Home View rendering verified the new three-layer icon. Source layers checked at 1024 x 1024 with an opaque background and transparent foregrounds; Assets.car and CFBundleIcons were present in the built app. 22 native tests, Python suite and lint passed. Evidence in the primary checkout: data/verifications/2026-09-15-vision-icon/build.log, swift-tests.log, pytest.log and home-icon.png. Production app data was untouched; the preview uses its own bundle identifier. Physical headset appearance and independent review remain unverified.
+
+**2026-09-14 (native AVP voice)**: real signed device build and installation; 22 Swift tests;
+643 Python tests passed, one existing optional skip; ruff clean. The actual Swift multipart/SSE
+voice client completed a synthetic speech round trip through isolated Whisper, real Claude, Chroma
+and Kokoro, returning two WAV clips. The fixture used explicit cached model directories after Hub
+lookup failures. No production test conversations were created; scratch servers stopped. Final
+headset listening acceptance remains pending. Evidence: `data/verifications/2026-09-14-avp-voice/`,
+particularly `voice-smoke-success.log`, `signed-build-final.log`, and `device-install-final.log`.
 
 
 ## 2026-09-10: snapshot merged and main scheduled entry point verified

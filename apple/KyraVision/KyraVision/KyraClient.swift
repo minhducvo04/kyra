@@ -12,26 +12,6 @@ import Observation
 /// server must be started with `KYRA_HOST=0.0.0.0`, and `KYRA_API_TOKEN` must
 /// be set and entered here. Checkpoint routes refuse remote access without
 /// a configured token; older routes retain the server's optional-token policy.
-struct ChatOut: Codable, Sendable {
-    var reply: String
-    var backend: String
-    var actualBackend: String?
-    var path: String?
-    var reason: String?
-
-    enum CodingKeys: String, CodingKey {
-        case reply, backend, path, reason
-        case actualBackend = "actual_backend"
-    }
-
-    /// "claude · tool" - what answered, and whether it used a tool. The web HUD
-    /// shows the same badge; in AUTO mode it is the only way to tell.
-    var badge: String? {
-        guard let actualBackend else { return nil }
-        return path == "tool" ? "\(actualBackend) · tool" : actualBackend
-    }
-}
-
 struct Reminder: Codable, Sendable, Identifiable {
     let id: Int
     let text: String
@@ -94,6 +74,9 @@ final class KyraClient: WorkspaceAPI, LessonAPI {
     init() {
         baseURL = UserDefaults.standard.string(forKey: "kyra.baseURL") ?? ""
         token = UserDefaults.standard.string(forKey: "kyra.token") ?? ""
+        // Persist settings supplied by the paired Mac at launch, just as field edits do.
+        UserDefaults.standard.set(baseURL, forKey: "kyra.baseURL")
+        UserDefaults.standard.set(token, forKey: "kyra.token")
     }
 
     private func request(_ path: String, body: Data? = nil) throws -> URLRequest {
@@ -179,6 +162,22 @@ final class KyraClient: WorkspaceAPI, LessonAPI {
         return final
     }
 
+    /// Uses the same transcription, spoken register and sentence audio as the web HUD.
+    func sendVoice(_ wav: Data, onEvent: @MainActor (VoiceEvent) -> Void) async throws {
+        let boundary = UUID().uuidString
+        var upload = try request("/api/voice/stream", body: VoiceUpload.body(wav, boundary: boundary))
+        upload.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        let (bytes, response) = try await Self.session.bytes(for: upload)
+        try Self.check(response)
+        var stream = VoiceStream()
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            if let event = try stream.consume(line) { onEvent(event) }
+        }
+        try Task.checkCancellation()
+        if let event = try stream.finish() { onEvent(event) }
+    }
+
     /// Speak text that has already been written, one sentence at a time.
     ///
     /// `onClip` fires per sentence as its audio arrives, so playback can start
@@ -217,6 +216,21 @@ final class KyraClient: WorkspaceAPI, LessonAPI {
             }
         }
         flush()
+    }
+
+    func createLoopRun(choice: String, prompt: String) async throws -> LoopRunSummary {
+        let body = try JSONEncoder().encode([
+            "choice": choice, "tier": "work", "topic": "headset", "prompt": prompt
+        ])
+        let (data, response) = try await Self.session.data(for: try request("/api/loop/runs", body: body))
+        try Self.check(response, data: data)
+        return try JSONDecoder().decode(LoopRunSummary.self, from: data)
+    }
+
+    func loopRun(_ id: Int) async throws -> LoopRunSummary {
+        let (data, response) = try await Self.session.data(for: try request("/api/loop/runs/\(id)"))
+        try Self.check(response, data: data)
+        return try JSONDecoder().decode(LoopRunSummary.self, from: data)
     }
 
     // ---- the daily loop -------------------------------------------------------

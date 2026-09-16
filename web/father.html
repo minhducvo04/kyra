@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tasks</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/tokens.css">
+  <link rel="stylesheet" href="/static/father.css">
+  <script defer src="/static/father.js"></script>
+</head>
+<body>
+<header class="app-header">
+  <a class="app-brand" href="/" aria-label="Kyra home"><span aria-hidden="true">◈</span>KYRA</a>
+  <span class="app-page">Father</span>
+  <nav aria-label="Main navigation"><a href="/">Talk</a><a href="/loop">Loop</a><a href="/father" aria-current="page">Father</a></nav>
+  <div class="app-status"><span class="status-dot" aria-hidden="true"></span><span>On this Mac</span></div>
+</header>
+<main>
+  <h1>Review and approve your documents.</h1>
+  <p id="message" role="status" aria-live="polite"></p>
+  <section aria-labelledby="progress-heading">
+    <h2 id="progress-heading">In progress</h2>
+    <div id="tasks"></div>
+  </section>
+  <section id="review" aria-labelledby="review-heading" hidden>
+    <h2 id="review-heading" tabindex="-1">Review</h2>
+    <p id="review-title"></p>
+    <h3>Findings</h3>
+    <ul id="findings"></ul>
+    <h3>Facts</h3>
+    <form id="review-form">
+      <div id="review-facts"></div>
+      <button id="review-button" type="submit">Review</button>
+    </form>
+    <div id="pages" aria-label="Document pages"></div>
+    <div id="decision-controls">
+      <button id="approve" type="button">Approve</button>
+      <label for="note">Changes requested</label>
+      <textarea id="note" rows="3"></textarea>
+      <button id="request-changes" type="button">Request changes</button>
+    </div>
+    <p id="decision-note"></p>
+  </section>
+  <section aria-labelledby="history-heading">
+    <h2 id="history-heading">History</h2>
+    <div id="history"></div>
+  </section>
+  <section aria-labelledby="start-heading">
+    <h2 id="start-heading">Start a task</h2>
+    <form id="start-form">
+      <label for="workflow">Workflow</label>
+      <select id="workflow" required></select>
+      <div id="start-facts"></div>
+      <button id="start-button" type="submit" disabled>Start a task</button>
+    </form>
+  </section>
+</main>
+</body>
+</html>

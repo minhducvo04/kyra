@@ -165,3 +165,24 @@ def threads() -> list[tuple[str, str, str]]:
         when = datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
         rows.append((p.stem, when, opens[-1] if opens else "?"))
     return sorted(rows, key=lambda r: r[1], reverse=True)
+
+
+def summarize(text: str) -> dict[str, str | None]:
+    """Read metadata only from the last hand-off block; absent fields stay absent."""
+    summary = dict.fromkeys(("agent", "stamp", "open_for", "next", "suggested"))
+    blocks = list(re.finditer(r"^## (claude|codex|duc) - (.+)$", text, re.MULTILINE))
+    if not blocks:
+        return summary
+    last = blocks[-1]
+    summary.update(agent=last[1], stamp=last[2])
+    # The metadata ends at the blank line before the body, which may quote older blocks.
+    metadata = text[last.end():].lstrip("\n").split("\n\n", 1)[0]
+    for key, pattern in (
+        ("open_for", r"^- \*\*Open for: (\w+)\*\*$"),
+        ("next", r"^- Next: (.*)$"),
+        ("suggested", r"^- Suggested: (.*)$"),
+    ):
+        match = re.search(pattern, metadata, re.MULTILINE)
+        if match:
+            summary[key] = match[1]
+    return summary

@@ -6,9 +6,24 @@ Timestamps stay ISO-8601 strings (as v1 wrote them) rather than
 TIMESTAMP columns - changing that is a data migration, tracked for a
 later slice. Alembic (migrations/) owns schema changes from here on.
 """
-from sqlalchemy import CheckConstraint, Column, Float, Integer, MetaData, String, Table, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, Float, Integer, MetaData, String, Table, Text, UniqueConstraint
 
 metadata = MetaData()
+
+father_tasks = Table(
+    "father_tasks", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("slug", Text, nullable=False),
+    Column("version", Integer, nullable=False),
+    Column("status", String(32), nullable=False),
+    Column("facts_json", Text, nullable=False),
+    Column("document_path", Text, nullable=False),
+    Column("report_json", Text, nullable=False),
+    Column("note", Text, nullable=False),
+    Column("created_at", String(64), nullable=False),
+    Column("decided_at", String(64)),
+    CheckConstraint("status IN ('review', 'approved', 'changes_requested')", name="father_task_status"),
+)
 
 reminders = Table(
     "reminders", metadata,
@@ -164,6 +179,7 @@ initiative_snapshot = Table(
 # Content-free execution receipts. Prompts and replies stay in private artifact files.
 loop_runs = Table(
     "loop_runs", metadata,
+    Column("tier", String(16), nullable=False, server_default="work"),
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("owner", String(160), nullable=False),
     Column("project", String(160), nullable=False),
@@ -235,6 +251,46 @@ loop_reconciliations = Table(
     Column("created_at", String(64), nullable=False),
     CheckConstraint("outcome IN ('nothing_happened','provider_processed')", name="loop_declared_outcome"),
 )
+
+
+loop_assignments = Table(
+    "loop_assignments", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("owner", String(160), nullable=False),
+    Column("code", String(160), nullable=False),
+    Column("title", Text, nullable=False),
+    Column("goal", Text, nullable=False),
+    Column("allowed_files", Text, nullable=False),
+    Column("acceptance", Text, nullable=False),
+    Column("tier", String(16), nullable=False, server_default="work"),
+    Column("status", String(16), nullable=False, server_default="assigned"),
+    Column("builder_run_id", Integer),
+    Column("plan_run_id", Integer),
+    Column("review_run_id", Integer),
+    Column("worktree", Text),
+    Column("result_sha256", String(64)),
+    Column("commit_hash", String(40)),
+    Column("created_at", String(64), nullable=False),
+    Column("updated_at", String(64), nullable=False),
+    UniqueConstraint("owner", "code", name="loop_assignment_owner_code"),
+    CheckConstraint("status IN ('assigned','built','reviewed','committed')", name="loop_assignment_status"),
+    CheckConstraint("tier IN ('casual','work','life_changing')", name="loop_assignment_tier"),
+)
+
+
+# Arguments and summaries are private runtime state, shared by all front doors.
+tool_runs = Table(
+    "tool_runs", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("tool", String(128), nullable=False),
+    Column("args", Text, nullable=False),
+    Column("ok", Boolean, nullable=False),
+    Column("summary", String(300), nullable=False),
+    Column("error", Text),
+    Column("started_at", String(64), nullable=False),
+    Column("duration_ms", Float, nullable=False),
+)
+
 
 # Learning reels keep immutable moment bodies and an append-only attempt log.
 reel_sources = Table(

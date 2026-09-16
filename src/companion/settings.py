@@ -11,7 +11,7 @@ CI has to move.
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", extra="ignore")
 
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
+    tenant: str = Field(default="personal", validation_alias="KYRA_TENANT")
     data_dir: Path = Field(default=PROJECT_ROOT / "data", validation_alias="KYRA_DATA_DIR")
     log_level: str = Field(default="INFO", validation_alias="KYRA_LOG_LEVEL")
     classifier_adapter: str = Field(default="", validation_alias="KYRA_CLASSIFIER_ADAPTER")  # "repo:adapter_dir"
@@ -63,6 +64,17 @@ class Settings(BaseSettings):
     claude_cli_path: str = Field(default="", validation_alias="KYRA_CLAUDE_CLI_PATH")
     codex_cli_path: str = Field(default="", validation_alias="KYRA_CODEX_CLI_PATH")
     loop_timeout_seconds: float = Field(default=600, gt=0, le=1800, validation_alias="KYRA_LOOP_TIMEOUT_SECONDS")
+
+    @model_validator(mode="after")
+    def validate_tenant(self) -> "Settings":
+        if self.tenant not in {"personal", "father"}:
+            raise ValueError(f"Unknown tenant: {self.tenant}")
+        if self.tenant == "father":
+            # A nested worktree must also protect the main checkout's data.
+            roots = [PROJECT_ROOT, *(p for p in PROJECT_ROOT.parents if (p / ".git").is_dir())]
+            if any(self.data_dir.resolve().is_relative_to((root / "data").resolve()) for root in roots):
+                raise ValueError("tenant father requires KYRA_DATA_DIR outside the personal data directory")
+        return self
 
     def require_api_key(self) -> str:
         if not self.anthropic_api_key:

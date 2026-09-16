@@ -1,0 +1,52 @@
+# Kyra feature map. Hand-kept by Duc and the agents; rendered on the HUD by companion.features.
+# status per slice: planned | red | building | done. A feature's percent is done slices over all slices.
+features:
+  - id: loop
+    name: Working loop
+    depends_on: []
+    slices:
+      - {id: A01, name: Usage ledger, status: done}
+      - {id: A02, name: Tiers and readiness, status: done}
+      - {id: A03, name: Assignment records, status: done}
+      - {id: W2, name: Dispatch from the page, status: done}
+      - {id: D06, name: Second build after a real run, status: done}
+      - {id: W3, name: Brief answers by model, status: done}
+  - id: father
+    name: Father's assistant
+    depends_on: []
+    slices:
+      - {id: F01, name: Tenant seam, status: done}
+      - {id: F02, name: Document QA, status: done}
+      - {id: F03, name: Task cards, status: done}
+      - {id: F04, name: Drafting with guards, status: done}
+      - {id: F05, name: Provider terms and deployment, status: planned}
+  - id: headset
+    name: Vision Pro client
+    depends_on: [loop]
+    slices:
+      - {id: V01, name: Orb and card, status: done}
+      - {id: V02, name: Second opinion, status: done}
+      - {id: V03, name: Taps verified in the simulator, status: planned}
+  - id: console
+    name: Console and design
+    depends_on: []
+    slices:
+      - {id: P01, name: CONSOLE panel, status: done}
+      - {id: P02, name: One token set and header, status: done}
+      - {id: W4, name: Feature map, status: done}
+      - {id: W6, name: Job list drag, status: done}
+  - id: memory
+    name: Memory palace
+    depends_on: [console]
+    slices:
+      - {id: W5, name: Memory map and dots, status: done}
+  - id: ci
+    name: Test impact
+    depends_on: []
+    slices:
+      - {id: W1, name: Impacted tests first, status: done}
+  - id: reels
+    name: Learning reels
+    depends_on: []
+    slices:
+      - {id: R-A, name: Slice A, status: done}

@@ -1,22 +1,20 @@
-:root {
-  --void: #05070a;
-  --panel: #0a1119;
-  --panel-2: #0d1620;
-  --grid: #142230;
-  --text: #d9f2ff;
-  --text-dim: #6a8a9c;
-  --text-faint: #3c5666;
-  --accent: #29d8ff;
-  --accent-dim: #0f6b82;
-  --accent-glow: rgba(41, 216, 255, 0.38);
-  --danger: #ff5470;
-  --fit-high: #3ddc84;
-  --fit-medium: #ffcc4d;
-  --fit-low: #6a8a9c;
-  --idle-speed: 140s;
-  --mid-speed: 90s;
-  --inner-speed: 46s;
-}
+:root { --idle-speed: 140s; --mid-speed: 90s; --inner-speed: 46s; }
+
+#map-panel { z-index: 31; }
+#map-panel button, #map-toggle { min-height: 44px; }
+#map-close { min-width: 44px; }
+#feature-map { width: 100%; flex-shrink: 0; font: var(--text-sm) var(--font-mono); }
+#feature-map text { fill: var(--text); }
+#feature-map .map-status { fill: var(--text-dim); font-size: var(--text-xs); }
+.map-wire { fill: none; stroke: var(--accent-dim); stroke-width: 2; }
+.map-card { fill: var(--panel-2); stroke: var(--border); }
+.map-track { fill: var(--grid); }
+.map-progress { fill: var(--accent); }
+#feature-map [data-feature] { cursor: pointer; }
+#feature-map [data-feature]:is(:hover, :focus) .map-card { stroke: var(--accent); stroke-width: 2; }
+#map-slices { font-size: var(--text-sm); overflow-wrap: anywhere; }
+#map-slices h3 { font-size: inherit; }
+#map-slices li { margin-block: var(--space-2); }
 
 #initiative-list .jobs-tracker-item {
   display: flex;
@@ -38,18 +36,6 @@
 #initiative-list summary { padding: 0.5rem 0; cursor: pointer; }
 #initiative-list [role="alert"] { color: var(--danger); }
 
-body[data-backend="local"] {
-  --accent: #ffb454;
-  --accent-dim: #8a5a1d;
-  --accent-glow: rgba(255, 180, 84, 0.38);
-}
-
-body[data-backend="auto"] {
-  --accent: #b98bff;
-  --accent-dim: #6b3fb0;
-  --accent-glow: rgba(185, 139, 255, 0.38);
-}
-
 * { box-sizing: border-box; }
 
 html, body {
@@ -63,10 +49,10 @@ html, body {
 body {
   display: flex;
   flex-direction: column;
-  font-family: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  font-family: var(--font-mono);
   overflow: hidden;
   background:
-    radial-gradient(ellipse at 50% 20%, rgba(41, 216, 255, 0.05), transparent 60%),
+    radial-gradient(ellipse at 50% 20%, var(--stage-glow), transparent 60%),
     linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 34px,
     linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 34px 100%,
     var(--void);
@@ -80,8 +66,8 @@ body {
   pointer-events: none;
   background: repeating-linear-gradient(
     to bottom,
-    rgba(255, 255, 255, 0.025) 0px,
-    rgba(255, 255, 255, 0.025) 1px,
+    var(--scanline) 0px,
+    var(--scanline) 1px,
     transparent 1px,
     transparent 3px
   );
@@ -93,56 +79,22 @@ body {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(0, 0, 0, 0.55) 100%);
+  background: radial-gradient(ellipse at 50% 45%, transparent 45%, var(--shade-strong) 100%);
 }
 
-/* ---------- header ---------- */
-
-.hud-header {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.1rem 1.6rem;
-  border-bottom: 1px solid var(--grid);
-  background: linear-gradient(to bottom, rgba(10, 17, 25, 0.9), rgba(10, 17, 25, 0.55));
-  backdrop-filter: blur(6px);
-  flex: 0 0 auto;
-}
-
-.wordmark {
-  display: flex;
-  align-items: baseline;
-  gap: 0.55rem;
-  font-family: "Orbitron", sans-serif;
-}
-
-.wordmark-mark {
-  color: var(--accent);
-  font-size: 1rem;
-  text-shadow: 0 0 10px var(--accent-glow);
-  transition: color 0.5s ease;
-}
-
-.wordmark-text {
-  font-weight: 700;
-  font-size: 1.25rem;
-  letter-spacing: 0.28em;
-  color: var(--text);
-}
-
-.wordmark-sub {
-  font-size: 0.62rem;
-  letter-spacing: 0.24em;
-  color: var(--text-faint);
-  font-weight: 500;
-}
+/* ---------- Talk controls ---------- */
 
 .header-controls {
   display: flex;
   align-items: center;
-  gap: 1.2rem;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 1.6rem;
+  border-bottom: 1px solid var(--grid);
+  background: var(--panel);
+  position: relative;
+  z-index: 10;
+  flex: 0 0 auto;
 }
 
 .backend-toggle {
@@ -156,7 +108,7 @@ body {
   border: 0;
   background: transparent;
   color: var(--text-faint);
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.66rem;
   font-weight: 600;
   letter-spacing: 0.16em;
@@ -169,7 +121,7 @@ body {
 }
 
 .backend-btn:not(:last-child) { border-right: 1px solid var(--grid); }
-.backend-btn:hover { color: var(--text-dim); background: rgba(255, 255, 255, 0.03); }
+.backend-btn:hover { color: var(--text-dim); background: var(--hover-surface); }
 
 .backend-btn .dot {
   width: 6px;
@@ -179,26 +131,9 @@ body {
   transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
-.backend-btn.is-active { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.backend-btn.is-active { color: var(--text); background: var(--active-surface); }
 .backend-btn.is-active .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
 .backend-btn.is-loading .dot { animation: blink 0.6s steps(2, jump-none) infinite; }
-
-.status {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.68rem;
-  letter-spacing: 0.14em;
-  color: var(--text-dim);
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #3fdc7f;
-  box-shadow: 0 0 8px rgba(63, 220, 127, 0.6);
-}
 
 /* ---------- stage ---------- */
 
@@ -290,7 +225,7 @@ body {
 }
 
 .core-label {
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.2em;
@@ -356,7 +291,7 @@ body {
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-faint);
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.56rem;
   letter-spacing: 0.16em;
   padding: 0.2rem 0.4rem;
@@ -404,7 +339,7 @@ body {
 
 .line-tag {
   flex: 0 0 auto;
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -416,11 +351,11 @@ body {
 
 .line-meta {
   display: inline-block;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 0.66rem;
   letter-spacing: 0.03em;
   color: var(--accent);
-  background: var(--accent-soft, rgba(255, 255, 255, 0.06));
+  background: var(--accent-soft, var(--subtle-surface));
   border: 1px solid var(--accent-dim);
   border-radius: 4px;
   padding: 0.05em 0.4em;
@@ -454,7 +389,7 @@ body {
   gap: 0.7rem;
   padding: 0.9rem 1.4rem 1.3rem;
   border-top: 1px solid var(--grid);
-  background: linear-gradient(to top, rgba(10, 17, 25, 0.9), rgba(10, 17, 25, 0.4));
+  background: linear-gradient(to top, var(--panel-opaque), var(--panel-fade));
 }
 
 .input-frame {
@@ -463,7 +398,7 @@ body {
   align-items: center;
   gap: 0.5rem;
   border: 1px solid var(--grid);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--input-surface);
   padding: 0.68rem 0.9rem;
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -475,7 +410,7 @@ body {
 }
 
 .bracket {
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   color: var(--accent-dim);
   font-size: 1rem;
 }
@@ -497,7 +432,7 @@ body {
   border: 1px solid var(--accent-dim);
   background: transparent;
   color: var(--accent);
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.18em;
@@ -507,14 +442,14 @@ body {
   transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
-#send:hover { background: rgba(41, 216, 255, 0.08); box-shadow: 0 0 14px var(--accent-glow); }
-#send:active { background: rgba(41, 216, 255, 0.16); }
+#send:hover { background: var(--accent-hover); box-shadow: 0 0 14px var(--accent-glow); }
+#send:active { background: var(--accent-active); }
 #send:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
 
 /* SEND becomes STOP while a reply is streaming - the same "this is live, press
    to stop it" language the mic already uses when it is recording. */
 #send.is-stop { color: var(--danger); border-color: var(--danger); }
-#send.is-stop:hover { background: rgba(255, 84, 112, 0.12); box-shadow: 0 0 14px rgba(255, 84, 112, 0.35); }
+#send.is-stop:hover { background: var(--danger-hover); box-shadow: 0 0 14px var(--danger-glow); }
 
 /* A stopped reply keeps its partial text; this labels it so the transcript
    never reads as something Kyra finished saying. */
@@ -534,7 +469,7 @@ body {
   border: 0;
   background: transparent;
   color: var(--text-faint);
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.6rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -544,8 +479,8 @@ body {
 }
 
 .voice-mode-btn:not(:last-child) { border-right: 1px solid var(--grid); }
-.voice-mode-btn:hover { color: var(--text-dim); background: rgba(255, 255, 255, 0.03); }
-.voice-mode-btn.is-active { color: var(--accent); background: rgba(255, 255, 255, 0.04); }
+.voice-mode-btn:hover { color: var(--text-dim); background: var(--hover-surface); }
+.voice-mode-btn.is-active { color: var(--accent); background: var(--active-surface); }
 
 .mic-wrap {
   flex: 0 0 auto;
@@ -556,7 +491,7 @@ body {
 }
 
 .mic-label {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 0.58rem;
   font-weight: 500;
   letter-spacing: 0.05em;
@@ -589,7 +524,7 @@ body {
 
 /* recording: solid red fill, unmistakable - your voice is being captured right now */
 .mic-btn[data-state="recording"] {
-  color: #fff;
+  color: var(--white);
   border-color: var(--danger);
   background: var(--danger);
   animation: mic-pulse 1.1s ease-in-out infinite;
@@ -642,12 +577,9 @@ body {
    its own instead, because losing the voice-mode switch on the one device
    that is all microphone is the wrong trade. */
 @media (max-width: 560px) {
-  .wordmark-sub { display: none; }
-  .hud-header { flex-wrap: wrap; gap: 0.55rem; padding: 0.75rem 0.85rem; }
-  .header-controls { flex-wrap: wrap; justify-content: flex-end; gap: 0.45rem; min-width: 0; }
+  .header-controls { flex-wrap: wrap; justify-content: flex-end; gap: 0.45rem; min-width: 0; padding: 0.6rem 0.85rem; }
   .jobs-toggle { padding: 0.5rem 0.55rem; font-size: 0.58rem; }
   .backend-btn { padding: 0.45rem 0.6rem; font-size: 0.58rem; }
-  .status { font-size: 0.58rem; }
 
   .stage { padding: 0.8rem 0.7rem 0.3rem; min-width: 0; }
   .core-wrap { width: min(22vh, 132px); height: min(22vh, 132px); }
@@ -670,7 +602,7 @@ body {
   border: 1px solid var(--grid);
   background: transparent;
   color: var(--text-dim);
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.66rem;
   font-weight: 600;
   letter-spacing: 0.16em;
@@ -680,7 +612,7 @@ body {
   transition: color 0.2s ease, border-color 0.2s ease;
 }
 .jobs-toggle:hover { color: var(--accent); border-color: var(--accent-dim); }
-.jobs-toggle.is-active { color: var(--accent); border-color: var(--accent-dim); background: rgba(255, 255, 255, 0.03); }
+.jobs-toggle.is-active { color: var(--accent); border-color: var(--accent-dim); background: var(--hover-surface); }
 
 .jobs-panel {
   position: fixed;
@@ -705,7 +637,7 @@ body {
   justify-content: space-between;
   padding: 1rem 1.1rem;
   border-bottom: 1px solid var(--grid);
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -734,7 +666,7 @@ body {
   border: 0;
   background: transparent;
   color: var(--text-faint);
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -768,7 +700,7 @@ body {
 .jobs-field input[type="text"],
 .jobs-field input[type="file"],
 .jobs-tracker-add input {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 0.78rem;
   color: var(--text);
   background: var(--panel-2);
@@ -787,9 +719,9 @@ body {
 .jobs-btn {
   appearance: none;
   border: 1px solid var(--accent-dim);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--hover-surface);
   color: var(--accent);
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -806,7 +738,7 @@ body {
   border: 1px solid var(--danger);
   border-radius: 2px;
   padding: 0.5rem 0.6rem;
-  background: rgba(255, 84, 112, 0.08);
+  background: var(--danger-surface);
 }
 
 .jobs-output {
@@ -859,6 +791,34 @@ body {
 .jobs-tracker-add input { flex: 1 1 auto; min-width: 80px; }
 .jobs-tracker-add .jobs-btn { flex: 0 0 auto; }
 
+.tracker-columns {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-3);
+  overflow-x: auto;
+}
+.tracker-columns > section {
+  flex: 0 0 18rem;
+  min-width: 0;
+  min-height: 6rem;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.tracker-columns h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+.tracker-columns .jobs-tracker-item {
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+  cursor: grab;
+}
+.tracker-columns .jobs-tracker-item-top { flex-direction: column; align-items: stretch; }
+.tracker-columns .jobs-tracker-status { width: 100%; min-height: 44px; }
+
 .jobs-tracker-item {
   border: 1px solid var(--grid);
   border-radius: 2px;
@@ -880,7 +840,7 @@ body {
 .jobs-tracker-item-link { color: var(--text-faint); font-size: 0.68rem; word-break: break-all; }
 .outreach-where { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .outreach-draft input[type="text"] {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 0.78rem;
   color: var(--text);
   background: var(--panel-2);
@@ -899,7 +859,7 @@ body {
 /* Memory notes: a flat, readable list - this is meant to look like the Markdown
    file it is, not like a database view. */
 .memnote-category {
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.6rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -922,7 +882,7 @@ body {
 .memnote-row:hover .memnote-del, .memnote-del:focus-visible { opacity: 1; }
 .jobs-tracker-item-role { color: var(--text-dim); }
 .jobs-tracker-status {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.68rem;
   background: var(--panel-2);
   color: var(--accent);
@@ -986,7 +946,7 @@ body {
 }
 .fit-section-title {
   padding: 0.4rem 0.6rem;
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.64rem;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -1016,7 +976,7 @@ body {
   display: inline-flex;
   align-items: baseline;
   gap: 0.3rem;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 0.64rem;
   font-weight: 500;
   padding: 0.05rem 0.4rem;
@@ -1035,7 +995,7 @@ body {
   border: 1px solid var(--danger);
   border-radius: 2px;
   padding: 0.5rem 0.6rem;
-  background: rgba(255, 84, 112, 0.06);
+  background: var(--danger-subtle);
   font-size: 0.72rem;
 }
 .fit-cut-suggestions .fit-cut-title { color: var(--danger); letter-spacing: 0.05em; text-transform: uppercase; font-size: 0.64rem; }
@@ -1058,7 +1018,7 @@ body {
 }
 
 .jobs-panel-subhead {
-  font-family: "Orbitron", sans-serif;
+  font-family: var(--font-display);
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -1096,7 +1056,7 @@ body {
   border-radius: 2px;
   flex-shrink: 0;
 }
-.jobs-doc-delete:hover { background: rgba(255, 84, 112, 0.12); }
+.jobs-doc-delete:hover { background: var(--danger-hover); }
 
 .jobs-doc-add {
   display: flex;
@@ -1107,7 +1067,7 @@ body {
 .jobs-doc-add select,
 .jobs-doc-add textarea,
 .jobs-doc-add input[type="file"] {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 0.76rem;
   color: var(--text);
   background: var(--panel-2);
@@ -1159,6 +1119,8 @@ body {
 @media (max-width: 560px) {
   .jobs-panel { width: 100vw; }
   .jobs-profile-grid { grid-template-columns: 1fr; }
+  .tracker-columns { flex-wrap: wrap; }
+  .tracker-columns > section { flex-basis: 100%; }
 }
 
 /* One-page fit verdict for resume output - a pass/fail the eye can't
@@ -1175,12 +1137,12 @@ body {
 .fit-status.is-ok {
   color: var(--fit-high);
   border-color: var(--fit-high);
-  background: rgba(61, 220, 132, 0.08);
+  background: var(--success-surface);
 }
 .fit-status.is-bad {
   color: var(--danger);
   border-color: var(--danger);
-  background: rgba(255, 84, 112, 0.08);
+  background: var(--danger-surface);
 }
 .fit-notes {
   margin: 0 0.7rem;
@@ -1196,7 +1158,7 @@ body {
 .draft-live li { margin: 0.15rem 0; }
 
 /* APPLY tab: one card per queued posting. */
-.apply-card { margin: 0.7rem 0; border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 6px; padding: 0.5rem 0.7rem; font-size: 0.8rem; }
+.apply-card { margin: 0.7rem 0; border: 1px solid var(--border, var(--border-soft)); border-radius: 6px; padding: 0.5rem 0.7rem; font-size: 0.8rem; }
 .apply-card-head { display: flex; justify-content: space-between; gap: 0.6rem; align-items: baseline; }
 .apply-card-head a { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .apply-status { flex-shrink: 0; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; font-size: 0.72rem; }
@@ -1234,7 +1196,7 @@ body[data-presence="failed"] .core-sub { color: var(--danger); }
    privacy toggle are new. ---- */
 .search-kinds { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.6rem 0.7rem 0.2rem; }
 .search-chip {
-  font-family: "Orbitron", sans-serif; font-size: 0.55rem; letter-spacing: 0.1em;
+  font-family: var(--font-display); font-size: 0.55rem; letter-spacing: 0.1em;
   padding: 0.28rem 0.5rem; background: transparent; color: var(--text-faint);
   border: 1px solid var(--grid); border-radius: 2px; cursor: pointer; transition: all 0.2s ease;
 }
@@ -1268,7 +1230,7 @@ body[data-presence="failed"] .core-sub { color: var(--danger); }
 .search-hit.is-sensitive { border-left-color: var(--danger); }
 .search-hit-head { display: flex; align-items: baseline; gap: 0.4rem; margin-bottom: 0.25rem; }
 .search-hit-kind {
-  font-family: "Orbitron", sans-serif; font-size: 0.5rem; letter-spacing: 0.08em;
+  font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 0.08em;
   color: var(--accent); border: 1px solid var(--accent-dim); padding: 0.1rem 0.25rem; border-radius: 2px;
 }
 .search-hit.is-sensitive .search-hit-kind { color: var(--danger); border-color: var(--danger); }
@@ -1283,7 +1245,7 @@ body[data-presence="failed"] .core-sub { color: var(--danger); }
    brighten), and nothing in the running state may name the assigned arm. */
 
 .focus-chip {
-  font-family: var(--mono, monospace);
+  font-family: var(--font-mono);
   font-size: 0.68rem;
   letter-spacing: 0.08em;
   color: var(--accent);
@@ -1291,13 +1253,13 @@ body[data-presence="failed"] .core-sub { color: var(--danger); }
   border-radius: 999px;
   padding: 0.18rem 0.55rem;
   white-space: nowrap;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--shade-soft);
 }
 .focus-chip[hidden] { display: none; }
 
 .focus-readout { text-align: center; padding: 0.6rem 0 0.9rem; }
 .focus-remaining {
-  font-family: var(--mono, monospace);
+  font-family: var(--font-mono);
   font-size: 2.6rem;
   line-height: 1;
   color: var(--text);
@@ -1329,7 +1291,7 @@ body[data-presence="failed"] .core-sub { color: var(--danger); }
   color: var(--text-dim);
   padding: 0.4rem 0;
   cursor: pointer;
-  font-family: var(--mono, monospace);
+  font-family: var(--font-mono);
 }
 .focus-rate-btn.is-active { border-color: var(--accent); color: var(--accent); }
 
@@ -1348,7 +1310,7 @@ body[data-presence="failed"] .core-sub { color: var(--danger); }
 .focus-target[data-lit="early"] { background: var(--danger); border-color: var(--danger); }
 .focus-probe-head { font-size: 0.72rem; letter-spacing: 0.12em; color: var(--text-dim); }
 .focus-probe-progress {
-  font-family: var(--mono, monospace);
+  font-family: var(--font-mono);
   font-size: 0.72rem;
   color: var(--text-faint);
   text-align: center;
@@ -1374,23 +1336,60 @@ body[data-presence="failed"] .core-sub { color: var(--danger); }
 body[data-focus="running"] .core-wrap { --idle-speed: 200s; }
 body[data-focus="running"] .ring-outer { stroke: var(--accent-dim); opacity: 0.5; }
 
-/* Evening. Only darkens and warms - never a brighter value than the day
-   token it replaces. Checked in the browser by reading computed luminance,
-   not by eye. */
-body[data-focus-evening="true"] {
-  --void: #070502;
-  --panel: #120c05;
-  --panel-2: #170f06;
-  --grid: #2a1c0c;
-  --text: #e8d3b0;
-  --text-dim: #8f7658;
-  --text-faint: #5c4c37;
-  --accent: #e08a3c;
-  --accent-dim: #7a4a17;
-  --accent-glow: rgba(224, 138, 60, 0.28);
-}
+/* Evening palette lives in tokens.css alongside the backend accents. */
 body[data-focus-evening="true"] .hud-stage { filter: brightness(0.82); }
 
 /* A checkbox that reads as one line beside its label, unlike .jobs-field's stacked layout. */
 .jobs-check { display:flex; align-items:center; gap:0.5rem; margin:0.7rem; font-size:0.8rem; color:var(--text-dim); }
 .jobs-check input { margin:0; flex-shrink:0; }
+
+/* Console reuses the panel shell. Wrap long tool names and private thread text. */
+#console-panel { z-index: 31; }
+#console-panel button, #console-toggle { min-height: 44px; }
+#console-close { min-width: 44px; }
+#console-panel h3, #console-panel h4 { margin: 0 0 0.6rem; }
+#console-panel h3 { font-size: 0.85rem; }
+#console-panel h4 { font-size: 0.8rem; }
+#console-panel pre, #console-repo, .console-card p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#console-panel pre { font-size: 0.72rem; }
+#console-panel .jobs-tab-panel, #console-panel .jobs-field { min-width: 0; }
+.console-card {
+  border: 1px solid var(--grid);
+  padding: 0.75rem;
+  margin-bottom: 0.85rem;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+}
+.console-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.console-run-form { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.75rem; }
+.console-run-form[hidden] { display: none; }
+.console-run-form input, .console-run-form textarea, .console-run-form select { min-width: 0; max-width: 100%; }
+.console-run-form input[type="number"] {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--grid);
+  padding: 0.5rem 0.6rem;
+  min-height: 44px;
+  font: inherit;
+}
+.console-run-form input[type="checkbox"] { align-self: flex-start; width: 24px; height: 24px; }
+.console-thread { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; text-align: left; font: inherit; }
+.console-badge { color: var(--text-faint); }
+.console-badge[data-open-for="duc"] { color: var(--attention); }
+.console-badge:is([data-open-for="build"], [data-open-for="tests"], [data-open-for="review"], [data-open-for="critique"]) { color: var(--running); }
+
+/* Memory map uses the shared palette in both themes. */
+#map-panel button { min-height: 44px; }
+#memory-map { width: 100%; height: auto; flex-shrink: 0; overflow: visible; }
+#memory-map .memory-map-link { stroke: var(--border); }
+#memory-map g { cursor: pointer; }
+#memory-map circle { fill: var(--queued); stroke: var(--border); }
+#memory-map [data-age="fresh"] circle { fill: var(--done); }
+#memory-map [data-age="stale"] circle { fill: var(--attention); }
+#memory-map [data-age="thread"] circle { fill: var(--accent); }
+#memory-map g:focus circle { stroke: var(--text); stroke-width: 3; }
+#memory-map text { fill: var(--text); font-size: var(--text-xs); }
+#memory-map-summary, #memory-map-detail { font-size: var(--text-sm); overflow-wrap: anywhere; }

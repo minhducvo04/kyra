@@ -31,6 +31,7 @@ Codex is the default builder across subsystems, including implementation, bug fi
 | Kind of test | Who writes it | Who runs it, and when | Where the result goes |
 |---|---|---|---|
 | Hermetic unit and API tests (`pytest`, `tests/conftest.py` temp data dir) | Claude Code, from the plan's `verify:` lines, before the build | Both, before every commit; CI on push | Count from pytest's summary line in the commit message |
+| Impacted tests while iterating (`scripts/impacted_tests.py --run`, the `test-impact` skill) | n/a | The builder, between edits during a build or a fix; never as the hand-over check | Nothing; the full suite before the commit is the check that gets recorded |
 | Post-condition guards (a check in code for a hard constraint: no invented numbers, no dash, no file in a focus condition, startup imports, PII) | Claude Code writes the failing test; Codex implements the guard, adding a test first if missing | Both, as part of the suite | The guard's docstring names the failure it was written after |
 | Lint (`ruff check src scripts tests`) | n/a | Both, before every commit | Commit only when clean |
 | Real run: Anthropic API, LaTeX compile, RSS and board fetches, search reindex and eval | Codex prepares a reproducible run; Claude Code designs independent acceptance checks | Codex verifies the build; Claude independently reproduces the relevant paths | Top of `docs/log/verification-history.md`; numbers in the matching `docs/*.md` eval doc |
@@ -39,6 +40,8 @@ Codex is the default builder across subsystems, including implementation, bug fi
 | Evals with held-out sets (`router_ft.py eval`, `tool_ft.py eval`, `search.py --eval`, `focus_report.py`) | Claude Code writes held-out cases **before** any data is generated and adds at least three independent cases Codex did not see | Codex runs the eval; Claude re-runs on a fresh index or a second seed | The eval doc under `docs/`, with the noise floor stated |
 | Test-pollution cleanup (`data/*.db`, `data/memory_db`, `data/router.log`, `data/memory_notes/`) | n/a | Whoever ran the real run, immediately after; the reviewer checks `git status` and the store counts | Named in the verification entry |
 | Private-data check before commit (`git status --porcelain`: nothing under `data/`, no `.env*` but the example, no personal-document extension) | n/a | Both, every commit | Silent when clean; a hit is a blocking review finding |
+
+Every assignment Claude writes for Codex says both: iterate with the impacted set, run the full suite once before reporting (2026-09-16: five builds each ran only the full suite because the assignment named only that).
 
 Two rules that apply to every row: read the count off pytest's **summary line**, never the dots (a session once reported 1 to 4 high from the dots); and a test that has quietly stopped testing its own name is worse than no test, so a reviewer's first question about any new test is "what change would make this fail?".
 

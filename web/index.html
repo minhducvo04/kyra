@@ -10,6 +10,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='25' x='4' font-size='24' fill='%2329d8ff'%3E%E2%97%88%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="/static/tokens.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -17,12 +18,12 @@
   <div class="scanlines" aria-hidden="true"></div>
   <div class="vignette" aria-hidden="true"></div>
 
-  <header class="hud-header">
-    <div class="wordmark">
-      <span class="wordmark-mark" aria-hidden="true">◈</span>
-      <span class="wordmark-text">KYRA</span>
-      <span class="wordmark-sub">COMPANION&nbsp;SYSTEM</span>
-    </div>
+<header class="app-header">
+  <a class="app-brand" href="/" aria-label="Kyra home"><span aria-hidden="true">◈</span>KYRA</a>
+  <span class="app-page">Talk</span>
+  <nav aria-label="Main navigation"><a href="/" aria-current="page">Talk</a><a href="/loop">Loop</a></nav>
+  <div class="app-status"><span class="status-dot" aria-hidden="true"></span><span id="status-text">ONLINE</span></div>
+</header>
     <div class="header-controls">
       <div class="backend-toggle" role="group" aria-label="Model backend">
         <button class="backend-btn is-active" data-backend="auto" id="btn-auto" type="button">
@@ -36,17 +37,64 @@
         </button>
       </div>
       <span class="focus-chip" id="focus-chip" hidden aria-live="polite"></span>
+      <button class="jobs-toggle" id="map-toggle" type="button" aria-controls="map-panel" aria-expanded="false">MAP</button>
+      <button class="jobs-toggle" id="console-toggle" type="button" aria-controls="console-panel" aria-expanded="false">CONSOLE</button>
       <button class="jobs-toggle" id="focus-toggle" type="button">FOCUS</button>
       <button class="jobs-toggle" id="search-toggle" type="button">SEARCH</button>
-      <a class="jobs-toggle" href="/loop">LOOP</a>
       <button class="jobs-toggle" id="tools-toggle" type="button">TOOLS</button>
       <button class="jobs-toggle" id="jobs-toggle" type="button">JOBS</button>
-      <div class="status">
-        <span class="status-dot"></span>
-        <span id="status-text">ONLINE</span>
-      </div>
     </div>
-  </header>
+
+  <aside class="jobs-panel" id="map-panel" aria-hidden="true" aria-label="Map" inert>
+    <div class="jobs-panel-header">
+      <span>MAP</span>
+      <button id="map-close" type="button" aria-label="Close map">&times;</button>
+    </div>
+    <div class="jobs-tabs" role="tablist" aria-label="Map">
+      <button class="jobs-tab is-active" id="map-tab-features" data-map-tab="features" type="button" role="tab" aria-selected="true" aria-controls="map-features">FEATURES</button>
+      <button class="jobs-tab" id="map-tab-memory" data-map-tab="memory" type="button" role="tab" aria-selected="false" aria-controls="map-memory" tabindex="-1">MEMORY</button>
+    </div>
+    <section class="jobs-tab-panel is-active" id="map-features" data-map-tab-panel="features" role="tabpanel" aria-labelledby="map-tab-features">
+      <p class="jobs-hint" id="map-summary" aria-live="polite"></p>
+      <svg id="feature-map" role="group" aria-label="Feature blueprint"></svg>
+      <div id="map-slices" aria-live="polite" tabindex="-1"></div>
+    </section>
+    <section class="jobs-tab-panel" id="map-memory" data-map-tab-panel="memory" role="tabpanel" aria-labelledby="map-tab-memory">
+      <button class="jobs-btn" id="memory-map-refresh" type="button">REFRESH</button>
+      <p class="jobs-hint">Room size shows note count. Colour shows age: fresh, 30+ days, or unknown. Small nodes are threads.</p>
+      <div id="memory-map-summary" aria-live="polite"></div>
+      <svg id="memory-map" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 180" aria-label="Memory rooms and session threads"></svg>
+      <div id="memory-map-detail" aria-live="polite"></div>
+    </section>
+  </aside>
+
+  <aside class="jobs-panel" id="console-panel" aria-hidden="true" aria-label="Console" inert>
+    <div class="jobs-panel-header">
+      <span>CONSOLE</span>
+      <button id="console-close" type="button" aria-label="Close console">&times;</button>
+    </div>
+    <div class="jobs-tabs" role="tablist" aria-label="Console">
+      <button class="jobs-tab is-active" id="console-tab-tools" data-console-tab="tools" type="button" role="tab" aria-selected="true" aria-controls="console-tools">TOOLS</button>
+      <button class="jobs-tab" id="console-tab-agents" data-console-tab="agents" type="button" role="tab" aria-selected="false" aria-controls="console-agents" tabindex="-1">AGENTS</button>
+      <button class="jobs-tab" id="console-tab-runs" data-console-tab="runs" type="button" role="tab" aria-selected="false" aria-controls="console-runs" tabindex="-1">RUNS</button>
+    </div>
+    <section class="jobs-tab-panel is-active" id="console-tools" data-console-tab-panel="tools" role="tabpanel" aria-labelledby="console-tab-tools">
+      <div id="console-tool-list" aria-live="polite"></div>
+    </section>
+    <section class="jobs-tab-panel" id="console-agents" data-console-tab-panel="agents" role="tabpanel" aria-labelledby="console-tab-agents">
+      <button class="jobs-btn" id="console-agents-refresh" type="button">REFRESH</button>
+      <div id="console-repo"></div>
+      <div id="console-thread-list" aria-live="polite"></div>
+      <pre id="console-thread-text" tabindex="0" aria-label="Session thread" aria-live="polite"></pre>
+    </section>
+    <section class="jobs-tab-panel" id="console-runs" data-console-tab-panel="runs" role="tabpanel" aria-labelledby="console-tab-runs">
+      <button class="jobs-btn" id="console-runs-refresh" type="button">REFRESH</button>
+      <h3>Tool runs</h3>
+      <div id="console-run-list" aria-live="polite"></div>
+      <h3>Background jobs</h3>
+      <div id="console-job-list" aria-live="polite"></div>
+    </section>
+  </aside>
 
   <aside class="jobs-panel" id="jobs-panel" aria-hidden="true">
     <div class="jobs-panel-header">
@@ -219,7 +267,18 @@
         <input id="tracker-link" type="text" placeholder="Link (optional)">
         <button class="jobs-btn" id="tracker-add" type="button">Add</button>
       </div>
-      <div class="jobs-tracker-list" id="tracker-list"></div>
+      <p>Drag an application to a status column, or use its status menu.</p>
+      <div class="jobs-tracker-list tracker-columns" id="tracker-list">
+        <section data-tracker-column="targeting"><h3>targeting</h3></section>
+        <section data-tracker-column="ready_to_submit"><h3>ready to submit</h3></section>
+        <section data-tracker-column="needs_attention"><h3>needs attention</h3></section>
+        <section data-tracker-column="applied"><h3>applied</h3></section>
+        <section data-tracker-column="referral_pending"><h3>referral pending</h3></section>
+        <section data-tracker-column="interviewing"><h3>interviewing</h3></section>
+        <section data-tracker-column="offer"><h3>offer</h3></section>
+        <section data-tracker-column="rejected"><h3>rejected</h3></section>
+        <section data-tracker-column="withdrawn"><h3>withdrawn</h3></section>
+      </div>
     </section>
 
     <section class="jobs-tab-panel" data-tab-panel="outreach">

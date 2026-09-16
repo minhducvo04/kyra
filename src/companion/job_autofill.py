@@ -503,6 +503,7 @@ def default_engines(headless: bool = False) -> dict[str, AutofillEngine]:
 
 
 class AutofillJobApplicationTool(Tool):
+    needs_confirmation = True
     name = "autofill_job_application"
     description = (
         "Open a job application page (Greenhouse, Ashby or Lever) and fill in the standard fields "

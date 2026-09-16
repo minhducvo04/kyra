@@ -882,10 +882,10 @@ jobsToggle.addEventListener("click", () => {
 });
 jobsClose.addEventListener("click", closeJobsPanel);
 
-document.querySelectorAll(".jobs-tab").forEach((tab) => {
+document.querySelectorAll("#jobs-panel .jobs-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
-    document.querySelectorAll(".jobs-tab").forEach((t) => t.classList.toggle("is-active", t === tab));
-    document.querySelectorAll(".jobs-tab-panel").forEach((p) => {
+    document.querySelectorAll("#jobs-panel .jobs-tab").forEach((t) => t.classList.toggle("is-active", t === tab));
+    document.querySelectorAll("#jobs-panel .jobs-tab-panel").forEach((p) => {
       p.classList.toggle("is-active", p.dataset.tabPanel === tab.dataset.tab);
     });
     if (tab.dataset.tab === "tracker") loadTrackerList();
@@ -1402,14 +1402,59 @@ async function loadTrackerList() {
 }
 
 function renderTrackerList(apps) {
-  trackerList.innerHTML = "";
-  if (apps.length === 0) {
-    trackerList.textContent = "no applications tracked yet";
-    return;
+  trackerList.textContent = "";
+  let draggedApp = null;
+  let updating = false;
+  async function updateStatus(app, status) {
+    if (updating || status === app.status) return;
+    updating = true;
+    try {
+      await readJson(await fetch("/api/job/applications/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: app.id, status }),
+      }));
+      await loadTrackerList();
+    } catch (err) {
+      addLine("error", `status update failed — ${err.message}`);
+    } finally {
+      updating = false;
+    }
+  }
+  const columns = new Map();
+  for (const status of STATUSES) {
+    const column = document.createElement("section");
+    column.dataset.trackerColumn = status;
+    const heading = document.createElement("h3");
+    heading.textContent = status.replaceAll("_", " ");
+    column.appendChild(heading);
+    column.addEventListener("dragover", (event) => {
+      if (draggedApp && !updating) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+      }
+    });
+    column.addEventListener("drop", async (event) => {
+      if (!draggedApp) return;
+      event.preventDefault();
+      const app = draggedApp;
+      draggedApp = null;
+      await updateStatus(app, status);
+    });
+    columns.set(status, column);
+    trackerList.appendChild(column);
   }
   for (const app of apps) {
     const item = document.createElement("div");
     item.className = "jobs-tracker-item";
+    item.draggable = true;
+    item.dataset.appId = app.id;
+    item.addEventListener("dragstart", (event) => {
+      draggedApp = app;
+      event.dataTransfer.setData("text/plain", app.id);
+      event.dataTransfer.effectAllowed = "move";
+    });
+    item.addEventListener("dragend", () => { draggedApp = null; });
 
     const top = document.createElement("div");
     top.className = "jobs-tracker-item-top";
@@ -1424,6 +1469,7 @@ function renderTrackerList(apps) {
 
     const select = document.createElement("select");
     select.className = "jobs-tracker-status";
+    select.setAttribute("aria-label", `Status for ${app.company}, ${app.role}`);
     for (const s of STATUSES) {
       const opt = document.createElement("option");
       opt.value = s;
@@ -1432,15 +1478,10 @@ function renderTrackerList(apps) {
       select.appendChild(opt);
     }
     select.addEventListener("change", async () => {
-      try {
-        await fetch("/api/job/applications/status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: app.id, status: select.value }),
-        });
-      } catch (err) {
-        addLine("error", `status update failed — ${err.message}`);
-      }
+      select.disabled = true;
+      await updateStatus(app, select.value);
+      select.value = app.status;
+      select.disabled = false;
     });
 
     top.append(left, select);
@@ -1457,7 +1498,7 @@ function renderTrackerList(apps) {
       item.appendChild(link);
     }
 
-    trackerList.appendChild(item);
+    columns.get(app.status).appendChild(item);
   }
 }
 
@@ -3218,3 +3259,459 @@ focusRestore();
 // countdown, and the same call keeps the block state in step with the other front
 // doors for free.
 setInterval(focusSync, 5 * 60 * 1000);
+
+/* ---------------- console: registry, hand-offs and run receipts ---------------- */
+const consolePanel = document.getElementById("console-panel");
+const consoleToggle = document.getElementById("console-toggle");
+const consoleTabs = [...consolePanel.querySelectorAll("[data-console-tab]")];
+let consoleToolsLoaded = false;
+let consoleThreadRequest = 0;
+
+function consoleNode(tag, text = "", className = "") {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  node.className = className;
+  return node;
+}
+function consoleButton(text, onClick) {
+  const button = consoleNode("button", text, "jobs-btn");
+  button.type = "button";
+  button.addEventListener("click", onClick);
+  return button;
+}
+function closeConsolePanel() {
+  consolePanel.classList.remove("is-open");
+  consolePanel.setAttribute("aria-hidden", "true");
+  consolePanel.inert = true;
+  consoleToggle.classList.remove("is-active");
+  consoleToggle.setAttribute("aria-expanded", "false");
+  consoleToggle.focus();
+}
+function loadConsoleTab(name) {
+  if (name === "tools" && !consoleToolsLoaded) loadConsoleTools();
+  if (name === "agents") loadConsoleAgents();
+  if (name === "runs") loadConsoleRuns();
+}
+consoleToggle.addEventListener("click", () => {
+  if (consolePanel.classList.contains("is-open")) return closeConsolePanel();
+  closeJobsPanel(); closeToolsPanel(); closeSearchPanel(); closeFocusPanel();
+  consolePanel.inert = false;
+  consolePanel.classList.add("is-open");
+  consolePanel.setAttribute("aria-hidden", "false");
+  consoleToggle.classList.add("is-active");
+  consoleToggle.setAttribute("aria-expanded", "true");
+  const active = consoleTabs.find((tab) => tab.classList.contains("is-active"));
+  active.focus();
+  loadConsoleTab(active.dataset.consoleTab);
+});
+document.getElementById("console-close").addEventListener("click", closeConsolePanel);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && consolePanel.classList.contains("is-open")) closeConsolePanel();
+});
+consoleTabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => {
+    consoleTabs.forEach((other) => {
+      const active = other === tab;
+      other.classList.toggle("is-active", active);
+      other.setAttribute("aria-selected", String(active));
+      other.tabIndex = active ? 0 : -1;
+    });
+    consolePanel.querySelectorAll("[data-console-tab-panel]").forEach((panel) => {
+      panel.classList.toggle("is-active", panel.dataset.consoleTabPanel === tab.dataset.consoleTab);
+    });
+    loadConsoleTab(tab.dataset.consoleTab);
+  });
+  tab.addEventListener("keydown", (event) => {
+    const offsets = { ArrowRight: 1, ArrowLeft: -1, Home: -index, End: consoleTabs.length - 1 - index };
+    if (!(event.key in offsets)) return;
+    event.preventDefault();
+    const next = consoleTabs[(index + offsets[event.key] + consoleTabs.length) % consoleTabs.length];
+    next.click(); next.focus();
+  });
+});
+
+function consoleOpenPanel(destination) {
+  const [panel, tab] = destination.split("/");
+  const openers = { jobs: openJobsPanel, tools: openToolsPanel, search: openSearchPanel, focus: openFocusPanel };
+  if (!openers[panel]) return;
+  closeConsolePanel();
+  openers[panel]();
+  const attribute = panel === "jobs" ? "data-tab" : `data-${panel}-tab`;
+  const target = document.querySelector(`#${panel}-panel [${attribute}="${tab}"]`);
+  if (target) { target.click(); target.focus(); }
+  else document.getElementById(`${panel}-close`).focus();
+}
+
+function consoleRunForm(tool) {
+  const form = consoleNode("form", "", "console-run-form");
+  form.hidden = true;
+  const fields = [];
+  for (const [name, schema] of Object.entries(tool.input_schema.properties || {})) {
+    const required = (tool.input_schema.required || []).includes(name);
+    const label = consoleNode("label", "", "jobs-field");
+    label.append(consoleNode("span", `${name}${required ? " *" : " (optional)"}`));
+    let field;
+    if (schema.enum) {
+      field = document.createElement("select");
+      field.append(new Option("Choose…", ""));
+      schema.enum.forEach((value) => field.append(new Option(String(value), String(value))));
+    } else if (schema.type === "boolean") {
+      field = document.createElement("input");
+      field.type = "checkbox";
+    } else if (schema.type === "integer" || schema.type === "number") {
+      field = document.createElement("input");
+      field.type = "number";
+      field.step = schema.type === "integer" ? "1" : "any";
+      if (schema.minimum !== undefined) field.min = schema.minimum;
+      if (schema.maximum !== undefined) field.max = schema.maximum;
+    } else if (/_text$|_notes$/.test(name) || /text/i.test(schema.description || "")) {
+      field = document.createElement("textarea");
+      field.rows = 3;
+    } else {
+      field = document.createElement("input");
+      field.type = "text";
+    }
+    field.name = name;
+    // A required boolean may legitimately be false; HTML required would force true.
+    field.required = required && field.type !== "checkbox";
+    if (schema.default !== undefined) {
+      if (field.type === "checkbox") field.checked = schema.default;
+      else field.value = schema.default;
+    }
+    label.append(field);
+    if (schema.description) label.append(consoleNode("small", schema.description));
+    form.append(label);
+    fields.push({ name, schema, field });
+  }
+  if (tool.needs_confirmation) form.append(consoleNode("p", "This tool needs your confirmation before it runs.", "jobs-hint"));
+  const submit = consoleNode("button", "RUN", "jobs-btn");
+  submit.type = "submit";
+  const result = consoleNode("pre");
+  result.setAttribute("aria-live", "polite");
+  form.append(submit, result);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    if (tool.needs_confirmation && !confirm(`Run ${tool.name}? This may use model tokens, contact an external service or open a browser.`)) return;
+    const input = {};
+    for (const { name, schema, field } of fields) {
+      if (field.type === "checkbox") input[name] = field.checked;
+      else if (field.value !== "") input[name] = ["integer", "number"].includes(schema.type) ? Number(field.value) : field.value;
+    }
+    submit.disabled = true;
+    result.textContent = "Running…";
+    try {
+      const receipt = await readJson(await fetch(`/api/tools/${encodeURIComponent(tool.name)}/run`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input, confirmed: tool.needs_confirmation }),
+      }));
+      result.textContent = JSON.stringify(receipt, null, 2);
+    } catch (error) { result.textContent = error.message; }
+    finally { submit.disabled = false; }
+  });
+  return form;
+}
+
+async function loadConsoleTools() {
+  const list = document.getElementById("console-tool-list");
+  list.textContent = "Loading tools…";
+  try {
+    const { tools } = await readJson(await fetch("/api/tools"));
+    list.replaceChildren();
+    let group;
+    for (const tool of tools.sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name))) {
+      if (group !== tool.group) {
+        group = tool.group;
+        list.append(consoleNode("h3", group));
+      }
+      const row = consoleNode("article", "", "console-card");
+      row.dataset.tool = tool.name;
+      row.append(consoleNode("h4", tool.name), consoleNode("p", tool.description));
+      const actions = consoleNode("div", "", "console-actions");
+      if (tool.panel) actions.append(consoleButton("OPEN", () => consoleOpenPanel(tool.panel)));
+      const form = consoleRunForm(tool);
+      form.id = `console-form-${tool.name}`;
+      const run = consoleButton("RUN", () => {
+        form.hidden = !form.hidden;
+        run.setAttribute("aria-expanded", String(!form.hidden));
+        if (!form.hidden) form.querySelector("input, textarea, select, button").focus();
+      });
+      run.setAttribute("aria-expanded", "false");
+      run.setAttribute("aria-controls", form.id);
+      actions.append(run);
+      row.append(actions, form);
+      list.append(row);
+    }
+    consoleToolsLoaded = true;
+  } catch (error) {
+    list.textContent = error.message;
+    list.append(consoleButton("RETRY", loadConsoleTools));
+  }
+}
+
+async function loadConsoleAgents() {
+  const list = document.getElementById("console-thread-list");
+  const repo = document.getElementById("console-repo");
+  const text = document.getElementById("console-thread-text");
+  const refresh = document.getElementById("console-agents-refresh");
+  if (refresh.disabled) return;
+  refresh.disabled = true;
+  list.textContent = "Loading threads…";
+  repo.textContent = "";
+  text.textContent = "";
+  ++consoleThreadRequest;
+  try {
+    const data = await readJson(await fetch("/api/agents"));
+    repo.textContent = `${data.repo.branch} · ${data.repo.head} · ${data.repo.tree}\n${data.repo.subject}`;
+    list.replaceChildren();
+    if (!data.threads.length) list.textContent = "No session threads yet.";
+    for (const thread of data.threads) {
+      const card = consoleButton("", async () => {
+        const request = ++consoleThreadRequest;
+        text.textContent = "Loading thread…";
+        try {
+          const body = await readJson(await fetch(`/api/agents/${encodeURIComponent(thread.slug)}`));
+          if (request === consoleThreadRequest) text.textContent = body.text;
+        } catch (error) { if (request === consoleThreadRequest) text.textContent = error.message; }
+      });
+      card.className = "jobs-btn console-card console-thread";
+      card.append(consoleNode("strong", thread.slug), consoleNode("span", `${thread.agent || "Unknown agent"} · ${thread.stamp || thread.modified}`));
+      const badge = consoleNode("span", `Open for: ${thread.open_for || "not stated"}`, "console-badge");
+      badge.dataset.openFor = thread.open_for || "nothing";
+      card.append(badge, consoleNode("span", `Next: ${thread.next || "not stated"}`), consoleNode("span", `Suggested: ${thread.suggested || "not stated"}`));
+      list.append(card);
+    }
+  } catch (error) { list.textContent = error.message; }
+  finally { refresh.disabled = false; }
+}
+
+async function loadConsoleRuns() {
+  const runs = document.getElementById("console-run-list");
+  const jobs = document.getElementById("console-job-list");
+  const refresh = document.getElementById("console-runs-refresh");
+  if (refresh.disabled) return;
+  refresh.disabled = true;
+  runs.textContent = jobs.textContent = "Loading…";
+  await Promise.all([
+    (async () => {
+      try {
+        const data = await readJson(await fetch("/api/tools/runs"));
+        runs.replaceChildren();
+        if (!data.runs.length) runs.textContent = "No tool runs yet.";
+        for (const run of data.runs) {
+          const row = consoleNode("article", "", "console-card");
+          const status = run.ok ? "done" : "failed";
+          const heading = consoleNode("strong", `${run.tool} · `);
+          heading.append(consoleNode("span", status, `status-badge status-${status}`));
+          row.append(heading, consoleNode("p", run.started_at), consoleNode("pre", run.error || run.summary));
+          runs.append(row);
+        }
+      } catch (error) { runs.textContent = error.message; }
+    })(),
+    (async () => {
+      try {
+        const data = await readJson(await fetch("/api/jobs"));
+        jobs.replaceChildren();
+        if (!data.jobs.length) jobs.textContent = "No background jobs yet.";
+        for (const job of data.jobs) {
+          const row = consoleNode("article", "", "console-card");
+          const heading = consoleNode("strong", `#${job.id} ${job.kind} · `);
+          heading.append(consoleNode("span", job.status, `status-badge status-${job.status}`));
+          row.append(heading, consoleNode("p", `Created: ${job.created_at}\nFinished: ${job.finished_at || "pending"}`));
+          if (job.error) row.append(consoleNode("pre", job.error));
+          jobs.append(row);
+        }
+      } catch (error) { jobs.textContent = error.message; }
+    })(),
+  ]);
+  refresh.disabled = false;
+}
+document.getElementById("console-agents-refresh").addEventListener("click", loadConsoleAgents);
+document.getElementById("console-runs-refresh").addEventListener("click", loadConsoleRuns);
+
+/* ---------------- feature blueprint and memory map ---------------- */
+const mapPanel = document.getElementById("map-panel");
+const mapToggle = document.getElementById("map-toggle");
+const mapTabs = [...mapPanel.querySelectorAll("[data-map-tab]")];
+let mapRequest = 0;
+const memoryMap = document.getElementById("memory-map");
+const mapSummary = document.getElementById("memory-map-summary");
+const mapDetail = document.getElementById("memory-map-detail");
+
+function closeMapPanel() {
+  mapPanel.classList.remove("is-open");
+  mapPanel.setAttribute("aria-hidden", "true");
+  mapPanel.inert = true;
+  mapToggle.classList.remove("is-active");
+  mapToggle.setAttribute("aria-expanded", "false");
+}
+function selectMapTab(tab) {
+  mapTabs.forEach((other) => {
+    const active = other === tab;
+    other.classList.toggle("is-active", active);
+    other.setAttribute("aria-selected", String(active));
+    other.tabIndex = active ? 0 : -1;
+  });
+  mapPanel.querySelectorAll("[data-map-tab-panel]").forEach((panel) => {
+    panel.classList.toggle("is-active", panel.dataset.mapTabPanel === tab.dataset.mapTab);
+  });
+  if (tab.dataset.mapTab === "features") loadFeatureMap();
+  if (tab.dataset.mapTab === "memory") loadMemoryMap();
+}
+mapToggle.addEventListener("click", () => {
+  if (mapPanel.classList.contains("is-open")) return closeMapPanel();
+  closeJobsPanel(); closeToolsPanel(); closeSearchPanel(); closeFocusPanel(); closeConsolePanel();
+  mapPanel.inert = false;
+  mapPanel.classList.add("is-open");
+  mapPanel.setAttribute("aria-hidden", "false");
+  mapToggle.classList.add("is-active");
+  mapToggle.setAttribute("aria-expanded", "true");
+  const active = mapTabs.find((tab) => tab.classList.contains("is-active"));
+  active.focus();
+  selectMapTab(active);
+});
+document.getElementById("map-close").addEventListener("click", () => { closeMapPanel(); mapToggle.focus(); });
+["jobs", "tools", "search", "focus", "console"].forEach((name) => {
+  document.getElementById(`${name}-toggle`).addEventListener("click", closeMapPanel);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && mapPanel.classList.contains("is-open")) {
+    closeMapPanel(); mapToggle.focus();
+  }
+});
+mapTabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => selectMapTab(tab));
+  tab.addEventListener("keydown", (event) => {
+    const offsets = { ArrowRight: 1, ArrowLeft: -1, Home: -index, End: mapTabs.length - 1 - index };
+    if (!(event.key in offsets)) return;
+    event.preventDefault();
+    const next = mapTabs[(index + offsets[event.key] + mapTabs.length) % mapTabs.length];
+    next.click(); next.focus();
+  });
+});
+
+function mapSvg(tag, attrs, text = "") {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  node.textContent = text;
+  return node;
+}
+
+function showFeatureSlices(feature) {
+  const details = document.getElementById("map-slices");
+  const heading = document.createElement("h3");
+  heading.textContent = `${feature.name} · ${feature.percent}% · ${feature.status}`;
+  const list = document.createElement("ul");
+  for (const slice of feature.slices) {
+    const item = document.createElement("li");
+    item.textContent = `${slice.id}: ${slice.name} · ${slice.status}`;
+    list.append(item);
+  }
+  details.replaceChildren(heading, list);
+  details.focus();
+}
+
+async function loadFeatureMap() {
+  const request = ++mapRequest;
+  const svg = document.getElementById("feature-map");
+  const summary = document.getElementById("map-summary");
+  svg.replaceChildren();
+  document.getElementById("map-slices").replaceChildren();
+  summary.textContent = "Loading features…";
+  try {
+    const data = await readJson(await fetch("/api/features"));
+    if (request !== mapRequest) return;
+    summary.textContent = `${data.overall}% overall · Select a feature for its slices.`;
+    svg.setAttribute("viewBox", `0 0 340 ${Math.max(1, data.features.length) * 88 + 8}`);
+    const positions = new Map(data.features.map((feature, index) => [feature.id, 8 + index * 88]));
+    // Draw dependency wires first so the feature cards remain in front.
+    for (const feature of data.features) {
+      for (const dependency of feature.depends_on) {
+        const from = positions.get(dependency) + 34;
+        const to = positions.get(feature.id) + 34;
+        const wire = mapSvg("path", { d: `M 40 ${from} H 16 V ${to} H 40`, class: "map-wire" });
+        wire.append(mapSvg("title", {}, `${feature.name} depends on ${dependency}`));
+        svg.append(wire);
+      }
+    }
+    for (const feature of data.features) {
+      const node = mapSvg("g", {
+        transform: `translate(40 ${positions.get(feature.id)})`,
+        "data-feature": feature.id, "data-percent": feature.percent,
+        role: "button", tabindex: "0", "aria-controls": "map-slices",
+        "aria-label": `${feature.name}, ${feature.percent}%, ${feature.status}. Show slices`,
+      });
+      node.append(
+        mapSvg("rect", { width: 292, height: 68, rx: 4, class: "map-card" }),
+        mapSvg("text", { x: 12, y: 23 }, feature.name),
+        mapSvg("text", { x: 12, y: 43, class: "map-status" }, `${feature.percent}% · ${feature.status}`),
+        mapSvg("rect", { x: 12, y: 53, width: 268, height: 5, class: "map-track" }),
+        mapSvg("rect", { x: 12, y: 53, width: 268 * feature.percent / 100, height: 5, class: "map-progress" }),
+      );
+      node.addEventListener("click", () => showFeatureSlices(feature));
+      node.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        showFeatureSlices(feature);
+      });
+      svg.append(node);
+    }
+  } catch (error) {
+    if (request !== mapRequest) return;
+    summary.textContent = `${error.message} Close and reopen MAP to retry.`;
+  }
+}
+
+function memoryMapNode(tag, attributes, text = "") {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  Object.entries(attributes).forEach(([name, value]) => node.setAttribute(name, value));
+  node.textContent = text;
+  return node;
+}
+function drawMemoryMap(data) {
+  memoryMap.replaceChildren();
+  const rooms = new Map(data.rooms.map((room, i) => [room.name, { ...room, x: 90, y: 60 + i * 120 }]));
+  const threads = new Map(data.thread_nodes.map((thread, i) => [thread.name, { ...thread, x: 280, y: 60 + i * 60 }]));
+  memoryMap.setAttribute("viewBox", `0 0 360 ${Math.max(180, rooms.size * 120, threads.size * 60 + 60)}`);
+  data.links.forEach((link) => {
+    const room = rooms.get(link.room), thread = threads.get(link.thread);
+    if (room && thread) memoryMap.append(memoryMapNode("line", {
+      x1: room.x, y1: room.y, x2: thread.x, y2: thread.y, class: "memory-map-link",
+    }));
+  });
+  function drawNode(item, radius, label, age, detail) {
+    const node = memoryMapNode("g", { role: "button", tabindex: 0, "aria-label": label, "data-age": age });
+    node.append(memoryMapNode("circle", { cx: item.x, cy: item.y, r: radius }));
+    node.append(memoryMapNode("text", { x: item.x, y: item.y + radius + 16, "text-anchor": "middle" }, label));
+    node.addEventListener("click", () => { mapDetail.textContent = detail; });
+    node.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); mapDetail.textContent = detail; }
+    });
+    memoryMap.append(node);
+  }
+  const largest = Math.max(1, ...data.rooms.map((room) => room.count));
+  rooms.forEach((room) => drawNode(room, 12 + 28 * Math.sqrt(room.count / largest), room.name,
+    room.age_days === null ? "unknown" : room.age_days >= 30 ? "stale" : "fresh",
+    `${room.count} notes · Last updated: ${room.last_date ?? "unknown"} · Age: ${room.age_days ?? "unknown"} days · ${data.links.filter((link) => link.room === room.name).length} linked threads`));
+  let index = 0;
+  threads.forEach((thread) => drawNode(thread, 7, `Thread ${++index}`, "thread",
+    `Last updated: ${thread.last_date} · ${data.links.filter((link) => link.thread === thread.name).length} linked rooms`));
+}
+let memoryMapRequest = 0;
+async function loadMemoryMap() {
+  const request = ++memoryMapRequest;
+  mapSummary.textContent = "Loading memory map…";
+  mapDetail.textContent = "";
+  memoryMap.replaceChildren();
+  try {
+    const data = await readJson(await fetch("/api/memory/map"));
+    if (request !== memoryMapRequest) return;
+    drawMemoryMap(data);
+    const assignments = Object.entries(data.assignments).map(([status, count]) => `${status}: ${count}`).join(", ");
+    mapSummary.textContent = `${data.rooms.length} rooms · ${data.threads.count} threads · Exchanges: ${data.exchanges ?? "not opened"} · Assignments: ${assignments || "0"}`;
+    mapDetail.textContent = data.rooms.length || data.threads.count ? "Select a node for counts and dates." : "No memory notes or session threads yet.";
+  } catch (error) {
+    if (request === memoryMapRequest) mapSummary.textContent = `Could not load memory map: ${error.message}`;
+  }
+}
+document.getElementById("memory-map-refresh").addEventListener("click", loadMemoryMap);
