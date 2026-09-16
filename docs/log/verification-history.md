@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: second dispatch from the page after the four fixes
+
+With D02, D03, D05 and D06 loaded, assignment D04 went through the page's API on the integration server: Plan (claude-fable-5-1, 16 s) returned numbered steps with a verification line each and no tool markup; Build with `confirmed: true` created its worktree and ran `codex exec` in 48 s, changed only the allowed file, and the card stored Codex's final message rather than the stream; Review (claude-fable-5-1, 24 s) returned a verdict that named the evidence it lacked. The managed Codex state directory, populated by the first real run, passed the preflight. Proof: `data/verifications/w2/second-dispatch-after-fixes.json`; the D01 and D04 worktrees remain under the loop data directory for inspection.
+
 ## 2026-09-16: D06 repeated dispatch preflight
 
 Two new hermetic regressions failed before the fix and passed afterward: populated Codex state with continued refusal of custom instructions/configuration, and preflight failures that remove the worktree/branch, clear the binding and allow a successful retry. All 12 dispatch/process tests passed. The actual managed state passed preflight without starting a provider; a previously stranded assignment was recovered after preserving its setup and confirming no source changes. Evidence: `/private/tmp/kyra-D06-state-proof.log`, `/private/tmp/kyra-D06-recovery.log`, `/private/tmp/kyra-D06-pytest.log`; private details: `data/private_docs/assignment-D06-result.md`.
