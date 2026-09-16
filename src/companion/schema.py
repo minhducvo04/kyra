@@ -236,3 +236,25 @@ loop_reconciliations = Table(
     Column("created_at", String(64), nullable=False),
     CheckConstraint("outcome IN ('nothing_happened','provider_processed')", name="loop_declared_outcome"),
 )
+
+
+loop_assignments = Table(
+    "loop_assignments", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("owner", String(160), nullable=False),
+    Column("code", String(160), nullable=False),
+    Column("title", Text, nullable=False),
+    Column("goal", Text, nullable=False),
+    Column("allowed_files", Text, nullable=False),
+    Column("acceptance", Text, nullable=False),
+    Column("tier", String(16), nullable=False, server_default="work"),
+    Column("status", String(16), nullable=False, server_default="assigned"),
+    Column("builder_run_id", Integer),
+    Column("result_sha256", String(64)),
+    Column("commit_hash", String(40)),
+    Column("created_at", String(64), nullable=False),
+    Column("updated_at", String(64), nullable=False),
+    UniqueConstraint("owner", "code", name="loop_assignment_owner_code"),
+    CheckConstraint("status IN ('assigned','built','reviewed','committed')", name="loop_assignment_status"),
+    CheckConstraint("tier IN ('casual','work','life_changing')", name="loop_assignment_tier"),
+)

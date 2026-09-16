@@ -10,6 +10,20 @@
 <div id="continuation" hidden><p id="continuation-label"></p><button id="fresh-request" type="button">Start a fresh conversation instead</button></div>
 <form id="request"><div class="row"><label>Topic<input id="topic" required maxlength="160" placeholder="What are you working on?"></label><label>Start with<select id="choice"><option value="codex-default">Codex · Astra · High</option><option value="claude-fable-high">Claude · Fable 5.1 · High</option></select></label><label>Tier<select id="tier"><option value="casual">Casual</option><option value="work" selected>Work</option><option value="life_changing">Life changing</option></select></label></div><label>Your request<textarea id="prompt" required maxlength="65536" rows="5" placeholder="Describe the task and what a good result needs to include."></textarea></label><div class="form-footer"><small>Uses your signed-in plans. Answers and review comments are saved privately.</small><button id="run" type="submit">Run model</button></div></form>
 <p id="notice" role="status" aria-live="polite"></p>
+<section id="assignments" aria-labelledby="assignments-heading">
+<div class="history-heading"><h2 id="assignments-heading">Assignments</h2><button id="refresh-assignments" type="button">Refresh</button></div>
+<p class="meta">Record the scope and progress of a task. Advancing records your declaration and does not run work or approve a review.</p>
+<details><summary>Add an assignment</summary>
+<form id="assignment-form">
+<div class="row"><label>Code<input id="assignment-code" required maxlength="160"></label><label>Title<input id="assignment-title" required></label></div>
+<label>Goal<textarea id="assignment-goal" required rows="2"></textarea></label>
+<label>Allowed files (one per line)<textarea id="assignment-files" rows="2"></textarea></label>
+<label>Acceptance checks (one per line)<textarea id="assignment-acceptance" rows="2"></textarea></label>
+<label>Tier<select id="assignment-tier"><option value="casual">Casual</option><option value="work" selected>Work</option><option value="life_changing">Life changing</option></select></label>
+<div class="form-footer"><button id="save-assignment" type="submit">Add assignment</button></div>
+</form></details>
+<p id="assignments-notice" role="status"></p><div id="assignment-rows"></div>
+</section>
 <section id="usage" aria-labelledby="usage-heading"><div class="history-heading"><h2 id="usage-heading">USAGE</h2><button id="refresh-usage" type="button">Refresh</button></div><p class="meta">All saved topics. Token totals cover reported usage only; runs without usage are unknown. Provider-reported cost is not a subscription charge.</p><p id="usage-notice" role="status"></p><div id="usage-rows"></div></section>
 <div class="history-heading"><h2>Contributions</h2><span id="count"></span></div><div id="runs"><p class="empty">Choose a topic or start a new one.</p></div>
 </section>

@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 import tempfile
 import uuid
 from abc import ABC, abstractmethod
@@ -14,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 from companion.db import engine_for_store
 from companion.paths import DATA_DIR
+from companion.schema import loop_assignments as ASSIGNMENTS
 from companion.schema import loop_reconciliations as RECONCILIATIONS
 from companion.schema import loop_review_decisions as OWNER_DECISIONS
 from companion.schema import loop_reviews as REVIEWS
@@ -41,6 +43,7 @@ POLICY_VERSION = "2026-09-15.2"
 APPROVED_DEVELOPERS = frozenset({"Anthropic", "OpenAI"})
 PERSONAL_OWNER = "personal"
 STALE_DISPATCH_GRACE_SECONDS = 30
+ASSIGNMENT_STATUSES = ("assigned", "built", "reviewed", "committed")
 TIERS = ("casual", "work", "life_changing")
 DECISIONS = ("approve", "reject")
 RECONCILIATION_OUTCOMES = ("nothing_happened", "provider_processed")
@@ -106,6 +109,24 @@ class ExecutionRecord:
     continued_from_run_id: int | None = None
     requested_session_id: str | None = None
     review_context: dict | None = None
+
+
+@dataclass(frozen=True)
+class Assignment:
+    id: int
+    owner: str
+    code: str
+    title: str
+    goal: str
+    allowed_files: list[str]
+    acceptance: list[str]
+    tier: str
+    status: str
+    builder_run_id: int | None
+    result_sha256: str | None
+    commit_hash: str | None
+    created_at: str
+    updated_at: str
 
 
 @dataclass(frozen=True)
@@ -188,6 +209,19 @@ def normalize_usage(provider: str, usage: dict | None) -> dict | None:
 
 
 class LoopStore(ABC):
+    @abstractmethod
+    def create_assignment(self, *, owner, code, title, goal, allowed_files, acceptance, tier="work") -> Assignment: ...
+
+    @abstractmethod
+    def list_assignments(self, *, owner) -> list[Assignment]: ...
+
+    @abstractmethod
+    def get_assignment(self, assignment_id, *, owner) -> Assignment | None: ...
+
+    @abstractmethod
+    def advance_assignment(self, assignment_id, *, owner, status, builder_run_id=None,
+                           result_sha256=None, commit_hash=None) -> Assignment: ...
+
     def request_is_current(self, run, *, owner):
         if not run or run.owner != owner:
             return False
@@ -259,6 +293,71 @@ class DbLoopStore(LoopStore):
         self.artifacts_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         if self.engine.dialect.name == "sqlite" and self.engine.url.database not in (None, ":memory:"):
             Path(self.engine.url.database).chmod(0o600)
+
+    @staticmethod
+    def _assignment(row):
+        if row is None:
+            return None
+        data = dict(row._mapping)
+        for key in ("allowed_files", "acceptance"):
+            data[key] = json.loads(data[key])
+        return Assignment(**data)
+
+    def create_assignment(self, *, owner, code, title, goal, allowed_files, acceptance, tier="work"):
+        owner = _label(owner, "owner")
+        if (any(not isinstance(v, str) or not v.strip() for v in (code, title, goal))
+                or len(code) > 160 or tier not in TIERS
+                or any(not isinstance(items, list) or any(not isinstance(v, str) for v in items)
+                       for items in (allowed_files, acceptance))):
+            raise PolicyRefused("invalid_assignment")
+        now = _now()
+        values = dict(owner=owner, code=code.strip(), title=title.strip(), goal=goal.strip(),
+                      allowed_files=json.dumps(allowed_files), acceptance=json.dumps(acceptance),
+                      tier=tier, status="assigned", created_at=now, updated_at=now)
+        try:
+            with self.engine.begin() as conn:
+                result = conn.execute(insert(ASSIGNMENTS).values(**values))
+                return self._assignment(conn.execute(select(ASSIGNMENTS).where(
+                    ASSIGNMENTS.c.id == result.inserted_primary_key[0])).first())
+        except IntegrityError:
+            raise PolicyRefused("invalid_assignment") from None
+
+    def list_assignments(self, *, owner):
+        with self.engine.connect() as conn:
+            return [self._assignment(row) for row in conn.execute(select(ASSIGNMENTS).where(
+                ASSIGNMENTS.c.owner == owner).order_by(ASSIGNMENTS.c.id.desc()))]
+
+    def get_assignment(self, assignment_id, *, owner):
+        with self.engine.connect() as conn:
+            return self._assignment(conn.execute(select(ASSIGNMENTS).where(
+                ASSIGNMENTS.c.id == assignment_id, ASSIGNMENTS.c.owner == owner)).first())
+
+    def advance_assignment(self, assignment_id, *, owner, status, builder_run_id=None,
+                           result_sha256=None, commit_hash=None):
+        with self.engine.begin() as conn:
+            where = (ASSIGNMENTS.c.id == assignment_id, ASSIGNMENTS.c.owner == owner)
+            assignment = self._assignment(conn.execute(select(ASSIGNMENTS).where(*where)).first())
+            if assignment is None:
+                raise LookupError("assignment_not_found")
+            next_status = dict(zip(ASSIGNMENT_STATUSES, ASSIGNMENT_STATUSES[1:], strict=False)).get(assignment.status)
+            if status != next_status or next_status is None:
+                raise PolicyRefused("invalid_transition")
+            values = dict(status=status, updated_at=_now())
+            if status == "built":
+                if not conn.execute(select(RUNS.c.id).where(RUNS.c.id == builder_run_id,
+                                                            RUNS.c.owner == owner)).first():
+                    raise PolicyRefused("run_not_owned")
+                values.update(builder_run_id=builder_run_id, result_sha256=result_sha256)
+            elif status == "committed":
+                if not isinstance(commit_hash, str) or not re.fullmatch(r"[0-9a-fA-F]{7,40}", commit_hash):
+                    raise PolicyRefused("invalid_transition")
+                values["commit_hash"] = commit_hash
+            # A concurrent request must not overwrite a transition already recorded.
+            changed = conn.execute(update(ASSIGNMENTS).where(*where,
+                ASSIGNMENTS.c.status == assignment.status).values(**values)).rowcount
+            if changed != 1:
+                raise PolicyRefused("invalid_transition")
+            return self._assignment(conn.execute(select(ASSIGNMENTS).where(*where)).first())
 
     @staticmethod
     def _record(row):

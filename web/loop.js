@@ -218,3 +218,75 @@ $("reconcile-form").onsubmit = async event => {
   } catch (error) { $("reconcile-error").textContent = error.message; }
   finally { $("save-reconcile").disabled = false; }
 };
+
+const assignmentNext = {assigned:"built", built:"reviewed", reviewed:"committed"};
+async function refreshAssignments() {
+  $("refresh-assignments").disabled = true;
+  try {
+    const {assignments} = await readJson("/api/loop/assignments");
+    const nodes = assignments.map(assignment => {
+      const card = el("article", undefined, "card");
+      card.append(el("strong", `${assignment.code}: ${assignment.title}`),
+        el("p", `${assignment.status} · ${tierLabel[assignment.tier]}`, "meta"), el("p", assignment.goal));
+      for (const [heading, items] of [["Allowed files", assignment.allowed_files], ["Acceptance checks", assignment.acceptance]]) {
+        const list = el("ul"); items.forEach(item => list.append(el("li", item)));
+        card.append(el("h3", heading), list);
+      }
+      card.append(el("pre", [
+        `Builder run: ${assignment.builder_run_id ?? "Not recorded"}`,
+        `Result SHA-256: ${assignment.result_sha256 || "Not recorded"}`,
+        `Commit: ${assignment.commit_hash || "Not recorded"}`,
+        `Created: ${assignment.created_at} · Updated: ${assignment.updated_at}`
+      ].join("\n"), "receipt"));
+      const next = assignmentNext[assignment.status];
+      if (next) {
+        const form = el("form");
+        const fields = {};
+        const addField = (key, label, type, pattern) => {
+          const wrapper = el("label", label), input = el("input");
+          input.type = type; input.required = true;
+          if (pattern) input.pattern = pattern;
+          if (type === "number") { input.min = "1"; input.step = "1"; }
+          wrapper.append(input); form.append(wrapper); fields[key] = input;
+        };
+        if (next === "built") {
+          addField("builder_run_id", "Builder run id", "number");
+          addField("result_sha256", "Result SHA-256", "text", "[0-9a-fA-F]{64}");
+        }
+        if (next === "committed") addField("commit_hash", "Commit hash", "text", "[0-9a-fA-F]{7,40}");
+        const button = el("button", `Advance to ${next}`); button.type = "submit";
+        form.append(button);
+        form.onsubmit = async event => {
+          event.preventDefault(); button.disabled = true;
+          try {
+            const body = {status:next};
+            for (const [key, input] of Object.entries(fields)) body[key] = key === "builder_run_id" ? Number(input.value) : input.value.trim();
+            await readJson(`/api/loop/assignments/${assignment.id}/advance`, {method:"POST",
+              headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+            await refreshAssignments();
+          } catch (error) { $("assignments-notice").textContent = error.message; }
+          finally { button.disabled = false; }
+        };
+        card.append(form);
+      }
+      return card;
+    });
+    $("assignment-rows").replaceChildren(...(nodes.length ? nodes : [el("p", "No assignments yet.", "empty")]));
+    $("assignments-notice").textContent = "";
+  } catch (error) { $("assignments-notice").textContent = `Assignments could not refresh: ${error.message}. Displayed records may be outdated.`; }
+  finally { $("refresh-assignments").disabled = false; }
+}
+$("refresh-assignments").onclick = refreshAssignments;
+$("assignment-form").onsubmit = async event => {
+  event.preventDefault(); $("save-assignment").disabled = true;
+  const lines = id => $(id).value.split("\n").map(line => line.trim()).filter(Boolean);
+  try {
+    await readJson("/api/loop/assignments", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({
+      code:$("assignment-code").value.trim(), title:$("assignment-title").value.trim(), goal:$("assignment-goal").value.trim(),
+      allowed_files:lines("assignment-files"), acceptance:lines("assignment-acceptance"), tier:$("assignment-tier").value
+    })});
+    $("assignment-form").reset(); await refreshAssignments();
+  } catch (error) { $("assignments-notice").textContent = error.message; }
+  finally { $("save-assignment").disabled = false; }
+};
+refreshAssignments();

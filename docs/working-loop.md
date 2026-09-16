@@ -26,6 +26,12 @@ incomplete, has no review, or has only stale reviews. A current review of any ve
 ready for your decision; this does not approve it or change the existing independent-review rule. Migration
 `c916d40f6b75` adds the tier and labels existing receipts as Work.
 
+The **Assignments** section records a task's goal, allowed files, acceptance checks and tier. Add a record,
+then explicitly advance it through assigned, built, reviewed and committed, one step at a time. Built links
+an owned run and can record a result hash; committed requires a 7 to 40 character hexadecimal commit hash.
+These are declarations, not verified build or review outcomes, and never dispatch work or change automatically.
+Migration `d916e50a7c86` adds the assignment table while preserving existing receipts.
+
 ## Continuing an answer
 
 Choose **Continue this conversation** on an eligible completed answer. The form names that contribution and keeps

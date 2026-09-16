@@ -2094,6 +2094,54 @@ def loop_page() -> HTMLResponse:
     return HTMLResponse(html)
 
 
+class AssignmentIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    code: str
+    title: str
+    goal: str
+    allowed_files: list[str]
+    acceptance: list[str]
+    tier: str = "work"
+
+
+class AssignmentAdvanceIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    status: str
+    builder_run_id: int | None = None
+    result_sha256: str | None = None
+    commit_hash: str | None = None
+
+
+@app.get("/api/loop/assignments")
+def loop_assignments() -> dict:
+    controller = _loop_controller()
+    return {"assignments": [asdict(a) for a in controller.store.list_assignments(owner=controller.owner)]}
+
+
+@app.post("/api/loop/assignments")
+def loop_create_assignment(body: AssignmentIn) -> dict:
+    from companion.working_loop import PolicyRefused
+    controller = _loop_controller()
+    try:
+        assignment = controller.store.create_assignment(owner=controller.owner, **body.model_dump())
+    except PolicyRefused as exc:
+        raise ApiError(400, "policy_refused", str(exc)) from None
+    return {"assignment": asdict(assignment)}
+
+
+@app.post("/api/loop/assignments/{assignment_id}/advance")
+def loop_advance_assignment(assignment_id: int, body: AssignmentAdvanceIn) -> dict:
+    from companion.working_loop import PolicyRefused
+    controller = _loop_controller()
+    try:
+        assignment = controller.store.advance_assignment(assignment_id, owner=controller.owner, **body.model_dump())
+    except PolicyRefused as exc:
+        raise ApiError(400, "policy_refused", str(exc)) from None
+    except LookupError:
+        raise ApiError(404, "not_found", "Assignment not found") from None
+    return {"assignment": asdict(assignment)}
+
+
 @app.get("/api/loop/usage")
 def loop_usage() -> dict:
     controller = _loop_controller()
