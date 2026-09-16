@@ -164,6 +164,7 @@ initiative_snapshot = Table(
 # Content-free execution receipts. Prompts and replies stay in private artifact files.
 loop_runs = Table(
     "loop_runs", metadata,
+    Column("tier", String(16), nullable=False, server_default="work"),
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("owner", String(160), nullable=False),
     Column("project", String(160), nullable=False),

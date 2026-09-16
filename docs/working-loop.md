@@ -20,6 +20,12 @@ finds installed binaries on PATH or in their macOS vendor application locations.
 The topic list groups the latest 100 saved contributions. Older receipts remain in the database. An ordinary request
 starts a fresh conversation. Choosing a topic groups contributions; it does not silently send that topic's history.
 
+Choose a tier for each new request: **Casual**, **Work** (the default), or **Life changing**. Reviews and
+follow-ups inherit that tier. Each card shows whether the answer is ready for your decision, or whether it is
+incomplete, has no review, or has only stale reviews. A current review of any verdict makes a completed answer
+ready for your decision; this does not approve it or change the existing independent-review rule. Migration
+`c916d40f6b75` adds the tier and labels existing receipts as Work.
+
 ## Continuing an answer
 
 Choose **Continue this conversation** on an eligible completed answer. The form names that contribution and keeps

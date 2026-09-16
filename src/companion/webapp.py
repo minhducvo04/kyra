@@ -2078,6 +2078,7 @@ def _loop_controller():
 
 
 class LoopRunIn(BaseModel):
+    tier: str = "work"
     model_config = {"extra": "forbid"}
     choice: str
     prompt: str = Field(min_length=1, max_length=65536)
@@ -2113,6 +2114,7 @@ def loop_run(run_id: int) -> dict:
         raise ApiError(404, "not_found", "Run not found")
     return {"run": asdict(record), "artifact": controller.store.read_artifact(run_id, owner=controller.owner),
             "reviews": controller.store.reviews_for(run_id, owner=controller.owner),
+            "readiness": controller.readiness(record),
             "reconciliations": controller.store.reconciliations_for(run_id, owner=controller.owner),
             "can_reconcile": controller.can_reconcile(record), "can_continue": controller.can_continue(record)}
 
@@ -2128,7 +2130,7 @@ def loop_create(body: LoopRunIn) -> dict:
     from companion.working_loop import PolicyRefused
     try:
         record = _loop_controller().request(project=body.project, topic=body.topic,
-                                            choice_key=body.choice, prompt=body.prompt)
+                                            choice_key=body.choice, prompt=body.prompt, tier=body.tier)
     except PolicyRefused as exc:
         raise ApiError(400, "policy_refused", str(exc)) from None
     return _enqueue_loop(record)

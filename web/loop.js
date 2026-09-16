@@ -19,6 +19,8 @@ const errorLabel = {
   served_model_mismatch:"The provider reported a different model from the one requested.",
   malformed_stream:"The model app returned an incomplete or unexpected receipt."
 };
+const tierLabel = {casual:"Casual", work:"Work", life_changing:"Life changing"};
+const readinessReason = {not_complete:"Answer is not complete.", no_review:"No review yet.", review_stale:"All reviews are stale; request a new review."};
 const pending = r => ["queued", "dispatching"].includes(r.status);
 const modelName = r => r.developer === "Anthropic" ? "Claude" : "Codex";
 const contextLabel = context => context
@@ -52,6 +54,7 @@ async function inspect(record) {
   top.append(el("strong", `${modelName(record)} ${record.review_subject_id ? "· Review" : "· Answer"}`),
     el("span", statusLabel[record.status] || record.status, `badge ${record.status}`));
   card.append(top, el("p", `#${record.id} · ${record.requested_model} · ${record.effort || "default effort"}`, "meta"));
+  card.append(el("p", `Tier: ${tierLabel[detail.readiness.tier]} · ${detail.readiness.ready ? "Ready for your decision." : detail.readiness.reasons.map(reason => readinessReason[reason] || reason).join(" ")}`, "meta"));
   if (record.review_subject_id) card.append(el("p", `Review of contribution #${record.review_subject_id}. No automatic approval.`, "meta"));
   if (record.review_subject_id) card.append(el("p", contextLabel(record.review_context), "meta"));
   if (record.continued_from_run_id) card.append(el("p", `Continues contribution #${record.continued_from_run_id}. ${record.status === "done" ? "Same provider conversation verified." : "See the receipt for continuation status."}`, "meta"));
@@ -115,6 +118,7 @@ async function inspect(record) {
       $("topic").disabled = true; $("choice").disabled = true;
       $("continuation").hidden = false;
       $("continuation-label").textContent = `Following up on ${modelName(record)} contribution #${record.id}. The same conversation will receive your request.`;
+      $("tier").value = record.tier; $("tier").disabled = true;
       $("run").textContent = "Send follow-up"; $("prompt").focus();
       $("request").scrollIntoView({behavior:"smooth", block:"start"});
     };
@@ -185,7 +189,7 @@ async function refresh() {
 }
 $("filter").oninput = showTopics;
 function resetContinuation() {
-  continuationTarget = null; $("continuation").hidden = true;
+  continuationTarget = null; $("continuation").hidden = true; $("tier").disabled = false;
   $("topic").disabled = false; $("choice").disabled = false; $("run").textContent = "Run model";
 }
 $("fresh-request").onclick = resetContinuation;
@@ -195,7 +199,7 @@ $("request").onsubmit = async event => {
   try {
     const topic = $("topic").value.trim();
     const url = continuationTarget ? `/api/loop/runs/${continuationTarget}/continue` : "/api/loop/runs";
-    const body = continuationTarget ? {prompt:$("prompt").value} : {choice:$("choice").value, prompt:$("prompt").value, topic};
+    const body = continuationTarget ? {prompt:$("prompt").value} : {choice:$("choice").value, prompt:$("prompt").value, topic, tier:$("tier").value};
     await readJson(url, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
     selected = topic; $("prompt").value = ""; resetContinuation(); await refresh();
   } catch (error) { $("notice").textContent = `${error.message}. Check saved contributions before submitting again.`; }

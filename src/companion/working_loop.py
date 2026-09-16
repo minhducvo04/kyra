@@ -41,6 +41,7 @@ POLICY_VERSION = "2026-09-15.2"
 APPROVED_DEVELOPERS = frozenset({"Anthropic", "OpenAI"})
 PERSONAL_OWNER = "personal"
 STALE_DISPATCH_GRACE_SECONDS = 30
+TIERS = ("casual", "work", "life_changing")
 DECISIONS = ("approve", "reject")
 RECONCILIATION_OUTCOMES = ("nothing_happened", "provider_processed")
 MAX_NOTE_CHARS = 2000
@@ -99,6 +100,7 @@ class ExecutionRecord:
     created_at: str
     started_at: str | None
     finished_at: str | None
+    tier: str = "work"
     review_subject_id: int | None = None
     review_subject_sha256: str | None = None
     continued_from_run_id: int | None = None
@@ -195,7 +197,7 @@ class LoopStore(ABC):
             return False
 
     @abstractmethod
-    def create_run(self, *, owner, project, topic, choice, prompt, **binding) -> ExecutionRecord: ...
+    def create_run(self, *, owner, project, topic, choice, prompt, tier="work", **binding) -> ExecutionRecord: ...
 
     @abstractmethod
     def get_run(self, run_id: int, *, owner: str) -> ExecutionRecord | None: ...
@@ -268,7 +270,9 @@ class DbLoopStore(LoopStore):
         return ExecutionRecord(**data)
 
     def create_run(self, *, owner, project, topic, choice, prompt, review_subject_id=None, review_subject_sha256=None,
-                   continued_from_run_id=None, requested_session_id=None, review_context=None):
+                   continued_from_run_id=None, requested_session_id=None, review_context=None, tier="work"):
+        if tier not in TIERS:
+            raise PolicyRefused("invalid_tier")
         owner, project, topic = _label(owner, "owner"), _label(project, "project"), _label(topic, "topic")
         if not isinstance(prompt, str) or not prompt.strip() or len(prompt.encode()) > MAX_PROMPT_BYTES:
             raise PolicyRefused("invalid_prompt")
@@ -276,7 +280,7 @@ class DbLoopStore(LoopStore):
             result = conn.execute(insert(RUNS).values(
                 owner=owner, project=project, topic=topic, choice_key=choice.key, provider=choice.provider,
                 developer=choice.developer, host=choice.host, method="cli", requested_model=choice.requested_model,
-                effort=choice.effort, status="queued", input_sha256=_sha(prompt), artifact_dir="",
+                effort=choice.effort, tier=tier, status="queued", input_sha256=_sha(prompt), artifact_dir="",
                 policy_version=POLICY_VERSION, created_at=_now(), review_subject_id=review_subject_id,
                 review_subject_sha256=review_subject_sha256,
                 continued_from_run_id=continued_from_run_id, requested_session_id=requested_session_id,
@@ -519,9 +523,11 @@ class LoopController:
             raise PolicyRefused("model_not_approved")
         return choice
 
-    def request(self, *, project, topic, choice_key, prompt):
+    def request(self, *, project, topic, choice_key, prompt, tier="work"):
+        if tier not in TIERS:
+            raise PolicyRefused("invalid_tier")
         return self.store.create_run(owner=self.owner, project=project, topic=topic,
-                                     choice=self._choice(choice_key), prompt=prompt)
+                                     choice=self._choice(choice_key), prompt=prompt, tier=tier)
 
     def _valid_parent(self, parent):
         if (not parent or parent.owner != self.owner or parent.status != "done"
@@ -553,7 +559,7 @@ class LoopController:
         try:
             return self.store.create_run(owner=self.owner, project=parent.project, topic=parent.topic,
                 choice=self._choice(parent.choice_key), prompt=prompt, continued_from_run_id=parent.id,
-                requested_session_id=parent.provider_session_id)
+                requested_session_id=parent.provider_session_id, tier=parent.tier)
         except IntegrityError:
             # The unique parent reservation is authoritative under concurrent requests.
             raise PolicyRefused("continuation_refused") from None
@@ -608,9 +614,23 @@ class LoopController:
             bindings.pop(0)
             omitted = True
         return self.store.create_run(owner=self.owner, project=subject.project, topic=subject.topic,
-                                     choice=choice, prompt=prompt, review_subject_id=subject.id,
+                                     choice=choice, prompt=prompt, tier=subject.tier, review_subject_id=subject.id,
                                      review_subject_sha256=subject.output_sha256,
                                      review_context={"turns": bindings, "omitted": omitted})
+
+    def readiness(self, run):
+        if run.owner != self.owner:
+            raise PolicyRefused("run_not_owned")
+        reasons = []
+        if run.status != "done":
+            reasons = ["not_complete"]
+        else:
+            reviews = self.store.reviews_for(run.id, owner=self.owner)
+            if not reviews:
+                reasons = ["no_review"]
+            elif all(review["stale"] for review in reviews):
+                reasons = ["review_stale"]
+        return {"tier": run.tier, "ready": not reasons, "reasons": reasons}
 
     def decide_review(self, review_id, *, decision):
         return self.store.decide_review(owner=self.owner, review_id=review_id, decision=decision)
