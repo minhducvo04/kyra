@@ -233,7 +233,7 @@ def _question_transfer() -> dict:
 
 def _proposal(**overrides) -> dict:
     moment = {
-        "start_s": 32,
+        "start_s": 15,
         "end_s": 130,
         "learning_objective": "Explain why a step size above the threshold makes gradient descent diverge.",
         "key_idea": "The step size scales the update, and past a threshold each update overshoots by more than it came.",
@@ -280,11 +280,11 @@ def test_a_valid_proposal_becomes_a_moment_with_the_card_and_both_questions(sour
     result = _propose(source, transcript, tmp_path, _proposal())
     assert result.rejected == []
     (moment,) = result.moments
-    assert (moment.start_s, moment.end_s) == (32, 130)
+    assert (moment.start_s, moment.end_s) == (15, 130)
     assert moment.source_id == source.id
     assert moment.evidence_span == EVIDENCE
     assert moment.concept_card.concept == "gradient descent overshooting"
-    assert moment.concept_card.source_timestamp == "0:32-2:10"  # derived by code, not the model
+    assert moment.concept_card.source_timestamp == "0:15-2:10"  # derived by code, not the model
     assert moment.questions["initial"].type == "predict"
     assert moment.questions["transfer"].type == "apply"
     assert moment.status == "proposed"
@@ -302,7 +302,7 @@ def test_the_firewall_view_carries_no_source_wording_and_no_timestamp(source, tr
     assert "use a convex function" in rendered
     assert "We move the parameters opposite the gradient" not in rendered
     assert "the step size scales how far" not in rendered
-    assert "0:32" not in rendered and "evidence" not in rendered and "timestamp" not in rendered
+    assert "0:15" not in rendered and "evidence" not in rendered and "timestamp" not in rendered
 
 
 def _rejected_reason(source, transcript, tmp_path, proposal):
@@ -371,12 +371,12 @@ def test_the_prompt_carries_the_window_text_and_both_limits(source, transcript, 
 
 def test_elaborate_returns_a_moment_on_exactly_the_marked_span(source, transcript, tmp_path):
     proposer = MomentProposer(ScriptedLLM([json.dumps(_proposal())]))
-    result = proposer.elaborate(source, transcript, 32, 130, raw_dir=tmp_path / "raw")
+    result = proposer.elaborate(source, transcript, 15, 130, raw_dir=tmp_path / "raw")
     assert result.rejected == []
-    assert (result.moments[0].start_s, result.moments[0].end_s) == (32, 130)
+    assert (result.moments[0].start_s, result.moments[0].end_s) == (15, 130)
     # The model moved the bounds: the span Duc marked is the contract, so that is a rejection.
     proposer = MomentProposer(ScriptedLLM([json.dumps(_proposal(start_s=40))]))
-    result = proposer.elaborate(source, transcript, 32, 130, raw_dir=tmp_path / "raw")
+    result = proposer.elaborate(source, transcript, 15, 130, raw_dir=tmp_path / "raw")
     assert result.moments == [] and result.rejected[0].reason.startswith("window_bounds")
 
 
@@ -397,7 +397,7 @@ def test_a_rejected_source_cannot_be_proposed_on(store, transcript, tmp_path):
     with pytest.raises(RightsError):
         proposer.propose(rejected, transcript, max_moments=1, raw_dir=tmp_path / "raw")
     with pytest.raises(RightsError):
-        proposer.elaborate(rejected, transcript, 32, 130, raw_dir=tmp_path / "raw")
+        proposer.elaborate(rejected, transcript, 15, 130, raw_dir=tmp_path / "raw")
     assert proposer_calls_made(proposer) == 0
 
 
@@ -408,8 +408,8 @@ def proposer_calls_made(proposer) -> int:
 # ---------------- store, attempts, mastery, XP ----------------
 
 
-def _approved_moment(store, source, transcript, tmp_path):
-    (moment,) = _propose(source, transcript, tmp_path, _proposal()).moments
+def _approved_moment(store, source, transcript, tmp_path, *, end_s=130):
+    (moment,) = _propose(source, transcript, tmp_path, _proposal(end_s=end_s)).moments
     saved = store.add_moment(moment)
     store.set_status(saved.id, "approved")
     return store.get_moment(saved.id)
@@ -493,7 +493,7 @@ def test_mastery_needs_all_four_conditions(store, source, transcript, tmp_path):
     store.record_attempt("duc", m.id, "delayed", CORRECT_INITIAL, at=T0 + timedelta(hours=25))
     assert store.learner_concept("duc", m.id).mastery == "PRACTICING"
     # (c) a delayed attempt before it is due is refused and leaves no trace
-    m2 = _approved_moment(store, source, transcript, tmp_path)
+    m2 = _approved_moment(store, source, transcript, tmp_path, end_s=135)
     store.record_attempt("duc", m2.id, "initial", CORRECT_INITIAL, at=T0)
     store.record_attempt("duc", m2.id, "transfer", CORRECT_TRANSFER, at=T0 + timedelta(minutes=1))
     with pytest.raises(NotDueError):
@@ -501,7 +501,7 @@ def test_mastery_needs_all_four_conditions(store, source, transcript, tmp_path):
     assert store.learner_concept("duc", m2.id).mastery == "PRACTICING"
     assert store.learner_concept("duc", m2.id).attempts == 2
     # (d) every correct answer came after a hint: not mastered
-    m3 = _approved_moment(store, source, transcript, tmp_path)
+    m3 = _approved_moment(store, source, transcript, tmp_path, end_s=152)
     store.record_attempt("duc", m3.id, "initial", WRONG_INITIAL, at=T0)
     store.record_attempt("duc", m3.id, "initial", CORRECT_INITIAL, at=T0 + timedelta(minutes=1))
     store.record_attempt("duc", m3.id, "transfer", "0.8", at=T0 + timedelta(minutes=2))
@@ -510,7 +510,7 @@ def test_mastery_needs_all_four_conditions(store, source, transcript, tmp_path):
     store.record_attempt("duc", m3.id, "delayed", CORRECT_INITIAL, at=T0 + timedelta(hours=25, minutes=1))  # the retry is the same review
     assert store.learner_concept("duc", m3.id).mastery == "PRACTICING"
     # all four: mastered, with the time recorded, and mastery is per learner
-    m4 = _approved_moment(store, source, transcript, tmp_path)
+    m4 = _approved_moment(store, source, transcript, tmp_path, end_s=170)
     assert _master(store, m4.id, T0).mastery == "MASTERED"
     concept = store.learner_concept("duc", m4.id)
     assert concept.mastery == "MASTERED" and concept.mastered_at == T0 + timedelta(hours=25)
@@ -568,10 +568,10 @@ def test_progress_reports_both_weeks_counts_and_never_a_bare_percentage(store, s
     week_ending = date(2026, 9, 20)
     last_week = datetime(2026, 9, 8, 9, 0, tzinfo=UTC)
     this_week = datetime(2026, 9, 15, 9, 0, tzinfo=UTC)
-    for t0 in (last_week, this_week, this_week + timedelta(hours=1)):
-        _master(store, _approved_moment(store, source, transcript, tmp_path).id, t0)
+    for t0, end_s in zip((last_week, this_week, this_week + timedelta(hours=1)), (130, 135, 152), strict=True):
+        _master(store, _approved_moment(store, source, transcript, tmp_path, end_s=end_s).id, t0)
     # one wrong delayed recall this week so the accuracy is not 100%
-    m = _approved_moment(store, source, transcript, tmp_path)
+    m = _approved_moment(store, source, transcript, tmp_path, end_s=170)
     store.record_attempt("duc", m.id, "initial", CORRECT_INITIAL, at=this_week)
     store.record_attempt("duc", m.id, "delayed", "It converges, but more slowly than with 0.1.", at=this_week + timedelta(hours=25))
 
@@ -587,3 +587,17 @@ def test_progress_reports_both_weeks_counts_and_never_a_bare_percentage(store, s
     empty = store.progress("alex", week_ending=week_ending)
     assert empty.delayed_accuracy_this_week is None and empty.delayed_accuracy_last_week is None
     assert "%" not in render_progress(empty)
+
+
+def test_plain_text_with_a_clock_line_is_not_a_timestamped_transcript():
+    text = parse_transcript("Meeting notes\n\n10:30\n\nDiscuss step size")
+    assert all(segment.start_s is None for segment in text.segments)
+
+
+def test_a_moment_can_start_before_the_first_caption(store, tmp_path):
+    # The video can start with silence before its first supplied caption.
+    srt = SRT_TEXT.replace("00:00:00,000", "00:00:03,000", 1)
+    source = store.add_source(_youtube_source(), transcript_text=srt)
+    result = _propose(source, parse_transcript(srt), tmp_path, _proposal(start_s=0))
+    assert result.rejected == []
+    assert result.moments[0].start_s == 0

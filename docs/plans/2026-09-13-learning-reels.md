@@ -164,7 +164,8 @@ independent visualization, the side-by-side comparison with the original, and in
   hint on that kind that day. `mastered_at` is recorded when the fourth condition lands.
 - Scheduling. The first correct initial or transfer sets `next_review_at` to +24 hours. A correct
   delayed attempt advances it by `learning.REVIEW_INTERVALS_DAYS` indexed by consecutive correct
-  delayed reviews (3 days, then 7, then 7); a wrong delayed attempt resets to +1 day. So a
+  delayed reviews (3 days, then 7, then 7); a first wrong delayed attempt keeps that review open for a hinted retry; a second wrong answer
+  reveals the answer and resets to +1 day. So a
   completed review is never left permanently due. `due(user_id, at)` lists approved moments whose
   `next_review_at` has passed.
 - XP, once-only where the brief's table names a milestone: attempt 3 (once per `user_id`, moment,

@@ -1,5 +1,29 @@
 # Verification history
 
+## 2026-09-16: PR #5 learning-reels CI repair
+
+The failed GitHub job stopped at `ModuleNotFoundError: companion.reels`; the failure was reproduced
+locally before implementing the existing red contract. Final Python run: **717 passed, 1 existing
+optional tokenizer skip in 68.39s**; `ruff check src scripts tests` clean. Reels, boundary, schema-upgrade
+and startup checks passed. Existing migration tests compare final metadata and preserve prior rows.
+
+Claude Fable 5.1 High independently approved the library and migration with no blocking findings.
+Two contradictory fixtures were corrected with Claude's confirmation, keeping duplicate and evidence
+guards intact. Two further parser findings were reproduced red and fixed green: a clock line inside
+plain text is not a transcript header, and a clip may begin before the first caption.
+
+A real Fable proposal over the fictional Northwind transcript passed all guards, saved to a scratch
+SQLite store and completed initial, transfer and delayed recall through persisted mastery. Delayed
+review used injected synthetic timestamps, not a claim of waiting 25 hours. Two earlier live responses
+were correctly rejected (Markdown wrapping/moved bounds, then an array type error); prompts were
+clarified, not parsers relaxed. Raw outputs and receipts are kept privately. Claude Code also reported
+auxiliary Haiku usage; the record is not a claim that every harness operation used Fable.
+
+Evidence: `.claude/worktrees/fix-reels-ci/data/verifications/reels-ci/` holds `full-suite-final.txt`,
+`review-regressions-red.txt`, `review-regressions-green.txt`, `claude-review.md`, `live-proof.json` and
+provider receipts. No personal database was read or changed. No push, production migration or deployment.
+CLI and HUD integration are outside this CI repair.
+
 ## 2026-09-10: snapshot merged and main scheduled entry point verified
 
 Merged Claude's completed integration into the snapshot branch, preserving both sides of two log conflicts, then fast-forwarded local master to `e441bbf`. Enumerated 61 parent/file comparisons: no additions from either parent were lost. Combined suite: **643 passed, 1 skipped in 67.69s**; existing optional tokenizer skip, ruff and plist syntax clean. The main tree matches the verified branch.
