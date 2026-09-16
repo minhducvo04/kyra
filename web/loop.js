@@ -22,7 +22,7 @@ const errorLabel = {
 const tierLabel = {casual:"Casual", work:"Work", life_changing:"Life changing"};
 const readinessReason = {not_complete:"Answer is not complete.", no_review:"No review yet.", review_stale:"All reviews are stale; request a new review."};
 const pending = r => ["queued", "dispatching"].includes(r.status);
-const modelName = r => r.developer === "Anthropic" ? "Claude" : "Codex";
+const modelName = r => r.model_label;
 const contextLabel = context => context
   ? `${context.turns.length} earlier turn${context.turns.length === 1 ? "" : "s"} included${context.omitted ? "; additional earlier turns omitted" : "; none omitted"}.`
   : "Earlier-turn context was not recorded for this review.";
@@ -54,7 +54,7 @@ async function inspect(record) {
   const status = statusClass[record.status] || "needs-you";
   top.append(el("strong", `${modelName(record)} ${record.review_subject_id ? "· Review" : "· Answer"}`),
     el("span", status.replaceAll("-", " "), `status-badge status-${status}`));
-  card.append(top, el("p", `#${record.id} · ${record.requested_model} · ${record.effort || "default effort"}`, "meta"));
+  card.append(top, el("p", `#${record.id} · ${record.effort || "default effort"}`, "meta"));
   card.append(el("p", `Tier: ${tierLabel[detail.readiness.tier]} · ${detail.readiness.ready ? "Ready for your decision." : detail.readiness.reasons.map(reason => readinessReason[reason] || reason).join(" ")}`, "meta"));
   if (record.review_subject_id) card.append(el("p", `Review of contribution #${record.review_subject_id}. No automatic approval.`, "meta"));
   if (record.review_subject_id) card.append(el("p", contextLabel(record.review_context), "meta"));
@@ -102,7 +102,7 @@ async function inspect(record) {
     card.append(button);
   }
   if (record.status === "done") {
-    const reviewButton = el("button", `Ask ${record.developer === "Anthropic" ? "Codex" : "Claude"} to review`);
+    const reviewButton = el("button", `Ask ${record.model_label === "Claude" ? "Codex" : "Claude"} to review`);
     reviewButton.onclick = async () => {
       reviewButton.disabled = true;
       try { await readJson(`/api/loop/runs/${record.id}/review`, {method:"POST"}); await refresh(); }
@@ -128,7 +128,7 @@ async function inspect(record) {
   const request = el("details"); request.append(el("summary", "Request sent"), el("pre", detail.artifact.prompt, "receipt"));
   const receipt = el("details");
   receipt.append(el("summary", "Execution receipt"), el("pre", [
-    `Developer: ${record.developer} · Host: ${record.host} · Method: ${record.method}`,
+    `Model: ${record.model_label} · Method: ${record.method}`,
     `Requested: ${record.requested_model}`,
     `Reported by provider: ${record.served_model || "Not supplied by this CLI"}`,
     `Session: ${record.provider_session_id || "Not received"}`,
@@ -166,7 +166,7 @@ async function refreshUsage() {
     const {rows} = await readJson("/api/loop/usage");
     const nodes = rows.map(row => {
       const card = el("article", undefined, "card");
-      card.append(el("strong", `${row.developer} · ${row.provider} · ${row.model} · ${row.effort || "default effort"}`),
+      card.append(el("strong", `${row.model_label} · ${row.effort || "default effort"}`),
         el("p", `Runs: ${row.runs} · Done: ${row.done} · Failed: ${row.failed} · Other: ${row.other} · Runs without usage: ${row.runs_without_usage}`),
         el("p", `Reported tokens: input uncached ${row.input_uncached} · cached read ${row.input_cached_read} · cache write ${row.cache_write} · output ${row.output}`),
         el("p", `Provider-reported cost (USD): ${row.provider_reported_cost_usd === null ? "Not supplied" : row.provider_reported_cost_usd}`, "meta"));
