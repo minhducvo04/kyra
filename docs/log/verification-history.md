@@ -1,5 +1,15 @@
 # Verification history
 
+## 2026-09-16: loop usage ledger and tiers in a real browser
+
+The working-loop worktree's server ran on port 8421 against the worktree's own data directory (never the
+personal `data/`), started outside the preview tool because that tool reads the main checkout's launch
+config; the wrong server it started on 8420 was stopped within seconds. `/loop` rendered the Tier select
+(Casual, Work, Life changing), the USAGE section with its Refresh control and the "runs without usage are
+unknown" wording, and no console errors. Proof: `data/verifications/working-loop/browser-8421-*` in the
+worktree. Not yet exercised in the browser: a real run with a tier and a readiness badge; the in-process
+HTTP proofs from A01 and A02 cover those paths.
+
 ## 2026-09-15: prior-turn review evidence and stale-context refusal
 
 Claude's 14 acceptance cases pass (13 initially failed; the oversized-subject refusal already existed). All loop,
