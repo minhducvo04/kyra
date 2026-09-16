@@ -1,19 +1,33 @@
 # Learning reels
 
-## 2026-09-16: slice A reviewed, two real-run defects fixed, first real proposals accepted
+## 2026-09-16: two builds of slice A collided; the CI-repair build is kept, Codex's is in history
 
-Claude Code reviewed the build below (the working tree Codex left unstaged; Claude committed it).
-The two failing fixtures were Claude's own: `_approved_moment` reused one span on one source,
-which the duplicate guard the same file demands refuses; each call now takes a distinct end
-second. The real run then found what hermetic tests cannot: Claude wrapped the JSON in a code
-fence (rejected as `json`) and the 4000-token budget was spent partly by adaptive thinking, so
-the reply stopped mid-record (rejected as `truncated`, the guard doing its job). Fixes: the
-parser unwraps a fence before `json.loads` (content untouched, raw file keeps the fence, test
-added), the prompt asks for bare JSON, the CLI backend budget is 16000. Second run: 2 proposed,
-2 passed every guard, 0 rejected. Numbers and the per-moment approval verdicts are in
-`docs/reels-eval.md`. The 73 local failures Codex saw come from a `KYRA_API_TOKEN` now present in
-the developer's `.env` that `tests/conftest.py` does not pin; flagged as its own task, not this
-branch's. The three fixes above are Claude's code; Codex reviews them at the next hand-off.
+Two sessions built the same slice on the same day. Codex (exec channel, reasoning high) built the
+module described in the entry below against the red tests in this checkout; meanwhile an
+Autofix session in a separate worktree built `companion.reels` to repair the PR's CI, pushed it,
+and merged master (the working-loop PR) into the branch with the Alembic merge revision
+`f916b02c3d45`. When the local build could not be pushed, Claude merged the remote branch in
+(never a rebase) and kept the remote implementation for `reels.py`, `schema.py`, the migration and
+the tests: it was already on the remote, CI-green, and the merge revision depends on its
+migration id; a second migration creating the same tables would have made two heads. Codex's
+build is preserved as commit `23c587e`, a parent of the merge, so nothing is lost; the diff between
+the two modules is a `git diff 23c587e <merge> -- src/companion/reels.py` away.
+
+What Claude carried across the merge, because the findings hold for either module: the parser
+unwraps a code-fenced reply before `json.loads` (the first real call fenced its JSON; the remote
+build had chosen a prompt-only fix, the unwrap keeps the raw file untouched; test added), the CLI
+backend budget is 16000 output tokens (4000 was cut at 2.7 KB by adaptive thinking), and
+`scripts/reels.py` adapted to the remote module's pydantic models. The remote build's stricter
+reading of provenance (quotes must sit inside the window, so the valid fixture starts at 15 s)
+stands. The 73 local failures both builders saw come from a `KYRA_API_TOKEN` now in the developer's
+`.env` that `tests/conftest.py` does not pin; a separate task.
+
+Real run on the merged module, through the CLI in a separate process against a scratch
+`KYRA_DATA_DIR`: `add` registered a public MIT OpenCourseWare lecture URL over oEmbed; `propose`
+made 2 moments, both passing every guard; `approve`, `show` (nocookie embed URL with both bounds),
+`quiz --mode quick` scored a correct first answer (XP 8, PRACTICING), `review` and `progress`
+answered. Numbers in `docs/reels-eval.md`; the raw reply and the earlier runs under
+`data/verifications/2026-09-16-reels-a/`.
 
 ## 2026-09-16: slice A built, acceptance awaits fixture corrections and live review
 

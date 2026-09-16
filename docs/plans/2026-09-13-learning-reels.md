@@ -165,7 +165,8 @@ independent visualization, the side-by-side comparison with the original, and in
   hint on that kind that day. `mastered_at` is recorded when the fourth condition lands.
 - Scheduling. The first correct initial or transfer sets `next_review_at` to +24 hours. A correct
   delayed attempt advances it by `learning.REVIEW_INTERVALS_DAYS` indexed by consecutive correct
-  delayed reviews (3 days, then 7, then 7); a wrong delayed attempt resets to +1 day. So a
+  delayed reviews (3 days, then 7, then 7); a first wrong delayed attempt keeps that review open for a hinted retry; a second wrong answer
+  reveals the answer and resets to +1 day. So a
   completed review is never left permanently due. `due(user_id, at)` lists approved moments whose
   `next_review_at` has passed.
 - XP, once-only where the brief's table names a milestone: attempt 3 (once per `user_id`, moment,
@@ -269,7 +270,7 @@ independent visualization, the side-by-side comparison with the original, and in
    whether a YouTube Data API key should exist for discovery later, the expected group size
    -> verify: answers in the thread (`--agent duc`).
 
-Reviewed: 23c587e, 3 findings, 2 blocking (fixed by Claude before commit: fenced JSON reply, 4000-token budget cut by adaptive thinking; the non-blocking one is the fixture reuse in Claude's own tests). Codex reviews Claude's three fixes at the next hand-off.
+Reviewed: 23c587e, 3 findings, 2 blocking (fixed by Claude before commit: fenced JSON reply, 4000-token budget cut by adaptive thinking; the non-blocking one is the fixture reuse in Claude's own tests). Codex reviews Claude's three fixes at the next hand-off. Merged with the remote CI-repair build the same day; see `docs/log/reels.md`.
 
 ## What is measured
 

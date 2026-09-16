@@ -6,13 +6,15 @@ Counts only. The transcript in every run so far is the fictional Northwind fixtu
 ## 2026-09-16: slice A, first real Claude call (Claude Code, independent acceptance)
 
 Setup: `MomentProposer` over `AnthropicLLM` (claude-sonnet-5), scratch `KYRA_DATA_DIR`, the SRT
-fixture (12 cues, 205 s, 1 window), `max_moments=2`. Proof kept privately under
+fixture (12 cues, 205 s, 1 window), `max_moments=2`. Runs 1 and 2 used the Codex build of the module
+(commit `23c587e`); run 3 used the module kept after the merge (see `docs/log/reels.md`, 2026-09-16). Proof kept privately under
 `data/verifications/2026-09-16-reels-a/` (the raw reply and the script).
 
 | Run | Output budget | Proposed | Passed every guard | Rejected (guard) |
 |---|---:|---:|---:|---|
 | 1 | 4000 | cut at 2.7 KB | 0 | 1 (`truncated`); the reply was also wrapped in a code fence |
 | 2 | 16000 | 2 | 2 | 0 |
+| 3 (merged module, through the CLI) | 16000 | 2 | 2 | 0 |
 
 Two defects the hermetic tests could not see, both fixed before commit: the model fenced the JSON
 despite the prompt (parser now unwraps a fence, prompt asks for bare JSON, test added), and

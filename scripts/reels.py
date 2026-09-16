@@ -4,7 +4,7 @@ import argparse
 import json
 import logging
 import sys
-from dataclasses import asdict, replace
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.error import URLError
 
@@ -17,8 +17,15 @@ from companion.reels import (
     adapter_for,
     embed_url,
     render_progress,
-    timestamp_seconds,
 )
+
+
+def _clock(value: str) -> float:
+    """m:ss or h:mm:ss, as the transcript panel shows it, or plain seconds."""
+    parts = [float(p) for p in value.split(":")]
+    if len(parts) > 3 or any(p < 0 for p in parts):
+        raise argparse.ArgumentTypeError(f"not a timestamp: {value}")
+    return sum(p * 60 ** i for i, p in enumerate(reversed(parts)))
 
 
 def _proposer():
@@ -62,8 +69,8 @@ def main(argv=None):
     propose.add_argument("--max", type=int, default=3, dest="max_moments")
     mark = commands.add_parser("mark")
     mark.add_argument("source_id", type=int)
-    mark.add_argument("--start", required=True, type=timestamp_seconds)
-    mark.add_argument("--end", required=True, type=timestamp_seconds)
+    mark.add_argument("--start", required=True, type=_clock)
+    mark.add_argument("--end", required=True, type=_clock)
     listing = commands.add_parser("list")
     listing.add_argument("source_id", type=int, nargs="?")
     for command in ("show", "approve", "reject", "quiz"):
@@ -79,7 +86,7 @@ def main(argv=None):
         if args.command == "add":
             text = args.transcript.read_text(encoding="utf-8")
             source = adapter_for(args.url).register(args.url)
-            source = store.add_source(replace(source, transcript_origin=args.origin), text)
+            source = store.add_source(source.model_copy(update={"transcript_origin": args.origin}), text)
             print(f"Source {source.id}: {source.title}")
         elif args.command in {"propose", "mark"}:
             source = store.get_source(args.source_id)
@@ -100,7 +107,7 @@ def main(argv=None):
             for moment in store.moments(args.source_id):
                 print(f"{moment.id}: {moment.status}: {moment.learning_objective}")
         elif args.command == "progress":
-            print(render_progress(store.progress(args.user)))
+            print(render_progress(store.progress(args.user, week_ending=datetime.now(UTC).date())))
         elif args.command == "review":
             due = store.due(args.user)
             if not due:
@@ -119,7 +126,7 @@ def main(argv=None):
             elif args.command == "show":
                 source = store.get_source(moment.source_id)
                 print(embed_url(source, moment.start_s, moment.end_s) or source.url)
-                print(json.dumps(asdict(moment), indent=2, ensure_ascii=False))
+                print(moment.model_dump_json(indent=2))
             elif args.command == "quiz":
                 # Enforce the gate before showing even the question or card.
                 if moment.status != "approved":

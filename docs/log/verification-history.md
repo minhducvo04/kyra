@@ -2,7 +2,111 @@
 
 ## 2026-09-16: learning reels slice A built by Codex, reviewed and real-run by Claude
 
-Codex built `companion.reels`, the four tables and migration, and `scripts/reels.py` through the exec channel against the red tests; Claude fixed its own two conflicting fixtures, then ran the real path against a scratch `KYRA_DATA_DIR`: one oEmbed registration of a public MIT OpenCourseWare lecture URL (title and channel returned, `EMBED_ONLY`, only the oEmbed host contacted) and two Claude proposal calls on the fictional fixture transcript. The first was cut at 2.7 KB with a fenced reply and was rejected as `truncated`; after the fence unwrap and a 16000-token budget the second produced 2 moments that passed every guard, both judged approvable by a person with one note each (`docs/reels-eval.md`). Full suite with the local API token setting empty: **717 passed in 23.52s**; ruff clean; PII guard green. Evidence: `data/verifications/2026-09-16-reels-a/` (raw reply, script). Scratch directory removed; no real store touched.
+Codex built `companion.reels`, the four tables and migration, and `scripts/reels.py` through the exec channel against the red tests; Claude fixed its own two conflicting fixtures, then ran the real path against a scratch `KYRA_DATA_DIR`: one oEmbed registration of a public MIT OpenCourseWare lecture URL (title and channel returned, `EMBED_ONLY`, only the oEmbed host contacted) and two Claude proposal calls on the fictional fixture transcript. The first was cut at 2.7 KB with a fenced reply and was rejected as `truncated`; after the fence unwrap and a 16000-token budget the second produced 2 moments that passed every guard, both judged approvable by a person with one note each (`docs/reels-eval.md`). Full suite with the local API token setting empty: **717 passed in 23.52s**; ruff clean; PII guard green. Then the remote branch turned out to carry a second, CI-green build of the same slice plus the master merge; Claude merged it in, kept that build (Codex's stays as commit `23c587e`), ported the fence unwrap, the 16000 budget and the CLI onto it, and re-ran the real path through `scripts/reels.py` in a separate process: `add` (oEmbed), `propose` (2 moments, 0 rejected), `approve`, `show`, `quiz` (correct, XP 8), `review`, `progress`. Evidence: `data/verifications/2026-09-16-reels-a/` (raw replies, script). Scratch directory removed; no real store touched.
+## 2026-09-16: integrate the PR #5 repair with merged PR #4
+
+Duc authorized fixing and merging PR #5 after PR #4 entered master. The two textual conflicts retain
+both branches' additions in the schema and this log. Removed lines were enumerated across all 32 merge
+paths: the only nonblank replacement expands the SQLAlchemy import list without dropping any imported name.
+Private audit: `data/verifications/reels-ci/pr5-merge-no-loss.json` in the fix worktree.
+
+The independent Alembic histories initially made eight existing upgrade checks fail. No-op merge revision
+`f916b02c3d45` joins reels head `e916a01b2c34` and working-loop head `b916d30f5a64` without rewriting either.
+Existing upgrade tests now also start from both heads and preserve seeded source/run rows. Focused checks:
+**87 passed in 1.49s**; lint clean. A real Alembic CLI upgrade of a new scratch database reached the single
+head, created both sets of tables and produced an empty metadata diff (`merge-runtime/proof.json`). No
+production database was migrated. Claude independently approved the merge content, requiring all resolved
+files and the new revision to be staged together before commit. Combined full suite: **843 passed,
+1 existing optional tokenizer skip in 71.93s**; proof `merged-full-suite.txt`.
+
+## 2026-09-16: PR #5 learning-reels CI repair
+
+The failed GitHub job stopped at `ModuleNotFoundError: companion.reels`; the failure was reproduced
+locally before implementing the existing red contract. Final Python run: **717 passed, 1 existing
+optional tokenizer skip in 68.39s**; `ruff check src scripts tests` clean. Reels, boundary, schema-upgrade
+and startup checks passed. Existing migration tests compare final metadata and preserve prior rows.
+
+Claude Fable 5.1 High independently approved the library and migration with no blocking findings.
+Two contradictory fixtures were corrected with Claude's confirmation, keeping duplicate and evidence
+guards intact. Two further parser findings were reproduced red and fixed green: a clock line inside
+plain text is not a transcript header, and a clip may begin before the first caption.
+
+A real Fable proposal over the fictional Northwind transcript passed all guards, saved to a scratch
+SQLite store and completed initial, transfer and delayed recall through persisted mastery. Delayed
+review used injected synthetic timestamps, not a claim of waiting 25 hours. Two earlier live responses
+were correctly rejected (Markdown wrapping/moved bounds, then an array type error); prompts were
+clarified, not parsers relaxed. Raw outputs and receipts are kept privately. Claude Code also reported
+auxiliary Haiku usage; the record is not a claim that every harness operation used Fable.
+
+Evidence: `.claude/worktrees/fix-reels-ci/data/verifications/reels-ci/` holds `full-suite-final.txt`,
+`review-regressions-red.txt`, `review-regressions-green.txt`, `claude-review.md`, `live-proof.json` and
+provider receipts. No personal database was read or changed. No push, production migration or deployment.
+CLI and HUD integration are outside this CI repair.
+
+## 2026-09-15: prior-turn review evidence and stale-context refusal
+
+Claude's 14 acceptance cases pass (13 initially failed; the oversized-subject refusal already existed). All loop,
+migration and startup checks: **133 passed in 6.13s**. Full suite: **766 passed in 27.45s**; lint clean.
+A browser-requested Codex review of a continued Claude answer received one earlier turn and checked its exact
+synthetic marker. Its native session was fresh and its developer independent. A browser-recorded owner decision
+became stale along with the review when the earlier prompt was temporarily edited; another decision returned 409.
+The scratch file was restored. Claude independently confirmed two additional gaps; three red regressions now pass for subject-request edits and a cycle at the depth limit. A live subject-request edit also invalidated the review and decision and returned 409 (`subject-request-live-proof.json`). The approval conditions are fulfilled. Proof: `data/verifications/working-loop/review-context-live-proof.json`.
+
+The additive scratch upgrade preserved all fourteen existing run rows (`review-context-migration-proof.json`).
+Production data was untouched. Independent implementation review is recorded in `claude-review-context-review.md`.
+
+## 2026-09-15: native continuation and fresh-session isolation
+
+Claude Fable High authored the continuation contract and 21 cases, including concurrent parent reservation and
+changed-parent refusals. Focused loop/migration/startup checks: **118 passed in 6.91s**. Full suite: **749 passed in
+28.89s**. Both providers passed live A/B/C checks: a fresh call stored a synthetic marker; a browser-requested
+continuation recalled it with the same native session id; a separate fresh call returned UNKNOWN with a different
+id. Duplicate continuation returned 409. Private proof: `data/verifications/working-loop/continuation-live-proof.json`.
+
+The existing scratch database was unversioned. Its schema was compared with commit `0358938`, backed up, stamped
+at its verified prior revision and upgraded. All eight old run rows survived unchanged; proof and backup remain
+private (`continuation-migration-proof.json`, `live/loop-before-continuation.db`). Production databases were not
+opened or migrated. Independent implementation review is recorded in `claude-continuation-review.md`.
+
+## 2026-09-15: owner decisions and outcome notes verified in the browser
+
+The new 20 Claude-authored acceptance cases failed before implementation and passed after. Combined loop,
+migration and startup checks: **95 passed in 5.32s**. Full suite: **727 passed in 29.62s**. Lint clean.
+A real browser appended an approve decision to a completed independent review and saved an outcome note for an
+explicit synthetic uncertain-run fixture. The review remained a comment, the uncertain status remained unchanged,
+and the run count stayed at eight. No provider request was made by either control. All state was scratch data.
+Private proof: `data/verifications/working-loop/decisions-browser-proof.json`, `decisions-codex-red.log`,
+`decisions-full-final.log`; independent review in `claude-decisions-review.md`. Claude caught a deleted-note edge case; both new regressions and a live missing-note HTTP check now pass with the receipt preserved. Proof: `missing-note-live-proof.json`.
+
+Separate provider probes established that fresh Codex calls do not recall the prior synthetic marker, while explicit
+resume recalls it under the same native session id. Claude explicit resume also recalled its synthetic marker under
+the same id. These prepare a later feature; the page still starts fresh sessions. Proof: `cross-call-isolation.json`,
+`codex-resume-proof.json`, `claude-resume-proof.json`. No native database was edited to simulate continuation.
+
+## 2026-09-15: working loop, real subscription calls and independent review
+
+Isolated branch `session/2026-09-15-working-loop`, based on clean master. Claude Fable High authored 44 acceptance
+cases and independently added 12 regressions; Codex implemented and added five regressions from the live integration
+and review findings. Full suite: **705 passed in 25.92s**. Focused loop suite: **61 passed in 3.29s**. Lint clean.
+
+A real browser submitted a Codex request, observed queued then complete, requested a Claude review, and displayed
+the completed response plus a non-stale comment bound to the original answer's hash. Reload preserved the topic and
+contributions. The first Claude attempt failed sign-in and remained failed: the corrected process environment retains
+OS account identity for Keychain while excluding inherited API keys and endpoint overrides.
+
+Claude's independent review caught global Codex instructions contaminating the first answer. The fix uses a private
+Codex state directory and a symlink to existing authentication. Two further real Codex calls succeeded, including a
+repeat of the original prompt without the leaked session-end line. Native trace inspection found no global instruction
+marker. A request to execute `pwd` reached the residual code-mode entry point, which returned `code-mode host is disabled`;
+no command executed. Capability disabling is verified; absence of every advertised tool name is not claimed.
+
+A deliberately weakened scratch copy removed the review-subject binding check. Claude's test failed on acceptance
+of an unrelated completed reviewer. The unchanged real implementation passed that same test. Private proof in the
+worktree's `data/verifications/working-loop/`: `seeded-defect-red.log`, `seeded-defect-green.log`, `live-run-1.json`
+through `live-run-5.json`, `codex-isolation-proof.json`, `full-tests-final.log`, and `claude-build-review.md`.
+Claude independently rechecked the fixes and approved this limited personal slice. No personal production data was
+used or modified. The live preview uses a separate scratch data directory and port.
+
 
 ## 2026-09-10: snapshot merged and main scheduled entry point verified
 

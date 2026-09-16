@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     host: str = Field(default="127.0.0.1", validation_alias="KYRA_HOST")
     port: int = Field(default=8420, validation_alias="KYRA_PORT")
 
+    # Personal loop: paths are server configuration, never browser input.
+    claude_cli_path: str = Field(default="", validation_alias="KYRA_CLAUDE_CLI_PATH")
+    codex_cli_path: str = Field(default="", validation_alias="KYRA_CODEX_CLI_PATH")
+    loop_timeout_seconds: float = Field(default=600, gt=0, le=1800, validation_alias="KYRA_LOOP_TIMEOUT_SECONDS")
+
     def require_api_key(self) -> str:
         if not self.anthropic_api_key:
             raise RuntimeError("ANTHROPIC_API_KEY is not set. Copy .env.example to .env and fill it in.")
