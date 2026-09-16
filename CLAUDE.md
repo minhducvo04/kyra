@@ -20,6 +20,7 @@ Lead planning, test design, independent testing, and review. Use Opus for plans 
 - `test-driven-development` and `code-review-and-quality` during build and review.
 - `ponytail` on build sessions (minimal code); `ponytail-review` to hunt over-engineering in a diff.
 - `domain-modeling` maintains `CONTEXT.md` (shared vocabulary) when terms get introduced. No `CONTEXT.md` exists yet; the skill would create it.
+- `private-check` before every commit and pull request (AGENTS.md section 2, rule 7); `brief` on every reply a person reads; `test-impact` while iterating on a build.
 
 ## Tooling
 
