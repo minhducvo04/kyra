@@ -267,7 +267,18 @@
         <input id="tracker-link" type="text" placeholder="Link (optional)">
         <button class="jobs-btn" id="tracker-add" type="button">Add</button>
       </div>
-      <div class="jobs-tracker-list" id="tracker-list"></div>
+      <p>Drag an application to a status column, or use its status menu.</p>
+      <div class="jobs-tracker-list tracker-columns" id="tracker-list">
+        <section data-tracker-column="targeting"><h3>targeting</h3></section>
+        <section data-tracker-column="ready_to_submit"><h3>ready to submit</h3></section>
+        <section data-tracker-column="needs_attention"><h3>needs attention</h3></section>
+        <section data-tracker-column="applied"><h3>applied</h3></section>
+        <section data-tracker-column="referral_pending"><h3>referral pending</h3></section>
+        <section data-tracker-column="interviewing"><h3>interviewing</h3></section>
+        <section data-tracker-column="offer"><h3>offer</h3></section>
+        <section data-tracker-column="rejected"><h3>rejected</h3></section>
+        <section data-tracker-column="withdrawn"><h3>withdrawn</h3></section>
+      </div>
     </section>
 
     <section class="jobs-tab-panel" data-tab-panel="outreach">

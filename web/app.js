@@ -1402,14 +1402,59 @@ async function loadTrackerList() {
 }
 
 function renderTrackerList(apps) {
-  trackerList.innerHTML = "";
-  if (apps.length === 0) {
-    trackerList.textContent = "no applications tracked yet";
-    return;
+  trackerList.textContent = "";
+  let draggedApp = null;
+  let updating = false;
+  async function updateStatus(app, status) {
+    if (updating || status === app.status) return;
+    updating = true;
+    try {
+      await readJson(await fetch("/api/job/applications/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: app.id, status }),
+      }));
+      await loadTrackerList();
+    } catch (err) {
+      addLine("error", `status update failed — ${err.message}`);
+    } finally {
+      updating = false;
+    }
+  }
+  const columns = new Map();
+  for (const status of STATUSES) {
+    const column = document.createElement("section");
+    column.dataset.trackerColumn = status;
+    const heading = document.createElement("h3");
+    heading.textContent = status.replaceAll("_", " ");
+    column.appendChild(heading);
+    column.addEventListener("dragover", (event) => {
+      if (draggedApp && !updating) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+      }
+    });
+    column.addEventListener("drop", async (event) => {
+      if (!draggedApp) return;
+      event.preventDefault();
+      const app = draggedApp;
+      draggedApp = null;
+      await updateStatus(app, status);
+    });
+    columns.set(status, column);
+    trackerList.appendChild(column);
   }
   for (const app of apps) {
     const item = document.createElement("div");
     item.className = "jobs-tracker-item";
+    item.draggable = true;
+    item.dataset.appId = app.id;
+    item.addEventListener("dragstart", (event) => {
+      draggedApp = app;
+      event.dataTransfer.setData("text/plain", app.id);
+      event.dataTransfer.effectAllowed = "move";
+    });
+    item.addEventListener("dragend", () => { draggedApp = null; });
 
     const top = document.createElement("div");
     top.className = "jobs-tracker-item-top";
@@ -1424,6 +1469,7 @@ function renderTrackerList(apps) {
 
     const select = document.createElement("select");
     select.className = "jobs-tracker-status";
+    select.setAttribute("aria-label", `Status for ${app.company}, ${app.role}`);
     for (const s of STATUSES) {
       const opt = document.createElement("option");
       opt.value = s;
@@ -1432,15 +1478,10 @@ function renderTrackerList(apps) {
       select.appendChild(opt);
     }
     select.addEventListener("change", async () => {
-      try {
-        await fetch("/api/job/applications/status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: app.id, status: select.value }),
-        });
-      } catch (err) {
-        addLine("error", `status update failed — ${err.message}`);
-      }
+      select.disabled = true;
+      await updateStatus(app, select.value);
+      select.value = app.status;
+      select.disabled = false;
     });
 
     top.append(left, select);
@@ -1457,7 +1498,7 @@ function renderTrackerList(apps) {
       item.appendChild(link);
     }
 
-    trackerList.appendChild(item);
+    columns.get(app.status).appendChild(item);
   }
 }
 
