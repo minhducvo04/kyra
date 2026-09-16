@@ -19,6 +19,7 @@ The contract these tests pin, for the builder:
   ValueError, learner_concept, due, progress; render_progress(p).
 """
 import io
+import itertools
 import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -361,6 +362,15 @@ def test_a_non_json_or_truncated_response_is_rejected_and_the_raw_output_kept(so
     assert list((tmp_path / "raw").rglob("*.json"))
 
 
+def test_a_reply_wrapped_in_a_code_fence_is_still_parsed(source, transcript, tmp_path):
+    # Found by the first real Claude call (2026-09-16): the model fenced the JSON despite the prompt.
+    # Unwrapping a fence is not a repair of content, so the guards still see exactly what was sent.
+    fenced = "```json\n" + json.dumps(_proposal(), indent=2) + "\n```\n"
+    result = MomentProposer(ScriptedLLM([fenced])).propose(source, transcript, max_moments=1, raw_dir=tmp_path / "raw")
+    assert result.rejected == [] and len(result.moments) == 1
+    assert Path(result.moments[0].raw_path).read_text() == fenced  # the raw file keeps the fence
+
+
 def test_the_prompt_carries_the_window_text_and_both_limits(source, transcript, tmp_path):
     llm = ScriptedLLM([json.dumps(_proposal())])
     MomentProposer(llm).propose(source, transcript, max_moments=2, raw_dir=tmp_path / "raw")
@@ -408,8 +418,13 @@ def proposer_calls_made(proposer) -> int:
 # ---------------- store, attempts, mastery, XP ----------------
 
 
+_SPAN_ENDS = itertools.count(130)
+
+
 def _approved_moment(store, source, transcript, tmp_path):
-    (moment,) = _propose(source, transcript, tmp_path, _proposal()).moments
+    """Each call takes a distinct span (the end moves by a second) because the store refuses a
+    duplicate span on one source; the evidence stays inside every such window."""
+    (moment,) = _propose(source, transcript, tmp_path, _proposal(end_s=next(_SPAN_ENDS))).moments
     saved = store.add_moment(moment)
     store.set_status(saved.id, "approved")
     return store.get_moment(saved.id)

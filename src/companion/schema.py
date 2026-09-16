@@ -160,3 +160,56 @@ initiative_snapshot = Table(
     Column("id", Integer, primary_key=True),
     Column("day", String(10), nullable=False),
 )
+
+# Learning reels: immutable moment bodies and per-learner recall state.
+reel_sources = Table(
+    "reel_sources", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("kind", String(16), nullable=False),
+    Column("url", Text, nullable=False),
+    Column("external_id", Text, nullable=False),
+    Column("title", Text, nullable=False),
+    Column("author", Text, nullable=False),
+    Column("rights_state", String(32), nullable=False),
+    Column("release_state", String(32), nullable=False),
+    Column("transcript_origin", String(16), nullable=False),
+    Column("created_at", String(64), nullable=False),
+    Column("thumbnail_url", Text),
+    Column("transcript", Text, nullable=False),
+    Column("transcript_sha256", String(64), nullable=False),
+)
+
+reel_moments = Table(
+    "reel_moments", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("source_id", Integer, nullable=False),
+    Column("start_s", Float),
+    Column("end_s", Float),
+    Column("status", String(16), nullable=False),
+    Column("body", Text, nullable=False),
+    CheckConstraint("status IN ('proposed', 'approved', 'rejected')", name="reel_moment_status"),
+)
+
+reel_attempts = Table(
+    "reel_attempts", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", String(128), nullable=False),
+    Column("moment_id", Integer, nullable=False),
+    Column("kind", String(16), nullable=False),
+    Column("chosen", Text),
+    Column("correct", Integer, nullable=False),
+    Column("hinted", Integer, nullable=False),
+    Column("revealed", Integer, nullable=False),
+    Column("review_first", Integer, nullable=False),
+    Column("review_completed", Integer, nullable=False),
+    Column("correction_bonus", Integer, nullable=False),
+    Column("xp", Integer, nullable=False),
+    Column("at", String(64), nullable=False),
+)
+
+reel_learner_concepts = Table(
+    "reel_learner_concepts", metadata,
+    Column("user_id", String(128), primary_key=True),
+    Column("moment_id", Integer, primary_key=True),
+    Column("body", Text, nullable=False),
+)
