@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: MAP panel in a real browser
+
+On the integration branch server (8424, worktree data): MAP opened on the features tab with seven nodes carrying their percentages (loop 60, father 80, headset 67, console 50, memory 0, ci 0, reels 0 at the time), two dependency wires, and a click on a node listed its slices with statuses; the memory tab drew the scratch data's one thread and reported zero rooms and exchanges not opened; at 375 px with the panel open `scrollWidth == clientWidth == 375`; the server log has no 500. A read-only run of the map over the real notes printed room counts and ages only. Full suite 877 passed, ruff clean, one Alembic head.
+
 ## 2026-09-16: create_all race gone on a fresh database
 
 After P02c the personal server restarted on the integration branch with the scratch loop database removed; the first load of `/loop` fired runs, assignments and usage at once and all three answered 200, with zero 500s and zero tracebacks in `data/verifications/design-pass/server-8424-after-fix.log`. Race test 2 passed five runs in a row; full suite 845 passed.

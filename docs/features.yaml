@@ -8,8 +8,8 @@ features:
       - {id: A01, name: Usage ledger, status: done}
       - {id: A02, name: Tiers and readiness, status: done}
       - {id: A03, name: Assignment records, status: done}
-      - {id: W2, name: Dispatch from the page, status: planned}
-      - {id: W3, name: Brief answers by model, status: red}
+      - {id: W2, name: Dispatch from the page, status: done}
+      - {id: W3, name: Brief answers by model, status: done}
   - id: father
     name: Father's assistant
     depends_on: []
@@ -32,20 +32,20 @@ features:
     slices:
       - {id: P01, name: CONSOLE panel, status: done}
       - {id: P02, name: One token set and header, status: done}
-      - {id: W4, name: Feature map, status: red}
+      - {id: W4, name: Feature map, status: done}
       - {id: W6, name: Job list drag, status: planned}
   - id: memory
     name: Memory palace
     depends_on: [console]
     slices:
-      - {id: W5, name: Memory map and dots, status: red}
+      - {id: W5, name: Memory map and dots, status: done}
   - id: ci
     name: Test impact
     depends_on: []
     slices:
-      - {id: W1, name: Impacted tests first, status: red}
+      - {id: W1, name: Impacted tests first, status: done}
   - id: reels
     name: Learning reels
     depends_on: []
     slices:
-      - {id: R-A, name: Slice A, status: building}
+      - {id: R-A, name: Slice A, status: done}
