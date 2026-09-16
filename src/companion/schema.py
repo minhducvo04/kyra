@@ -10,6 +10,21 @@ from sqlalchemy import CheckConstraint, Column, Float, Integer, MetaData, String
 
 metadata = MetaData()
 
+father_tasks = Table(
+    "father_tasks", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("slug", Text, nullable=False),
+    Column("version", Integer, nullable=False),
+    Column("status", String(32), nullable=False),
+    Column("facts_json", Text, nullable=False),
+    Column("document_path", Text, nullable=False),
+    Column("report_json", Text, nullable=False),
+    Column("note", Text, nullable=False),
+    Column("created_at", String(64), nullable=False),
+    Column("decided_at", String(64)),
+    CheckConstraint("status IN ('review', 'approved', 'changes_requested')", name="father_task_status"),
+)
+
 reminders = Table(
     "reminders", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),

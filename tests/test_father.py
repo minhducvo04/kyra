@@ -53,6 +53,7 @@ TEMPLATE = "Dear {{recipient}},\n\nThe Northwind invoice for {{month}} totals {{
 
 
 def _workflow(fa, root, *, version=1, approved="2026-09-16T00:00:00+00:00", template=TEMPLATE):
+    root.mkdir(parents=True, exist_ok=True)
     tpl = root / f"template-v{version}.txt"
     tpl.write_text(template, encoding="utf-8")
     v = fa.WorkflowVersion(slug="monthly-invoice", version=version, title="Monthly invoice letter", author="Northwind",

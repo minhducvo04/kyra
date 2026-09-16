@@ -94,6 +94,25 @@ end run
 '''
 
 
+class PandocRenderer(Renderer):
+    """Convert DOCX to PDF with Pandoc and render pages with Poppler."""
+
+    def render(self, path: Path, out_dir: Path) -> list[Path]:
+        executable = shutil.which("pandoc")
+        if not executable or not shutil.which("pdflatex"):
+            raise RenderUnavailable("pandoc_or_pdflatex_not_installed")
+        try:
+            path = Path(path).resolve(strict=True)
+            output = _render_dir(Path(out_dir), "pandoc-")
+            pdf = output / "document.pdf"
+            _run([executable, str(path), "-o", str(pdf), "--pdf-engine=pdflatex"])
+            if not pdf.is_file() or pdf.stat().st_size == 0:
+                raise RenderUnavailable("pandoc_produced_no_pdf")
+            return PdfToPpmRenderer().render(pdf, output)
+        except OSError as exc:
+            raise RenderUnavailable(f"pandoc: {exc.strerror}") from exc
+
+
 class WordRenderer(Renderer):
     """Export a scratch copy with Word AppleScript, then rasterize its PDF."""
 

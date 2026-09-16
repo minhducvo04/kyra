@@ -138,8 +138,13 @@ async def _require_api_token(request: Request, call_next):
     Duc's profile, outreach contacts and memory notes, and every chat turn spends
     his key. Still not multi-user auth: one token, one tenant, no accounts.
     """
-    token = get_settings().api_token
+    settings = get_settings()
+    token = settings.api_token
     path = request.url.path
+    if (path.rstrip("/") == "/father" or path == "/api/father" or path.startswith("/api/father/")
+            or path in {"/static/father.html", "/static/father.js", "/static/father.css"}):
+        if settings.tenant != "father":
+            return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": "Not found"}})
     if not token or path in _OPEN_PATHS or path.startswith("/static/"):
         return await call_next(request)
     if _authorized(request, token):
@@ -293,6 +298,105 @@ class CorrectionIn(BaseModel):
 
 class LoginIn(BaseModel):
     token: str
+
+
+def _father_store():
+    from companion.father import FatherTaskStore, WorkflowStore
+
+    settings = get_settings()
+    if settings.tenant != "father":
+        raise ApiError(404, "not_found", "Not found")
+    root = settings.data_dir.resolve()
+    return FatherTaskStore(root, WorkflowStore(root))
+
+
+class FatherTaskIn(BaseModel):
+    slug: str
+    facts: dict[str, str]
+
+
+class FatherFactsIn(BaseModel):
+    facts: dict[str, str]
+
+
+class FatherDecisionIn(BaseModel):
+    decision: str
+    note: str = ""
+
+
+@app.get("/father")
+def father_page() -> FileResponse:
+    if get_settings().tenant != "father":
+        raise ApiError(404, "not_found", "Not found")
+    return FileResponse(WEB_DIR / "father.html")
+
+
+@app.get("/api/father/workflows")
+def father_workflows() -> dict:
+    return {"workflows": [{"slug": v.slug, "version": v.version, "title": v.title,
+                           "required_facts": v.required_facts} for v in _father_store().workflows.list()]}
+
+
+@app.get("/api/father/tasks")
+def father_tasks_list() -> dict:
+    return {"tasks": [asdict(task) for task in _father_store().list()]}
+
+
+@app.post("/api/father/tasks")
+def father_start_task(body: FatherTaskIn) -> dict:
+    store = _father_store()
+    try:
+        return asdict(store.start_task(body.slug, body.facts))
+    except ValueError as exc:
+        raise ApiError(400, "invalid_workflow", str(exc)) from exc
+
+
+@app.get("/api/father/tasks/{task_id}")
+def father_task(task_id: int) -> dict:
+    store = _father_store()
+    task = store.get(task_id)
+    if task is None:
+        raise ApiError(404, "not_found", "Task not found")
+    version = store.workflows.get(task.slug, task.version)
+    return {**asdict(task), "required_facts": version.required_facts if version else list(task.facts)}
+
+
+@app.put("/api/father/tasks/{task_id}/facts")
+def father_update_facts(task_id: int, body: FatherFactsIn) -> dict:
+    store = _father_store()
+    try:
+        return asdict(store.update_facts(task_id, body.facts))
+    except KeyError as exc:
+        raise ApiError(404, "not_found", "Task not found") from exc
+    except ValueError as exc:
+        raise ApiError(409, "task_changed", str(exc)) from exc
+
+
+@app.post("/api/father/tasks/{task_id}/decision")
+def father_decide(task_id: int, body: FatherDecisionIn) -> dict:
+    from companion.father import ApprovalRefused
+
+    store = _father_store()
+    try:
+        return asdict(store.decide(task_id, body.decision, body.note))
+    except ApprovalRefused as exc:
+        raise ApiError(409, "approval_refused", str(exc)) from exc
+    except KeyError as exc:
+        raise ApiError(404, "not_found", "Task not found") from exc
+    except ValueError as exc:
+        raise ApiError(409, "invalid_decision", str(exc)) from exc
+
+
+@app.get("/api/father/tasks/{task_id}/pages/{page_number}")
+def father_page_image(task_id: int, page_number: int) -> FileResponse:
+    store = _father_store()
+    task = store.get(task_id)
+    if task is None or not 1 <= page_number <= len(task.report["rendered_pages"]):
+        raise ApiError(404, "not_found", "Page not found")
+    path = Path(task.report["rendered_pages"][page_number - 1]).resolve()
+    if not path.is_relative_to(store.out_dir.resolve()) or not path.is_file():
+        raise ApiError(404, "not_found", "Page not found")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/")
@@ -1216,7 +1320,7 @@ HANDLERS: dict[str, Handler] = {"latex_resume": _run_latex_resume_job, "apply": 
 
 @app.on_event("startup")
 def _start_worker() -> None:
-    if get_settings().inline_worker:
+    if get_settings().tenant != "father" and get_settings().inline_worker:
         start_inline_worker(_queue, HANDLERS)
         logger.info("inline job worker started")
 
@@ -1231,7 +1335,7 @@ def _warm_up_router() -> None:
     warm-up must never stop the app starting, since the classifier would load on
     demand anyway.
     """
-    if not get_settings().warm_up_router:
+    if get_settings().tenant == "father" or not get_settings().warm_up_router:
         return
 
     def run() -> None:
