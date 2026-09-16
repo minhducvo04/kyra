@@ -1,5 +1,9 @@
 # Platform, configuration and deployment
 
+## 2026-09-16: serialize first-use table creation
+
+Concurrent store constructors could pass SQLAlchemy's table-existence check together and then collide on DDL. Both `engine_for_store()` and `DbLoopStore` now use one helper guarded by a module-level lock, including when the loop store receives an explicit engine. The helper tolerates only `OperationalError` messages containing `already exists` for races with another process; other failures propagate. The existing race tests failed before the fix and passed five consecutive runs afterward. A separate real SQLite run exercised 18 concurrent mixed constructors on each of ten fresh databases, checked every metadata table and passed every integrity check. Verification output and the reviewer handoff are recorded in `data/private_docs/assignment-P02c-result.md`; tests were unchanged.
+
 ## 2026-09-15: bounded prior turns for independent reviews
 
 Reviews of continued answers now receive up to eight prior turns from the loop's own artifacts. Prompt selection

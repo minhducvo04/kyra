@@ -13,14 +13,13 @@ from pathlib import Path
 from sqlalchemy import insert, select, update
 from sqlalchemy.exc import IntegrityError
 
-from companion.db import engine_for_store
+from companion.db import create_tables, engine_for_store
 from companion.paths import DATA_DIR
 from companion.schema import loop_assignments as ASSIGNMENTS
 from companion.schema import loop_reconciliations as RECONCILIATIONS
 from companion.schema import loop_review_decisions as OWNER_DECISIONS
 from companion.schema import loop_reviews as REVIEWS
 from companion.schema import loop_runs as RUNS
-from companion.schema import metadata
 from companion.settings import get_settings
 from companion.working_loop_process import (  # re-export the process boundary for callers and tests
     MAX_PROMPT_BYTES,
@@ -288,7 +287,7 @@ class LoopStore(ABC):
 class DbLoopStore(LoopStore):
     def __init__(self, path=None, *, engine=None, artifacts_dir=None):
         self.engine = engine if engine is not None else engine_for_store(DATA_DIR / "loop.db", path)
-        metadata.create_all(self.engine)
+        create_tables(self.engine)
         self.artifacts_dir = Path(artifacts_dir or DATA_DIR / "working_loop")
         self.artifacts_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         if self.engine.dialect.name == "sqlite" and self.engine.url.database not in (None, ":memory:"):
