@@ -1,5 +1,9 @@
 # Memory layers and the LLM client
 
+## 2026-09-16: W5 memory map for independent review
+
+Added a metadata-only memory map so category counts and freshness, session links and assignment totals are visible without exposing note text. The endpoint reads the real notes, session and loop stores; it counts exchanges only when the runtime already holds an open memory store, and adds thread names and modification dates for drawing unlinked nodes. The minimal MAP panel reserves an empty FEATURES tab for W4, uses shared colour tokens and textContent, and shows only counts and dates on selection. Stale categories now supply evidence to the existing initiatives tool. The unchanged W5 and startup checks passed; the full suite reported 847 passed, 1 skipped, and ruff passed. A scratch-store ASGI HTTP run verified text omission, no Chroma import or opening, and a count from an explicitly opened real Chroma collection. JavaScript syntax passed; browser verification remains pending because the sandbox refused local socket binding and Chromium launch. Evidence and the reviewer handoff are in `data/private_docs/assignment-W5-result.md`; changes remain unstaged.
+
 `memory.py`, `memory_notes.py`, `llm.py`, `conversation.py`: the two memory layers, the Chroma id defect, token budgets, streaming, prompt caching, the date in the system prompt.
 
 Entries below were moved verbatim from `CLAUDE.md` on 2026-09-09 (original order kept, newest work is usually nearer the top of each section). Add new entries at the top of this file, dated, with the *why*.
