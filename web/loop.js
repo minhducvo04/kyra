@@ -221,6 +221,24 @@ $("reconcile-form").onsubmit = async event => {
 };
 
 const assignmentNext = {assigned:"built", built:"reviewed", reviewed:"committed"};
+const assignmentJobs = new Map(), assignmentReceipts = new Map();
+async function watchAssignmentBuild(assignmentId, jobId) {
+  assignmentJobs.set(assignmentId, jobId);
+  try {
+    let job;
+    do {
+      job = await readJson(`/api/jobs/${jobId}`);
+      if (["queued", "running"].includes(job.status)) await new Promise(resolve => setTimeout(resolve, 1500));
+    } while (["queued", "running"].includes(job.status));
+    if (job.status === "failed") throw new Error(job.error || "Build failed. Inspect the saved run before retrying.");
+    assignmentReceipts.set(assignmentId, job.result.receipt);
+    assignmentJobs.delete(assignmentId);
+    await refreshAssignments(); await refresh();
+  } catch (error) {
+    assignmentJobs.delete(assignmentId);
+    $("assignments-notice").textContent = error.message;
+  }
+}
 async function refreshAssignments() {
   $("refresh-assignments").disabled = true;
   try {
@@ -234,11 +252,40 @@ async function refreshAssignments() {
         card.append(el("h3", heading), list);
       }
       card.append(el("pre", [
+        `Plan run: ${assignment.plan_run_id ?? "Not recorded"}`,
         `Builder run: ${assignment.builder_run_id ?? "Not recorded"}`,
+        `Review run: ${assignment.review_run_id ?? "Not recorded"}`,
+        `Worktree: ${assignment.worktree || "Not created"}`,
         `Result SHA-256: ${assignment.result_sha256 || "Not recorded"}`,
         `Commit: ${assignment.commit_hash || "Not recorded"}`,
         `Created: ${assignment.created_at} · Updated: ${assignment.updated_at}`
       ].join("\n"), "receipt"));
+      const receipt = assignmentReceipts.get(assignment.id);
+      if (receipt) card.append(el("pre", JSON.stringify(receipt, null, 2), "receipt"));
+      const controls = el("div");
+      for (const [action, label, disabled] of [
+        ['plan', "Plan", assignment.status !== "assigned" || assignment.plan_run_id !== null],
+        ['build', "Build", assignment.status !== "assigned" || !assignment.plan_run_id || !!assignment.worktree],
+        ['review', "Review", assignment.status !== "built"]
+      ]) {
+        const button = el("button", label); button.type = "button"; button.dataset.action = action;
+        button.disabled = disabled || assignmentJobs.has(assignment.id);
+        button.onclick = async () => {
+          if (!confirm(action === "build" ? `Build ${assignment.code} with Codex in a new worktree?`
+            : `Ask Claude to ${action} ${assignment.code}?`)) return;
+          button.disabled = true; $("assignments-notice").textContent = "";
+          try {
+            const result = await readJson(`/api/loop/assignments/${assignment.id}/${action}`, {method:"POST",
+              headers:{"Content-Type":"application/json"}, ...(action === "build" ? {body:JSON.stringify({confirmed:true})} : {})});
+            if (result.job_id) watchAssignmentBuild(assignment.id, result.job_id);
+            selected = `assignment:${assignment.code}`; $("topic").value = selected;
+            await refreshAssignments(); await refresh();
+          } catch (error) { $("assignments-notice").textContent = error.message; button.disabled = false; }
+        };
+        controls.append(button);
+      }
+      card.append(controls);
+      if (assignmentJobs.has(assignment.id)) card.append(el("p", "Build queued or running. Waiting for its receipt.", "meta"));
       const next = assignmentNext[assignment.status];
       if (next) {
         const form = el("form");
