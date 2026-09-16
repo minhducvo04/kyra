@@ -361,6 +361,15 @@ def test_a_non_json_or_truncated_response_is_rejected_and_the_raw_output_kept(so
     assert list((tmp_path / "raw").rglob("*.json"))
 
 
+def test_a_reply_wrapped_in_a_code_fence_is_still_parsed(source, transcript, tmp_path):
+    # Found by the first real Claude call (2026-09-16): the model fenced the JSON despite the prompt.
+    # Unwrapping a fence is not a repair of content, so the guards still see exactly what was sent.
+    fenced = "```json\n" + json.dumps(_proposal(), indent=2) + "\n```\n"
+    result = MomentProposer(ScriptedLLM([fenced])).propose(source, transcript, max_moments=1, raw_dir=tmp_path / "raw")
+    assert result.rejected == [] and len(result.moments) == 1
+    assert Path(result.moments[0].raw_path).read_text() == fenced  # the raw file keeps the fence
+
+
 def test_the_prompt_carries_the_window_text_and_both_limits(source, transcript, tmp_path):
     llm = ScriptedLLM([json.dumps(_proposal())])
     MomentProposer(llm).propose(source, transcript, max_moments=2, raw_dir=tmp_path / "raw")

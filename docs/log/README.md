@@ -21,6 +21,7 @@ The table lists the topic files; this index is not one of them.
 | `visionos.md` | The Vision Pro client: transport, orb, Today tab, the SSE bug, the launch-argument seam. |
 | `platform-and-deploy.md` | Settings, errors, stores and Alembic, the job queue, the container, AWS, Render, auth, startup cost, the repo move. |
 | `publishing.md` | The PII audit, the history-rewrite rehearsal, licence, README, gitignore for personal documents. |
+| `reels.md` | Embed-only sources, transcript and proposal guards, approved moments, recall, XP, CLI and migration verification. |
 | `tools-and-feeds.md` | Book summarisation, RSS news, the Claude Code handoff tool. |
 | `rules-history.md` | The original wording of the working practices and the architecture section, with the failures each rule was written after. |
 | `verification-history.md` | What was verified for real and when, newest first. Prepend after every substantive session. |

@@ -284,6 +284,14 @@ class ProposalResult(Record):
     rejected: list[Rejection] = Field(default_factory=list)
 
 
+def _unfenced(raw: str) -> str:
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+        text = text.rsplit("```", 1)[0] if text.rstrip().endswith("```") else text
+    return text
+
+
 def _normalized(text: str) -> str:
     return " ".join(text.split())
 
@@ -424,7 +432,9 @@ class MomentProposer:
             if TRUNCATION_MARKER in raw:
                 raise ValueError("truncated: incomplete model output")
             try:
-                parsed = json.loads(raw)
+                # The first real calls fenced the JSON despite the prompt (2026-09-16). Unwrapping a fence
+                # changes no content: the raw file keeps it and the guards see what the model wrote.
+                parsed = json.loads(_unfenced(raw))
             except ValueError as exc:
                 raise ValueError("json: invalid response") from exc
             if not isinstance(parsed, dict) or not isinstance(parsed.get("moments"), list):
