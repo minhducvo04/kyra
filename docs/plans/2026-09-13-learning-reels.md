@@ -9,7 +9,7 @@ use by Duc first, an invited group second. Rights-aware from the first commit. T
 an adapter, because the next sources Duc named are tech posts by people worth reading and tech
 news, not videos.
 
-Background: `docs/plans/YouTube_AI_Learning_Reels_Project_Brief/YouTube_AI_Learning_Reels_Project_Brief.md`
+Background: `data/private_docs/reels/YouTube_AI_Learning_Reels_Project_Brief.md` (private: a conversation handoff addressed to Duc, moved out of the public tree on 2026-09-16)
 (the product brief, sections 7 to 15 and the decisions in 17). This plan builds a prerequisite
 slice of the brief's Phase 1 and takes its decisions as given where they constrain code: arbitrary
 YouTube sources are `EMBED_ONLY`; nothing downloads video or audio from such a source; the
