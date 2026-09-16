@@ -126,6 +126,9 @@ class Assignment:
     commit_hash: str | None
     created_at: str
     updated_at: str
+    plan_run_id: int | None = None
+    review_run_id: int | None = None
+    worktree: str | None = None
 
 
 @dataclass(frozen=True)
@@ -208,6 +211,9 @@ def normalize_usage(provider: str, usage: dict | None) -> dict | None:
 
 
 class LoopStore(ABC):
+    @abstractmethod
+    def bind_assignment(self, assignment_id, *, owner, plan_run_id=None, review_run_id=None, worktree=None): ...
+
     @abstractmethod
     def create_assignment(self, *, owner, code, title, goal, allowed_files, acceptance, tier="work") -> Assignment: ...
 
@@ -330,6 +336,19 @@ class DbLoopStore(LoopStore):
         with self.engine.connect() as conn:
             return self._assignment(conn.execute(select(ASSIGNMENTS).where(
                 ASSIGNMENTS.c.id == assignment_id, ASSIGNMENTS.c.owner == owner)).first())
+
+    def bind_assignment(self, assignment_id, *, owner, plan_run_id=None, review_run_id=None, worktree=None):
+        values = {key: value for key, value in dict(plan_run_id=plan_run_id,
+                  review_run_id=review_run_id, worktree=worktree).items() if value is not None}
+        with self.engine.begin() as conn:
+            where = (ASSIGNMENTS.c.id == assignment_id, ASSIGNMENTS.c.owner == owner)
+            for run_id in (plan_run_id, review_run_id):
+                if run_id is not None and not conn.execute(select(RUNS.c.id).where(
+                        RUNS.c.id == run_id, RUNS.c.owner == owner)).first():
+                    raise PolicyRefused("run_not_owned")
+            if conn.execute(update(ASSIGNMENTS).where(*where).values(**values, updated_at=_now())).rowcount != 1:
+                raise LookupError("assignment_not_found")
+            return self._assignment(conn.execute(select(ASSIGNMENTS).where(*where)).first())
 
     def advance_assignment(self, assignment_id, *, owner, status, builder_run_id=None,
                            result_sha256=None, commit_hash=None):

@@ -18,7 +18,7 @@
 <form id="request"><div class="row"><label>Topic<input id="topic" required maxlength="160" placeholder="What are you working on?"></label><label>Start with<select id="choice"><option value="codex-default">Codex · Astra · High</option><option value="claude-fable-high">Claude · Fable 5.1 · High</option></select></label><label>Tier<select id="tier"><option value="casual">Casual</option><option value="work" selected>Work</option><option value="life_changing">Life changing</option></select></label></div><label>Your request<textarea id="prompt" required maxlength="65536" rows="5" placeholder="Describe the task and what a good result needs to include."></textarea></label><div class="form-footer"><small>Uses your signed-in plans. Answers and review comments are saved privately.</small><button id="run" type="submit">Run model</button></div></form>
 <section id="assignments" aria-labelledby="assignments-heading">
 <div class="history-heading"><h2 id="assignments-heading">Assignments</h2><button id="refresh-assignments" type="button">Refresh</button></div>
-<p class="meta">Record the scope and progress of a task. Advancing records your declaration and does not run work or approve a review.</p>
+<p class="meta">Plan with Claude, confirm a Codex build in its own worktree, then ask Claude to review the diff. Each button confirms before sending work. Build receipts appear on the card; contributions appear under the assignment topic. Advancing manually records your declaration.</p>
 <details><summary>Add an assignment</summary>
 <form id="assignment-form">
 <div class="row"><label>Code<input id="assignment-code" required maxlength="160"></label><label>Title<input id="assignment-title" required></label></div>

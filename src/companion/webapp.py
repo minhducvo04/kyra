@@ -2342,6 +2342,68 @@ def loop_usage() -> dict:
     return {"rows": controller.store.usage_ledger(owner=controller.owner)}
 
 
+def _loop_dispatcher():
+    from companion.dispatch import Dispatcher
+    controller = _loop_controller()
+    return Dispatcher(controller.store, controller.runner, owner=controller.owner,
+                      repo_root=WEB_DIR.parent, worktrees_dir=DATA_DIR / "working_loop" / "worktrees")
+
+
+def _assignment_stage(assignment_id, stage):
+    from companion.working_loop import PolicyRefused
+    dispatcher = _loop_dispatcher()
+    try:
+        run = getattr(dispatcher, stage)(assignment_id)
+    except PolicyRefused as exc:
+        raise ApiError(400, "policy_refused", str(exc)) from None
+    except LookupError:
+        raise ApiError(404, "not_found", "Assignment not found") from None
+    return {"assignment": asdict(dispatcher.store.get_assignment(assignment_id, owner=dispatcher.owner)),
+            **_enqueue_loop(run)}
+
+
+@app.post("/api/loop/assignments/{assignment_id}/plan")
+def loop_plan_assignment(assignment_id: int) -> dict:
+    return _assignment_stage(assignment_id, "plan")
+
+
+class AssignmentBuildIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    confirmed: StrictBool
+
+
+@app.post("/api/loop/assignments/{assignment_id}/build")
+def loop_build_assignment(assignment_id: int, body: AssignmentBuildIn) -> dict:
+    from companion.working_loop import PolicyRefused
+    dispatcher = _loop_dispatcher()
+    try:
+        assignment, _, _ = dispatcher.check_build(assignment_id, confirmed=body.confirmed)
+    except PolicyRefused as exc:
+        if str(exc) == "confirmation_required":
+            raise ApiError(409, "confirmation_required", str(exc)) from None
+        raise ApiError(400, "policy_refused", str(exc)) from None
+    except LookupError:
+        raise ApiError(404, "not_found", "Assignment not found") from None
+    job_id = _queue.enqueue("loop_build", {"assignment_id": assignment_id, "confirmed": body.confirmed})
+    return {"assignment": asdict(assignment), "receipt": None, "job_id": job_id}
+
+
+@app.post("/api/loop/assignments/{assignment_id}/review")
+def loop_review_assignment(assignment_id: int) -> dict:
+    return _assignment_stage(assignment_id, "review")
+
+
+def _run_loop_build_job(payload, on_progress):
+    dispatcher = _loop_dispatcher()
+    receipt = dispatcher.build(payload["assignment_id"], confirmed=payload["confirmed"])
+    on_progress(f"Build exited with code {receipt.returncode}")
+    return {"assignment": asdict(dispatcher.store.get_assignment(receipt.assignment_id, owner=dispatcher.owner)),
+            "receipt": asdict(receipt)}
+
+
+HANDLERS["loop_build"] = _run_loop_build_job
+
+
 @app.get("/api/loop/runs")
 def loop_runs(topic: str | None = None) -> dict:
     controller = _loop_controller()

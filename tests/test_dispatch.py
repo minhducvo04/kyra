@@ -114,8 +114,9 @@ def test_build_is_gated_then_runs_codex_in_a_fresh_worktree(dp, wl, tmp_path, re
     d.plan(a.id)
     _drain(wl, store, runner)
 
-    def fake_codex(call):  # the "build" edits a file in the worktree, as codex exec would
-        wt = Path(call["command"][call["command"].index("-C") + 1])
+    wt = tmp_path / "wt" / "W9"  # where the dispatcher puts this assignment's worktree
+
+    def fake_codex():  # the "build" edits a file in the worktree, as codex exec would
         (wt / "hello.py").write_text("x = 2\n")
         (wt / "data" / "private_docs").mkdir(parents=True, exist_ok=True)
         (wt / "data" / "private_docs" / "assignment-W9-result.md").write_text("done\n")
@@ -144,7 +145,7 @@ def test_review_carries_the_diff_to_the_other_company(dp, wl, tmp_path, repo):
         d.review(a.id)
     d.plan(a.id)
     _drain(wl, store, runner)
-    runner._on_run = lambda call: (Path(call["command"][call["command"].index("-C") + 1]) / "hello.py").write_text("x = 2\n")
+    runner._on_run = lambda: (tmp_path / "wt" / "W9" / "hello.py").write_text("x = 2\n")
     d.build(a.id, confirmed=True)
     review = d.review(a.id)
     prompt = store.read_artifact(review.id, owner="duc")["prompt"]
@@ -167,9 +168,17 @@ def test_http_routes_and_page_buttons(dp, wl, tmp_path, monkeypatch):
     monkeypatch.setenv("KYRA_API_TOKEN", "")
     monkeypatch.setenv("KYRA_TRUST_LOOPBACK", "true")
     get_settings.cache_clear()
+    from sqlalchemy import create_engine
+
+    from companion.jobs import DbJobQueue
+    from companion.schema import metadata
+
     store = wl.DbLoopStore(tmp_path / "loop.db", artifacts_dir=tmp_path / "artifacts")
     controller = wl.LoopController(store, ScriptedRunner([]), owner=wl.PERSONAL_OWNER)
     monkeypatch.setattr(webapp, "_loop_controller", lambda: controller)
+    eng = create_engine(f"sqlite:///{tmp_path / 'q.db'}", connect_args={"check_same_thread": False})
+    metadata.create_all(eng)
+    monkeypatch.setattr(webapp, "_queue", DbJobQueue(eng))  # a private queue: no job leaks into later tests
     with TestClient(webapp.app, base_url="http://127.0.0.1:8420", client=("127.0.0.1", 4321)) as client:
         a = client.post("/api/loop/assignments", json={"code": "W9", "title": "t", "goal": "g", "allowed_files": [], "acceptance": ["a"]}).json()["assignment"]
         planned = client.post(f"/api/loop/assignments/{a['id']}/plan")
