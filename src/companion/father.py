@@ -12,6 +12,7 @@ from sqlalchemy import insert, select, update
 
 from companion.db import engine_for_store
 from companion.doc_qa import Finding, PandocRenderer, Renderer, inspect_docx
+from companion.father_draft import DraftBrief, Drafter, DraftRejected, check_draft
 from companion.paths import write_json
 from companion.schema import father_tasks
 
@@ -25,6 +26,7 @@ class WorkflowVersion:
     template_path: Path
     required_facts: list[str]
     approved_at: str | None
+    draft_instructions: str | None = None
 
 
 class WorkflowStore:
@@ -118,12 +120,13 @@ class ApprovalRefused(ValueError):
 
 class FatherTaskStore:
     def __init__(self, root: Path, workflows: WorkflowStore, *, renderer: Renderer | None = None,
-                 out_dir: Path | None = None):
+                 out_dir: Path | None = None, drafter: Drafter | None = None):
         root = Path(root).resolve()
         # Explicit path prevents a personal DATABASE_URL from joining the tenants.
         self.engine = engine_for_store(root / "father.db", explicit=root / "father.db")
         self.workflows = workflows
         self.renderer = renderer if renderer is not None else PandocRenderer()
+        self.drafter = drafter
         self.out_dir = Path(out_dir) if out_dir is not None else root / "father_tasks"
 
     @staticmethod
@@ -145,16 +148,28 @@ class FatherTaskStore:
 
     def _build(self, version: WorkflowVersion, facts: dict[str, str]) -> dict:
         template = version.template_path.read_text(encoding="utf-8")
-        required = set(version.required_facts) | {key.strip() for key in re.findall(r"\{\{([^{}]+)\}\}", template)}
+        placeholders = {key.strip() for key in re.findall(r"\{\{([^{}]+)\}\}", template)}
+        required = set(version.required_facts) | (placeholders - {"draft"})
         missing = sorted(key for key in required if not facts.get(key, "").strip())
         values = dict(facts)
         for key in missing:
             values[key] = ""
+        draft_provider = None
+        if "draft" in placeholders:
+            if self.drafter is None:
+                raise ValueError("drafter_not_configured")
+            draft = self.drafter.draft(DraftBrief(version.title, dict(facts), version.draft_instructions or ""))
+            problems = check_draft(draft, values)
+            if problems:
+                raise DraftRejected(problems)
+            values["draft"] = draft
+            draft_provider = self.drafter.provider
         document = build_document(version, values, self.out_dir / uuid4().hex / "document.docx")
         report = inspect_docx(document, facts=facts, allowed_authors={version.author}, renderer=self.renderer)
         report.findings.extend(Finding("fact_missing", "facts", key) for key in missing)
         report_data = asdict(report)
         report_data["rendered_pages"] = [str(path) for path in report.rendered_pages]
+        report_data["draft_provider"] = draft_provider
         return {"document_path": str(document), "report_json": json.dumps(report_data),
                 "facts_json": json.dumps(facts)}
 
