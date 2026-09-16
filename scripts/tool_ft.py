@@ -34,6 +34,8 @@ from companion.agent_ft import (
 )
 from companion.logging_setup import configure_logging
 from companion.paths import PROJECT_ROOT
+from companion.settings import get_settings
+from companion.tenant import refuse_training
 
 MESSAGES = FT_DIR / "messages.jsonl"
 TRACES = FT_DIR / "traces.jsonl"
@@ -180,6 +182,7 @@ def cmd_eval(args):
 
 
 def main():
+    refuse_training(get_settings())
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     g = sub.add_parser("gen")

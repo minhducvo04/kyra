@@ -1,5 +1,9 @@
 # Platform, configuration and deployment
 
+## 2026-09-16: tenant configuration and training guard
+
+Added the default personal tenant and an immutable Father policy so entry points can share explicit restrictions. Settings reject unknown tenants and Father data paths resolving inside this checkout's personal data or an enclosing main checkout's data, including symlinks; both training CLIs refuse Father before parsing commands. Local-model and router restrictions are policy flags only in this slice, not runtime enforcement. Real subprocess runs refused personal data, nested scratch, symlink access and both training CLIs, while an external temporary directory passed startup and was removed afterwards. A scratch directory inside personal data remains forbidden. Proof: `data/verifications/father/f01-*.txt`. Tenant and startup checks: 12 passed; full suite: 649 passed, 1 skipped, 6 expected errors from the pending document-QA module; ruff clean. Tests were unchanged and no server was started.
+
 ## 2026-09-10: snapshot slice complete on local master
 
 After Claude finished the initiatives merge, the reviewed snapshot slice was integrated and local master advanced to `e441bbf`. The installed `com.kyra.snapshot` plist now exactly matches `deploy/com.kyra.snapshot.plist` and runs `scripts/snapshot_data.py` from the main checkout, rather than the temporary worktree. A 04:30 local-time schedule and umask 077 protect copies under `~/kyra-snapshots`; this remains same-disk recovery, not off-machine protection. Kickstart exited 0, eight SQLite integrity checks passed, and all 348 captured files restored identically into a temporary directory, subsequently removed. Evidence: `data/verifications/2026-09-10-snapshot/launchd-main.json`. Combined Python suite: 643 passed, 1 existing optional tokenizer skip; ruff clean. No snapshot push, hook installation, or filesystem-lock rollout.
