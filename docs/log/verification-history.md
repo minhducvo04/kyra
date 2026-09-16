@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: design pass in a real browser at two widths
+
+On the integration branch, the personal server (8424) and the Father tenant server (8425) served `/`, `/loop` and `/father`. At 1280 px all three carry the same header and nav and the loop and Father pages show results above their forms; at 375 px every page measures `scrollWidth == clientWidth == 375`, the loop contributions sit above the request form (241 px against 315 px) and the Father tasks above the start form (349 px against 1608 px). Measurements: `data/verifications/design-pass/browser-pass.json`. One console error surfaced a real defect: three simultaneous loop requests on a fresh data directory raced `metadata.create_all` and one answered 500; a red test reproduces it (`tests/test_store_creation_race.py`) and the fix is P02c.
+
 ## 2026-09-16: integration branch of the four overnight branches
 
 `session/2026-09-16-integration` merges working-loop, father, console and vision-orb-interface onto master, local only. Conflicts were in settings.py (loop fields beside the tenant validator), schema.py (three appended tables and one import line), webapp.py (one import) and the two logs that every branch prepends; each kept both sides. The lost-nothing check enumerated every file each branch changed and found no line any branch had that the merged tree lacks. Three Alembic heads were merged by ecb1b431ebce. Full suite 835 passed in 32.12s, ruff clean, Swift 31 passed. Master is untouched; merging it is Duc's.
