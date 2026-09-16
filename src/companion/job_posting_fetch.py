@@ -149,6 +149,7 @@ def _key(text: str | None) -> str:
 
 
 class TargetPostingTool(Tool):
+    needs_confirmation = True
     name = "target_job_posting"
     description = ('Start on a posting Duc found: fetch its text, read the signals, log it in the tracker as "targeting". '
                    'Takes a Greenhouse/Lever/Ashby URL, or a LinkedIn/careers-page URL with the company and role - then it '

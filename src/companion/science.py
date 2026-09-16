@@ -16,6 +16,7 @@ FEEDS = {
 
 
 class ScienceFactsTool(Tool):
+    needs_confirmation = True
     name = "science_facts"
     description = (
         "Fetch recent science headlines/facts from official RSS feeds (NYT Science, "

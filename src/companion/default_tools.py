@@ -19,6 +19,7 @@ from companion.posting_signals import AnalyzePostingTool
 from companion.reminders import RemindersStore, reminder_tools
 from companion.science import ScienceFactsTool
 from companion.search import SearchKyraDataTool
+from companion.tool_runs import ToolRunStore
 from companion.tools import ToolRegistry
 
 
@@ -56,5 +57,6 @@ def default_tool_registry(draft_backend: AnthropicLLM | None = None) -> ToolRegi
             sources=[RemindersSource(reminders), ProjectNotesSource(), PatternsSource(), GitSource()],
             llm=draft_backend,
         )]
-        + [TechNewsTool(), ScienceFactsTool()]
+        + [TechNewsTool(), ScienceFactsTool()],
+        audit=ToolRunStore(),
     )

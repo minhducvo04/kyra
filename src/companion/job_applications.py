@@ -1036,6 +1036,7 @@ def generate_latex_from_selection(
 
 
 class DraftApplicationMaterialTool(Tool):
+    needs_confirmation = True
     name = "draft_application_material"
     description = (
         "Draft a cover letter or resume bullet, using Duc's actual background (never invented). Tailors to a "

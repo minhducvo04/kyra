@@ -197,6 +197,7 @@ class SuggestInitiativesTool(Tool):
     def render_result(self, result: dict) -> str:
         return render_suggestions(result)
 
+    needs_confirmation = True
     name = "suggest_initiatives"
     description = (
         "Suggest what to work on next using due reminders, project notes, repeated tool use, and recent commits. "

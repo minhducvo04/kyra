@@ -6,7 +6,7 @@ Timestamps stay ISO-8601 strings (as v1 wrote them) rather than
 TIMESTAMP columns - changing that is a data migration, tracked for a
 later slice. Alembic (migrations/) owns schema changes from here on.
 """
-from sqlalchemy import CheckConstraint, Column, Float, Integer, MetaData, String, Table, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, CheckConstraint, Column, Float, Integer, MetaData, String, Table, Text, UniqueConstraint
 
 metadata = MetaData()
 
@@ -272,4 +272,17 @@ loop_assignments = Table(
     UniqueConstraint("owner", "code", name="loop_assignment_owner_code"),
     CheckConstraint("status IN ('assigned','built','reviewed','committed')", name="loop_assignment_status"),
     CheckConstraint("tier IN ('casual','work','life_changing')", name="loop_assignment_tier"),
+
+
+# Arguments and summaries are private runtime state, shared by all front doors.
+tool_runs = Table(
+    "tool_runs", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("tool", String(128), nullable=False),
+    Column("args", Text, nullable=False),
+    Column("ok", Boolean, nullable=False),
+    Column("summary", String(300), nullable=False),
+    Column("error", Text),
+    Column("started_at", String(64), nullable=False),
+    Column("duration_ms", Float, nullable=False),
 )

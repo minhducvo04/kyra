@@ -72,6 +72,10 @@ class JobQueue(ABC):
     def get(self, job_id: int) -> Job | None: ...
 
 
+    @abstractmethod
+    def list(self, limit: int = 20) -> list[Job]: ...
+
+
 class DbJobQueue(JobQueue):
     def __init__(self, engine: Engine):
         self._engine = engine
@@ -128,6 +132,12 @@ class DbJobQueue(JobQueue):
         with self._engine.connect() as conn:
             row = conn.execute(select(J).where(J.c.id == job_id)).first()
         return self._row_to_job(row) if row else None
+
+
+    def list(self, limit: int = 20) -> list[Job]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(select(J).order_by(J.c.id.desc()).limit(max(0, limit)))
+            return [self._row_to_job(row) for row in rows]
 
 
 def run_one(queue: JobQueue, handlers: dict[str, Handler]) -> bool:

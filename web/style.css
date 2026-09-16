@@ -1394,3 +1394,41 @@ body[data-focus-evening="true"] .hud-stage { filter: brightness(0.82); }
 /* A checkbox that reads as one line beside its label, unlike .jobs-field's stacked layout. */
 .jobs-check { display:flex; align-items:center; gap:0.5rem; margin:0.7rem; font-size:0.8rem; color:var(--text-dim); }
 .jobs-check input { margin:0; flex-shrink:0; }
+
+/* Console reuses the panel shell. Wrap long tool names and private thread text. */
+#console-panel { z-index: 31; }
+#console-panel button, #console-toggle { min-height: 44px; }
+#console-close { min-width: 44px; }
+#console-panel h3, #console-panel h4 { margin: 0 0 0.6rem; }
+#console-panel h3 { font-size: 0.85rem; }
+#console-panel h4 { font-size: 0.8rem; }
+#console-panel pre, #console-repo, .console-card p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#console-panel pre { font-size: 0.72rem; }
+#console-panel .jobs-tab-panel, #console-panel .jobs-field { min-width: 0; }
+.console-card {
+  border: 1px solid var(--grid);
+  padding: 0.75rem;
+  margin-bottom: 0.85rem;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+}
+.console-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.console-run-form { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.75rem; }
+.console-run-form[hidden] { display: none; }
+.console-run-form input, .console-run-form textarea, .console-run-form select { min-width: 0; max-width: 100%; }
+.console-run-form input[type="number"] {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--grid);
+  padding: 0.5rem 0.6rem;
+  min-height: 44px;
+  font: inherit;
+}
+.console-run-form input[type="checkbox"] { align-self: flex-start; width: 24px; height: 24px; }
+.console-thread { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; text-align: left; font: inherit; }
+.console-badge { color: var(--text-faint); }
+.console-badge[data-open-for="duc"] { color: #ffba66; }
+.console-badge:is([data-open-for="build"], [data-open-for="tests"], [data-open-for="review"], [data-open-for="critique"]) { color: #29d8ff; }
