@@ -54,7 +54,9 @@ history lists them.
 
 1. The main checkout holds an untracked copy of `docs/plans/2026-09-15-multi-model-working-loop.md`; the
    tracked file lives on the integration branch. `git merge` in the main checkout will refuse while the
-   untracked copy exists. Compare them, then delete the untracked copy before merging.
+   untracked copy exists. Compared: the tracked file is the newer one (three lines differ; it records the
+   implemented state and replaces a session identifier with a private-evidence reference), so delete the
+   untracked copy before merging.
 2. `.claude/worktrees/console-snapshot` is a leftover restored snapshot; delete after a glance.
 3. The evening-theme test now reads `web/tokens.css`; any future palette move must update it again.
 4. The Codex desktop task `Design multi-model workflow` never resumed; the queued messages from last night
