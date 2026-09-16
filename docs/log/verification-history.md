@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: job tracker drag in a real browser
+
+On the integration branch server (8424, worktree data) a fictional Northwind application was added through the TRACKER form, appeared in the `applied` column, and a scripted drag (dragstart, dragover, drop with a DataTransfer) onto `interviewing` posted to the status endpoint (200), reloaded the list into the new column and updated the row's menu; zero console errors; at 375 px the nine columns wrap with `scrollWidth == clientWidth`. Codex built W6 in the desktop chat task (f76c876, 956 passed). Nit for a later pass: at the panel's desktop width the 18rem columns show two at a time.
+
 ## 2026-09-16: MAP panel in a real browser
 
 On the integration branch server (8424, worktree data): MAP opened on the features tab with seven nodes carrying their percentages (loop 60, father 80, headset 67, console 50, memory 0, ci 0, reels 0 at the time), two dependency wires, and a click on a node listed its slices with statuses; the memory tab drew the scratch data's one thread and reported zero rooms and exchanges not opened; at 375 px with the panel open `scrollWidth == clientWidth == 375`; the server log has no 500. A read-only run of the map over the real notes printed room counts and ages only. Full suite 877 passed, ruff clean, one Alembic head.

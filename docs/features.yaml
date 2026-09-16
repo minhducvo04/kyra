@@ -33,7 +33,7 @@ features:
       - {id: P01, name: CONSOLE panel, status: done}
       - {id: P02, name: One token set and header, status: done}
       - {id: W4, name: Feature map, status: done}
-      - {id: W6, name: Job list drag, status: planned}
+      - {id: W6, name: Job list drag, status: done}
   - id: memory
     name: Memory palace
     depends_on: [console]
