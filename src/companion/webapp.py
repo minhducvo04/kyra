@@ -20,7 +20,6 @@ from datetime import UTC, datetime
 from functools import cache, cached_property
 from pathlib import Path
 from typing import Literal
-
 from urllib.parse import unquote
 from uuid import UUID
 
