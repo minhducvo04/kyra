@@ -64,3 +64,6 @@ apple/**/*.xcodeproj/project.xcworkspace/xcuserdata/
 *.odt
 *.rtf
 *.tex
+
+# Test impact history (companion.test_impact), private runtime state
+.pytest_history.jsonl
