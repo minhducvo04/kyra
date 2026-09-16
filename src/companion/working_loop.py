@@ -168,6 +168,23 @@ def _write_private(path: Path, text: str):
             os.unlink(name)
 
 
+def normalize_usage(provider: str, usage: dict | None) -> dict | None:
+    if usage is None:
+        return None
+    if provider == "claude_code":
+        cached = int(usage.get("cache_read_input_tokens", 0))
+        cache_write = int(usage.get("cache_creation_input_tokens", 0))
+        uncached = int(usage.get("input_tokens", 0))
+    elif provider == "codex":
+        cached = int(usage.get("cached_input_tokens", 0))
+        cache_write = int(usage.get("cache_write_input_tokens", 0))
+        uncached = int(usage.get("input_tokens", 0)) - cached
+    else:
+        raise ValueError("unsupported_usage_provider")
+    return dict(input_uncached=uncached, input_cached_read=cached,
+                cache_write=cache_write, output=int(usage.get("output_tokens", 0)))
+
+
 class LoopStore(ABC):
     def request_is_current(self, run, *, owner):
         if not run or run.owner != owner:
@@ -194,6 +211,9 @@ class LoopStore(ABC):
 
     @abstractmethod
     def list_runs(self, *, owner, topic=None): ...
+
+    @abstractmethod
+    def usage_ledger(self, *, owner) -> list[dict]: ...
 
     @abstractmethod
     def current_artifact_sha256(self, run_id, *, owner): ...
@@ -280,6 +300,33 @@ class DbLoopStore(LoopStore):
             query = query.where(RUNS.c.topic == topic)
         with self.engine.connect() as conn:
             return [self._record(r) for r in conn.execute(query.order_by(RUNS.c.id.desc()).limit(100))]
+
+    def usage_ledger(self, *, owner) -> list[dict]:
+        _label(owner, "owner")
+        groups = {}
+        with self.engine.connect() as conn:
+            for run in conn.execute(select(RUNS).where(RUNS.c.owner == owner)):
+                model = run.served_model or run.requested_model
+                key = (run.provider, run.developer, model, run.effort)
+                if key not in groups:
+                    groups[key] = dict(provider=run.provider, developer=run.developer, model=model,
+                        effort=run.effort, runs=0, done=0, failed=0, other=0, runs_without_usage=0,
+                        input_uncached=0, input_cached_read=0, cache_write=0, output=0,
+                        provider_reported_cost_usd=None)
+                row = groups[key]
+                row["runs"] += 1
+                row[run.status if run.status in {"done", "failed"} else "other"] += 1
+                usage = normalize_usage(run.provider, json.loads(run.usage) if run.usage is not None else None)
+                if usage is None:
+                    row["runs_without_usage"] += 1
+                else:
+                    for name, value in usage.items():
+                        row[name] += value
+                model_usage = json.loads(run.model_usage) if run.model_usage is not None else None
+                for reported in (model_usage or {}).values():
+                    if reported.get("costUSD") is not None:
+                        row["provider_reported_cost_usd"] = (row["provider_reported_cost_usd"] or 0) + reported["costUSD"]
+        return sorted(groups.values(), key=lambda row: (-row["runs"], row["model"]))
 
     def _artifact_path(self, run_id, owner, name):
         run = self.get_run(run_id, owner=owner)

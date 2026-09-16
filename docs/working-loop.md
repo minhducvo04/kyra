@@ -52,6 +52,11 @@ upgraded to `a916c29e4f53` with all eight prior receipts preserved. The later co
 
 ## What the receipts prove
 
+The **USAGE** section totals all saved runs for the local owner by provider, developer, model and effort;
+**Refresh** reloads the totals. It uses the served model when reported, otherwise the requested model.
+Token totals cover known receipts only, with runs without usage counted separately. The only cost shown
+is provider-reported USD from saved per-model receipts; no pricing or subscription charge is calculated.
+
 - The controller selected an exact approved provider/model/effort and launched its configured CLI. Model prose
   cannot create another run or a review receipt. Only OpenAI and Anthropic are approved in this slice.
 - Claude's served-model field comes from its actual assistant event. Codex's current JSON stream does not report

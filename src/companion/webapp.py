@@ -2093,6 +2093,12 @@ def loop_page() -> HTMLResponse:
     return HTMLResponse(html)
 
 
+@app.get("/api/loop/usage")
+def loop_usage() -> dict:
+    controller = _loop_controller()
+    return {"rows": controller.store.usage_ledger(owner=controller.owner)}
+
+
 @app.get("/api/loop/runs")
 def loop_runs(topic: str | None = None) -> dict:
     controller = _loop_controller()

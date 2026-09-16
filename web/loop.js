@@ -155,13 +155,31 @@ async function render() {
   }
   $("runs").replaceChildren(...(nodes.length ? nodes : [el("p", "No contributions yet. Send the first request above.", "empty")]));
 }
+async function refreshUsage() {
+  $("refresh-usage").disabled = true;
+  try {
+    const {rows} = await readJson("/api/loop/usage");
+    const nodes = rows.map(row => {
+      const card = el("article", undefined, "card");
+      card.append(el("strong", `${row.developer} · ${row.provider} · ${row.model} · ${row.effort || "default effort"}`),
+        el("p", `Runs: ${row.runs} · Done: ${row.done} · Failed: ${row.failed} · Other: ${row.other} · Runs without usage: ${row.runs_without_usage}`),
+        el("p", `Reported tokens: input uncached ${row.input_uncached} · cached read ${row.input_cached_read} · cache write ${row.cache_write} · output ${row.output}`),
+        el("p", `Provider-reported cost (USD): ${row.provider_reported_cost_usd === null ? "Not supplied" : row.provider_reported_cost_usd}`, "meta"));
+      return card;
+    });
+    $("usage-rows").replaceChildren(...(nodes.length ? nodes : [el("p", "No saved runs yet.", "empty")]));
+    $("usage-notice").textContent = "";
+  } catch (error) { $("usage-notice").textContent = `Usage could not refresh: ${error.message}. Displayed totals may be outdated.`; }
+  finally { $("refresh-usage").disabled = false; }
+}
+$("refresh-usage").onclick = refreshUsage;
 async function refresh() {
   if (busy) return;
   busy = true;
   try {
     records = (await readJson("/api/loop/runs")).runs;
     if (!selected && records.length && !$("topic").value) { selected = records[0].topic; $("topic").value = selected; }
-    showTopics(); await render();
+    showTopics(); await render(); await refreshUsage();
   } catch (error) { $("notice").textContent = error.message; }
   finally { busy = false; }
 }
