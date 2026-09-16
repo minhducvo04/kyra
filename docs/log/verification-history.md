@@ -1,5 +1,9 @@
 # Verification history
 
+## 2026-09-16: CONSOLE panel in a real browser
+
+The console worktree's HUD ran on port 8423 against its own data directory. CONSOLE opened with TOOLS grouped by module (28 tools, 8 marked as needing confirmation); list_reminders ran from its generated form and returned a receipt (run_id 1) that then appeared under RUNS; RUN on draft_outreach_note raised exactly one confirm dialog and Cancel produced no request to its endpoint; at 375 px `scrollWidth == clientWidth == 375` with the panel open; zero console errors. Codex's in-process HTTP proof and scratch migration live under `data/verifications/console/`.
+
 ## 2026-09-10: snapshot merged and main scheduled entry point verified
 
 Merged Claude's completed integration into the snapshot branch, preserving both sides of two log conflicts, then fast-forwarded local master to `e441bbf`. Enumerated 61 parent/file comparisons: no additions from either parent were lost. Combined suite: **643 passed, 1 skipped in 67.69s**; existing optional tokenizer skip, ruff and plist syntax clean. The main tree matches the verified branch.
