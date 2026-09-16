@@ -3459,7 +3459,10 @@ async function loadConsoleRuns() {
         if (!data.runs.length) runs.textContent = "No tool runs yet.";
         for (const run of data.runs) {
           const row = consoleNode("article", "", "console-card");
-          row.append(consoleNode("strong", `${run.tool} · ${run.ok ? "OK" : "ERROR"}`), consoleNode("p", run.started_at), consoleNode("pre", run.error || run.summary));
+          const status = run.ok ? "done" : "failed";
+          const heading = consoleNode("strong", `${run.tool} · `);
+          heading.append(consoleNode("span", status, `status-badge status-${status}`));
+          row.append(heading, consoleNode("p", run.started_at), consoleNode("pre", run.error || run.summary));
           runs.append(row);
         }
       } catch (error) { runs.textContent = error.message; }
@@ -3471,7 +3474,9 @@ async function loadConsoleRuns() {
         if (!data.jobs.length) jobs.textContent = "No background jobs yet.";
         for (const job of data.jobs) {
           const row = consoleNode("article", "", "console-card");
-          row.append(consoleNode("strong", `#${job.id} ${job.kind} · ${job.status}`), consoleNode("p", `Created: ${job.created_at}\nFinished: ${job.finished_at || "pending"}`));
+          const heading = consoleNode("strong", `#${job.id} ${job.kind} · `);
+          heading.append(consoleNode("span", job.status, `status-badge status-${job.status}`));
+          row.append(heading, consoleNode("p", `Created: ${job.created_at}\nFinished: ${job.finished_at || "pending"}`));
           if (job.error) row.append(consoleNode("pre", job.error));
           jobs.append(row);
         }
