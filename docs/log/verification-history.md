@@ -1,5 +1,15 @@
 # Verification history
 
+## 2026-09-16: Father task cards in a real browser
+
+The Father tenant server ran on port 8422 with `KYRA_TENANT=father` and an external scratch data root (a
+placeholder key value satisfied the import; no call can succeed with it). In the browser: Start a task with
+the amount left blank produced a task in review with the finding "A required fact is missing."; Approve
+answered "Approval refused. Resolve the findings and review again." (the 409 is the only console entry);
+entering 1,250.00 and pressing Review cleared the findings; Approve then showed "Approved. Nothing has been
+sent." and History gained the row. Proof: `data/verifications/father/f03-claude-*` in the worktree. Word
+rendering still unverified; pandoc rendered the pages.
+
 ## 2026-09-10: snapshot merged and main scheduled entry point verified
 
 Merged Claude's completed integration into the snapshot branch, preserving both sides of two log conflicts, then fast-forwarded local master to `e441bbf`. Enumerated 61 parent/file comparisons: no additions from either parent were lost. Combined suite: **643 passed, 1 skipped in 67.69s**; existing optional tokenizer skip, ruff and plist syntax clean. The main tree matches the verified branch.
