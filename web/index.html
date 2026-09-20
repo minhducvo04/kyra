@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="en" data-backend="claude">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KYRA</title>
+<!-- Inline so there is no second request: without it every page load logged a
+     404 for /favicon.ico, which is a permanent false positive in any console
+     check. The mark is the wordmark's own glyph. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='25' x='4' font-size='24' fill='%2329d8ff'%3E%E2%97%88%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+<header class="app-header">
+  <a class="app-brand" href="/" aria-label="Kyra home"><span aria-hidden="true">◈</span>KYRA</a>
+  <span class="app-page">Talk</span>
+  <nav aria-label="Main navigation"><a href="/" aria-current="page">Talk</a><a href="/loop">Loop</a></nav>
+  <div class="app-status"><span class="status-dot" aria-hidden="true"></span><span id="status-text">ONLINE</span></div>
+</header>
+    <div class="header-controls">
+      <div class="backend-toggle" role="group" aria-label="Model backend">
+        <button class="backend-btn is-active" data-backend="auto" id="btn-auto" type="button">
+          <span class="dot"></span>AUTO
+        </button>
+        <button class="backend-btn" data-backend="claude" id="btn-claude" type="button">
+          <span class="dot"></span>CLAUDE
+        </button>
+        <button class="backend-btn" data-backend="local" id="btn-local" type="button">
+          <span class="dot"></span>LOCAL
+        </button>
+      </div>
+      <span class="focus-chip" id="focus-chip" hidden aria-live="polite"></span>
+      <button class="jobs-toggle" id="map-toggle" type="button" aria-controls="map-panel" aria-expanded="false">MAP</button>
+      <button class="jobs-toggle" id="console-toggle" type="button" aria-controls="console-panel" aria-expanded="false">CONSOLE</button>
+      <button class="jobs-toggle" id="room-toggle" type="button" aria-controls="room-panel" aria-expanded="false">ROOM</button>
+      <button class="jobs-toggle" id="focus-toggle" type="button">FOCUS</button>
+      <button class="jobs-toggle" id="search-toggle" type="button">SEARCH</button>
+      <button class="jobs-toggle" id="tools-toggle" type="button">TOOLS</button>
+      <button class="jobs-toggle" id="jobs-toggle" type="button">JOBS</button>
+    </div>
+
+  <aside class="jobs-panel" id="map-panel" aria-hidden="true" aria-label="Map" inert>
+    <div class="jobs-panel-header">
+      <span>MAP</span>
+      <button id="map-close" type="button" aria-label="Close map">&times;</button>
+    </div>
+    <div class="jobs-tabs" role="tablist" aria-label="Map">
+      <button class="jobs-tab is-active" id="map-tab-features" data-map-tab="features" type="button" role="tab" aria-selected="true" aria-controls="map-features">FEATURES</button>
+      <button class="jobs-tab" id="map-tab-memory" data-map-tab="memory" type="button" role="tab" aria-selected="false" aria-controls="map-memory" tabindex="-1">MEMORY</button>
+    </div>
+    <section class="jobs-tab-panel is-active" id="map-features" data-map-tab-panel="features" role="tabpanel" aria-labelledby="map-tab-features">
+      <p class="jobs-hint" id="map-summary" aria-live="polite"></p>
+      <svg id="feature-map" role="group" aria-label="Feature blueprint"></svg>
+      <div id="map-slices" aria-live="polite" tabindex="-1"></div>
+    </section>
+    <section class="jobs-tab-panel" id="map-memory" data-map-tab-panel="memory" role="tabpanel" aria-labelledby="map-tab-memory">
+      <button class="jobs-btn" id="memory-map-refresh" type="button">REFRESH</button>
+      <p class="jobs-hint">Room size shows note count. Colour shows age: fresh, 30+ days, or unknown. Small nodes are threads.</p>
+      <div id="memory-map-summary" aria-live="polite"></div>
+      <svg id="memory-map" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 180" aria-label="Memory rooms and session threads"></svg>
+      <div id="memory-map-detail" aria-live="polite"></div>
+    </section>
+  </aside>
+
+  <aside class="jobs-panel" id="console-panel" aria-hidden="true" aria-label="Console" inert>
+    <div class="jobs-panel-header">
+      <span>CONSOLE</span>
+      <button id="console-close" type="button" aria-label="Close console">&times;</button>
+    </div>
+    <div class="jobs-tabs" role="tablist" aria-label="Console">
+      <button class="jobs-tab is-active" id="console-tab-tools" data-console-tab="tools" type="button" role="tab" aria-selected="true" aria-controls="console-tools">TOOLS</button>
+      <button class="jobs-tab" id="console-tab-agents" data-console-tab="agents" type="button" role="tab" aria-selected="false" aria-controls="console-agents" tabindex="-1">AGENTS</button>
+      <button class="jobs-tab" id="console-tab-privacy" data-console-tab="privacy" type="button" role="tab" aria-selected="false" aria-controls="console-privacy" tabindex="-1">PRIVACY</button>
+      <button class="jobs-tab" id="console-tab-runs" data-console-tab="runs" type="button" role="tab" aria-selected="false" aria-controls="console-runs" tabindex="-1">RUNS</button>
+    </div>
+    <section class="jobs-tab-panel is-active" id="console-tools" data-console-tab-panel="tools" role="tabpanel" aria-labelledby="console-tab-tools">
+      <div id="console-tool-list" aria-live="polite"></div>
+    </section>
+    <section class="jobs-tab-panel" id="console-agents" data-console-tab-panel="agents" role="tabpanel" aria-labelledby="console-tab-agents">
+      <button class="jobs-btn" id="console-agents-refresh" type="button">REFRESH</button>
+      <div id="console-repo"></div>
+      <div id="console-thread-list" aria-live="polite"></div>
+      <pre id="console-thread-text" tabindex="0" aria-label="Session thread" aria-live="polite"></pre>
+    </section>
+    <section class="jobs-tab-panel" id="console-privacy" data-console-tab-panel="privacy" role="tabpanel" aria-labelledby="console-tab-privacy">
+      <button class="jobs-btn" id="console-privacy-refresh" type="button">REFRESH</button>
+      <h3>Notes privacy labels</h3>
+      <p class="console-badge">Review each notes file before saving its label. A stale label means the file changed and needs review again.</p>
+      <div id="console-privacy-files" aria-live="polite"></div>
+      <h3>Outbound dry-run summary · last 30 days</h3>
+      <div id="console-privacy-report" aria-live="polite"></div>
+    </section>
+    <section class="jobs-tab-panel" id="console-runs" data-console-tab-panel="runs" role="tabpanel" aria-labelledby="console-tab-runs">
+      <button class="jobs-btn" id="console-runs-refresh" type="button">REFRESH</button>
+      <h3>Tool runs</h3>
+      <div id="console-run-list" aria-live="polite"></div>
+      <h3>Background jobs</h3>
+      <div id="console-job-list" aria-live="polite"></div>
+    </section>
+  </aside>
+
+  <aside class="jobs-panel" id="jobs-panel" aria-hidden="true">
+    <div class="jobs-panel-header">
+      <span>JOB APPLICATIONS</span>
+      <button id="jobs-close" type="button" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="jobs-tabs" role="tablist">
+      <button class="jobs-tab is-active" data-tab="draft" type="button">DRAFT</button>
+      <button class="jobs-tab" data-tab="profile" type="button">PROFILE</button>
+      <button class="jobs-tab" data-tab="tracker" type="button">TRACKER</button>
+      <button class="jobs-tab" data-tab="outreach" type="button">OUTREACH</button>
+      <button class="jobs-tab" data-tab="autofill" type="button">AUTOFILL</button>
+      <button class="jobs-tab" data-tab="apply" type="button">APPLY</button>
+    </div>
+
+    <section class="jobs-tab-panel is-active" data-tab-panel="draft">
+      <label class="jobs-field">
+        <span>Material</span>
+        <select id="draft-material-type">
+          <option value="cover_letter">Cover letter</option>
+          <option value="latex_resume">Resume — Fast (auto one-page fit from my .tex)</option>
+          <option value="resume_detailed">Resume — Detailed (pick &amp; choose)</option>
+          <option value="resume_bullet">Single resume bullet</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label class="jobs-field">
+        <span>Job posting / role (leave blank to draft for an ideal role in general)</span>
+        <textarea id="draft-job-context" rows="4" placeholder="Paste the job posting, or describe the role. Leave blank for general-purpose material."></textarea>
+      </label>
+      <label class="jobs-field">
+        <span>Extra background (optional — anything not already in a saved document)</span>
+        <textarea id="draft-background" rows="3" placeholder="Any extra background/achievements"></textarea>
+      </label>
+
+      <div class="jobs-field">
+        <span>Background documents — check any to include as facts (manage these in PROFILE)</span>
+        <div class="jobs-doc-picker" id="draft-background-docs">
+          <span class="jobs-hint">no saved documents yet</span>
+        </div>
+      </div>
+      <div class="jobs-field">
+        <span>Style sample — pick one whose tone to match (not its facts)</span>
+        <select id="draft-style-doc">
+          <option value="">(none)</option>
+        </select>
+      </div>
+
+      <label class="jobs-field" style="flex-direction: row; align-items: center; gap: 0.5rem;">
+        <input id="draft-include-github" type="checkbox" style="width: auto;">
+        <span>Include my real GitHub projects (fetches live from your public repos, set GitHub link in PROFILE)</span>
+      </label>
+
+      <details class="jobs-details">
+        <summary>Quick one-off upload (also saved to your library)</summary>
+        <label class="jobs-field">
+          <span>Resume (pdf / docx / txt / tex)</span>
+          <input id="draft-resume" type="file" accept=".pdf,.docx,.txt,.md,.tex">
+        </label>
+        <label class="jobs-field">
+          <span>Style sample file</span>
+          <input id="draft-style" type="file" accept=".pdf,.docx,.txt,.md,.tex">
+        </label>
+      </details>
+
+      <button class="jobs-btn" id="draft-generate" type="button">Generate draft</button>
+      <div class="jobs-warnings" id="draft-warnings" hidden></div>
+      <div class="jobs-output" id="draft-output" hidden>
+        <div class="jobs-output-header">
+          <span>DRAFT</span>
+          <button class="jobs-copy" id="draft-copy" type="button">copy</button>
+        </div>
+        <ul id="draft-live" class="fit-notes draft-live" hidden></ul>
+        <div id="draft-fit-status" class="fit-status" hidden></div>
+        <details id="draft-notes-wrap" class="fit-notes" hidden><summary>what happened, attempt by attempt</summary><ul id="draft-notes"></ul></details>
+        <details id="draft-questions-wrap" class="fit-notes" hidden open><summary>questions for you - bullets that would benefit from a real number (Kyra never guesses one)</summary><ul id="draft-questions"></ul></details>
+        <a id="draft-pdf-link" class="jobs-btn" href="#" hidden style="display: block; text-align: center; text-decoration: none; margin: 0.7rem;">Download PDF</a>
+        <pre id="draft-text"></pre>
+      </div>
+
+      <div id="fit-panel" hidden style="display: flex; flex-direction: column; gap: 0.7rem;">
+        <button class="jobs-btn" id="fit-analyze" type="button">Analyze fit</button>
+        <p class="jobs-hint">Rates every bullet, entry, and skills line against the job above. Nothing is cut until you generate.</p>
+        <div class="jobs-warnings" id="fit-warnings" hidden></div>
+        <div id="fit-checklist" hidden style="display: flex; flex-direction: column; gap: 0.6rem;"></div>
+        <button class="jobs-btn" id="fit-generate" type="button" hidden>Generate resume from selection</button>
+        <div class="fit-cut-suggestions" id="fit-cut-suggestions" hidden>
+          <div class="fit-cut-title">Doesn't fit one page yet — consider cutting next (lowest fit first)</div>
+          <ul id="fit-cut-list"></ul>
+        </div>
+        <div class="jobs-output" id="fit-output" hidden>
+          <div class="jobs-output-header">
+            <span>RESULT</span>
+            <button class="jobs-copy" id="fit-copy" type="button">copy</button>
+          </div>
+          <div id="fit-fit-status" class="fit-status" hidden></div>
+          <a id="fit-pdf-link" class="jobs-btn" href="#" hidden style="display: block; text-align: center; text-decoration: none; margin: 0.7rem;">Download PDF</a>
+          <pre id="fit-text"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tab-panel="profile">
+      <p class="jobs-hint">This is what Kyra has on file for autofill and drafting. Nothing here leaves your machine except into a form you asked her to fill.</p>
+
+      <div class="jobs-profile-grid">
+        <label class="jobs-field"><span>First name</span><input id="profile-first_name" type="text"></label>
+        <label class="jobs-field"><span>Last name</span><input id="profile-last_name" type="text"></label>
+        <label class="jobs-field"><span>Email</span><input id="profile-email" type="text"></label>
+        <label class="jobs-field"><span>Phone</span><input id="profile-phone" type="text"></label>
+        <label class="jobs-field"><span>Location (city)</span><input id="profile-location" type="text" placeholder="City, State — Lever requires this"></label>
+        <label class="jobs-field"><span>Country</span><input id="profile-country" type="text"></label>
+        <label class="jobs-field"><span>Current company</span><input id="profile-current_company" type="text"></label>
+        <label class="jobs-field"><span>LinkedIn</span><input id="profile-linkedin_url" type="text" placeholder="https://linkedin.com/in/..."></label>
+        <label class="jobs-field"><span>GitHub</span><input id="profile-github_url" type="text" placeholder="https://github.com/..."></label>
+        <label class="jobs-field"><span>Portfolio</span><input id="profile-portfolio_url" type="text"></label>
+        <label class="jobs-field"><span>Twitter</span><input id="profile-twitter_url" type="text"></label>
+        <label class="jobs-field"><span>Preferred name</span><input id="profile-preferred_name" type="text"></label>
+        <label class="jobs-field"><span>Pronouns</span><input id="profile-pronouns" type="text"></label>
+      </div>
+
+      <label class="jobs-field">
+        <span>Resume file for autofill — the actual file Kyra attaches when filling out a job form</span>
+        <select id="profile-resume-picker">
+          <option value="">Pick a resume from your document library…</option>
+        </select>
+        <input id="profile-resume_path" type="text" placeholder="Or paste an absolute file path directly" style="margin-top: 0.35rem;">
+        <span class="jobs-hint">Upload a resume in the DRAFT or below in DOCUMENT LIBRARY first, then pick it here — that's the easiest way to fill this in.</span>
+      </label>
+
+      <details class="jobs-details">
+        <summary>Voluntary self-identification (EEO) — defaults to declining, edit only if you want real answers on file</summary>
+        <label class="jobs-field"><span>Gender identity</span><input id="profile-eeo_gender_identity" type="text"></label>
+        <label class="jobs-field"><span>Race/ethnicity</span><input id="profile-eeo_race_ethnicity" type="text"></label>
+        <label class="jobs-field"><span>Hispanic/Latino</span><input id="profile-eeo_hispanic_latino" type="text"></label>
+        <label class="jobs-field"><span>Veteran status</span><input id="profile-eeo_veteran_status" type="text"></label>
+        <label class="jobs-field"><span>Disability status</span><input id="profile-eeo_disability_status" type="text"></label>
+      </details>
+
+      <button class="jobs-btn" id="profile-save" type="button">Save profile</button>
+      <div class="jobs-warnings" id="profile-warnings" hidden></div>
+
+      <details class="jobs-details">
+        <summary>View raw record (transparency)</summary>
+        <pre class="jobs-raw" id="profile-raw"></pre>
+      </details>
+
+      <div class="jobs-panel-subhead">DOCUMENT LIBRARY</div>
+      <p class="jobs-hint">Resumes, style samples, and notes you've added — reused across every draft.</p>
+      <div class="jobs-doc-list" id="profile-doc-list"></div>
+
+      <div class="jobs-doc-add">
+        <input id="doc-label" type="text" placeholder="Label (e.g. Backend resume 2026)">
+        <select id="doc-kind">
+          <option value="resume">Resume</option>
+          <option value="style_sample">Style sample</option>
+          <option value="note">Note (e.g. summary of a past project)</option>
+        </select>
+        <textarea id="doc-text" rows="3" placeholder="Paste text directly (e.g. a project summary) — or attach a file below instead"></textarea>
+        <input id="doc-file" type="file" accept=".pdf,.docx,.txt,.md,.tex">
+        <button class="jobs-btn" id="doc-add" type="button">Add to library</button>
+      </div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tab-panel="tracker">
+      <div class="jobs-tracker-add">
+        <input id="tracker-company" type="text" placeholder="Company">
+        <input id="tracker-role" type="text" placeholder="Role">
+        <input id="tracker-link" type="text" placeholder="Link (optional)">
+        <button class="jobs-btn" id="tracker-add" type="button">Add</button>
+      </div>
+      <p>Drag an application to a status column, or use its status menu.</p>
+      <div class="jobs-tracker-list tracker-columns" id="tracker-list">
+        <section data-tracker-column="targeting"><h3>targeting</h3></section>
+        <section data-tracker-column="ready_to_submit"><h3>ready to submit</h3></section>
+        <section data-tracker-column="needs_attention"><h3>needs attention</h3></section>
+        <section data-tracker-column="applied"><h3>applied</h3></section>
+        <section data-tracker-column="referral_pending"><h3>referral pending</h3></section>
+        <section data-tracker-column="interviewing"><h3>interviewing</h3></section>
+        <section data-tracker-column="offer"><h3>offer</h3></section>
+        <section data-tracker-column="rejected"><h3>rejected</h3></section>
+        <section data-tracker-column="withdrawn"><h3>withdrawn</h3></section>
+      </div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tab-panel="outreach">
+      <div class="jobs-tracker-add">
+        <input id="outreach-name" type="text" placeholder="Name">
+        <input id="outreach-company" type="text" placeholder="Company">
+        <input id="outreach-role" type="text" placeholder="Role (optional)">
+        <input id="outreach-url" type="text" placeholder="Profile URL (optional)">
+        <input id="outreach-relation" type="text" placeholder="How you know them (optional)">
+        <button class="jobs-btn" id="outreach-add" type="button">Add</button>
+      </div>
+      <label class="jobs-field">
+        <input type="checkbox" id="outreach-due-only">
+        <span>only follow-ups that are due</span>
+      </label>
+      <p class="jobs-hint">Kyra drafts and tracks. She never sends anything and never touches LinkedIn &mdash; you paste and press send yourself.</p>
+      <div class="jobs-tracker-list" id="outreach-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tab-panel="autofill">
+      <label class="jobs-field">
+        <span>Greenhouse job posting URL</span>
+        <input id="autofill-url" type="text" placeholder="https://job-boards.greenhouse.io/company/jobs/12345">
+      </label>
+      <button class="jobs-btn" id="autofill-run" type="button">Fill it in</button>
+      <p class="jobs-hint">Opens a real browser window and fills it from your saved profile (data/applicant_profile.json). Nothing gets submitted — you review and click submit yourself.</p>
+      <div class="jobs-output" id="autofill-output" hidden>
+        <div class="jobs-output-header"><span>RESULT</span></div>
+        <div id="autofill-result"></div>
+      </div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tab-panel="apply">
+      <label class="jobs-field">
+        <span>Posting URLs, one per line (Greenhouse / Lever / Ashby / Workday)</span>
+        <textarea id="apply-urls" rows="5" placeholder="https://job-boards.greenhouse.io/company/jobs/12345&#10;https://jobs.ashbyhq.com/company/..."></textarea>
+      </label>
+      <label class="jobs-field">
+        <span>Cover letter</span>
+        <select id="apply-cover-letter">
+          <option value="auto">Only when the posting mentions one</option>
+          <option value="always">Always draft one</option>
+          <option value="never">Never</option>
+        </select>
+      </label>
+      <label class="jobs-field">
+        <span>Only if she cannot find it: the listing you found it on (one posting only)</span>
+        <input id="apply-source-url" type="text" placeholder="https://www.linkedin.com/jobs/view/...">
+      </label>
+      <label class="jobs-check">
+        <input id="apply-retailor" type="checkbox">
+        <span>Tailor the resume again even if this application already has one</span>
+      </label>
+      <button class="jobs-btn" id="apply-run" type="button">Apply to all</button>
+      <p class="jobs-hint">For each URL: tracker entry, resume tailored from your base .tex to one page and saved under data/resumes/, cover letter if asked, then the form filled in a browser window (Greenhouse, Ashby and Lever; a Workday application starts at its own sign-in, so that one stays yours to open). Nothing gets submitted: ready_to_submit means review and click, needs_attention means read the list first. A LinkedIn URL works on its own: she looks the job up on the company&rsquo;s own board from the company and role on its tracker row, and never opens LinkedIn. If she cannot identify it she says so rather than guessing &mdash; then paste the posting&rsquo;s &ldquo;Apply on company website&rdquo; link above and put the listing in the box below it. An application that already has a tailored resume reuses it, so re-running one is quick; tick the box to spend a fresh pass instead.</p>
+      <div id="apply-jobs"></div>
+    </section>
+  </aside>
+
+  <aside class="jobs-panel" id="search-panel" aria-hidden="true">
+    <div class="jobs-panel-header">
+      <span>SEARCH</span>
+      <button id="search-close" type="button" aria-label="Close">&times;</button>
+    </div>
+
+    <section class="jobs-tab-panel is-active">
+      <label class="jobs-field">
+        <span>Search everything Kyra stores</span>
+        <input id="search-query" type="text" autocomplete="off"
+               placeholder="why did we pick BGE, or RECENCY_WEIGHT&hellip;">
+      </label>
+
+      <div class="search-kinds" id="search-kinds" role="group" aria-label="Filter by kind">
+        <button class="search-chip is-active" data-kind="" type="button">ALL</button>
+        <button class="search-chip" data-kind="doc" type="button">DOCS</button>
+        <button class="search-chip" data-kind="plan" type="button">PLANS</button>
+        <button class="search-chip" data-kind="digest" type="button">DIGESTS</button>
+        <button class="search-chip" data-kind="resume" type="button">RESUMES</button>
+        <button class="search-chip" data-kind="memory_note" type="button">NOTES</button>
+        <button class="search-chip" data-kind="conversation" type="button">CHAT</button>
+      </div>
+
+      <div class="search-actions">
+        <button class="jobs-btn" id="search-run" type="button">SEARCH</button>
+        <button class="jobs-btn" id="search-answer" type="button">SYNTHESIZE ANSWER</button>
+        <button class="jobs-btn" id="search-reindex" type="button">REINDEX</button>
+      </div>
+
+      <label class="search-private">
+        <input type="checkbox" id="search-sensitive">
+        <span>Include private docs &mdash; off by default</span>
+      </label>
+
+      <div class="search-status" id="search-status"></div>
+      <div class="search-answer" id="search-answer-box" hidden></div>
+      <div class="search-results" id="search-results"></div>
+    </section>
+  </aside>
+
+  <aside class="jobs-panel" id="room-panel" aria-hidden="true" aria-label="Room" inert>
+    <div class="jobs-panel-header">
+      <span>ROOM</span>
+      <button id="room-close" type="button" aria-label="Close Room">&times;</button>
+    </div>
+    <section class="jobs-tab-panel is-active">
+      <p class="jobs-status" id="room-humidity">Humidity: unavailable · Target: unavailable</p>
+      <svg id="room-history" viewBox="0 0 360 96" role="img" aria-label="Humidity over the last 24 hours; breaks indicate missing readings" hidden></svg>
+      <p class="jobs-status" id="room-history-caption" role="status" aria-live="polite"></p>
+      <label class="jobs-check"><input id="room-display" type="checkbox" role="switch" disabled> Display <span id="room-display-pending"></span></label>
+      <label class="jobs-check"><input id="room-light" type="checkbox" role="switch" disabled> Night light <span id="room-light-pending"></span></label>
+      <label class="jobs-field">
+        <span>Night light brightness: <output id="room-brightness-value" for="room-brightness">40%</output> <span id="room-brightness-pending"></span></span>
+        <input id="room-brightness" type="range" min="40" max="100" value="40" disabled>
+      </label>
+      <button class="jobs-btn" id="room-refresh" type="button">Refresh</button>
+      <p class="jobs-status" id="room-status" role="status" aria-live="polite"></p>
+    </section>
+  </aside>
+
+  <!-- Focus blocks. Plan and the evidence for every default:
+       docs/plans/2026-09-08-attention-environment.md. The arm is not shown while a
+       block runs (the server strips it); it is revealed when the block ends. -->
+  <aside class="jobs-panel" id="focus-panel" aria-hidden="true">
+    <div class="jobs-panel-header">
+      <span>FOCUS</span>
+      <button id="focus-close" type="button" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="jobs-tabs" role="tablist">
+      <button class="jobs-tab is-active" data-focus-tab="block" type="button">BLOCK</button>
+      <button class="jobs-tab" data-focus-tab="history" type="button">HISTORY</button>
+      <button class="jobs-tab" data-focus-tab="about" type="button">ABOUT</button>
+    </div>
+
+    <section class="jobs-tab-panel is-active" data-focus-tab-panel="block">
+      <div id="focus-idle">
+        <label class="jobs-field">
+          <span>What are you working on?</span>
+          <input id="focus-task" type="text" placeholder="tailoring the Northwind resume">
+        </label>
+        <label class="jobs-field">
+          <span>Length</span>
+          <select id="focus-minutes">
+            <option value="25">25 minutes</option>
+            <option value="50" selected>50 minutes (break at 25)</option>
+            <option value="90">90 minutes (breaks at 25, 50, 75)</option>
+          </select>
+        </label>
+        <label class="jobs-field jobs-field-row">
+          <input id="focus-probe-on" type="checkbox" checked>
+          <span>Run the 60-second reaction-time probe at both ends</span>
+        </label>
+        <button class="jobs-btn" id="focus-start" type="button">Start block</button>
+        <p class="focus-note">Headphones for every block, so the arms stay comparable.</p>
+      </div>
+
+      <div id="focus-running" hidden>
+        <div class="focus-readout">
+          <div class="focus-remaining" id="focus-remaining">--:--</div>
+          <div class="focus-task-line" id="focus-task-line"></div>
+          <div class="focus-next-break" id="focus-next-break"></div>
+        </div>
+        <div class="focus-blind">Sound condition hidden until the block ends.</div>
+        <label class="jobs-field">
+          <span>How did that go? (1 poor - 5 great)</span>
+          <div class="focus-rating" id="focus-rating" role="group" aria-label="Rating">
+            <button class="focus-rate-btn" data-rating="1" type="button">1</button>
+            <button class="focus-rate-btn" data-rating="2" type="button">2</button>
+            <button class="focus-rate-btn" data-rating="3" type="button">3</button>
+            <button class="focus-rate-btn" data-rating="4" type="button">4</button>
+            <button class="focus-rate-btn" data-rating="5" type="button">5</button>
+          </div>
+        </label>
+        <label class="jobs-field">
+          <span>One word on why</span>
+          <input id="focus-note" type="text" placeholder="steady / restless / interrupted">
+        </label>
+        <button class="jobs-btn" id="focus-end" type="button">End block</button>
+      </div>
+
+      <div id="focus-probe" hidden>
+        <div class="focus-probe-head" id="focus-probe-head">REACTION-TIME PROBE</div>
+        <p class="focus-note" id="focus-probe-hint">
+          Press SPACE the moment the dot appears. About a minute. Do not anticipate - waiting is the task.
+        </p>
+        <button class="focus-target" id="focus-target" type="button" aria-label="Probe target"></button>
+        <div class="focus-probe-progress" id="focus-probe-progress"></div>
+        <button class="jobs-btn jobs-btn-quiet" id="focus-probe-skip" type="button">Skip the probe</button>
+      </div>
+
+      <div class="focus-result" id="focus-result" hidden></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-focus-tab-panel="history">
+      <button class="jobs-btn" id="focus-history-refresh" type="button">Refresh</button>
+      <div class="jobs-tracker-list" id="focus-history-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-focus-tab-panel="about">
+      <div class="focus-about" id="focus-about"></div>
+    </section>
+  </aside>
+
+  <aside class="jobs-panel" id="tools-panel" aria-hidden="true">
+    <div class="jobs-panel-header">
+      <span>TOOLS</span>
+      <button id="tools-close" type="button" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="jobs-tabs" role="tablist">
+      <button class="jobs-tab is-active" data-tools-tab="reminders" type="button">REMINDERS</button>
+      <button class="jobs-tab" data-tools-tab="initiatives" type="button">SUGGESTIONS</button>
+      <button class="jobs-tab" data-tools-tab="news" type="button">NEWS</button>
+      <button class="jobs-tab" data-tools-tab="science" type="button">SCIENCE</button>
+      <button class="jobs-tab" data-tools-tab="learning" type="button">LEARNING</button>
+      <button class="jobs-tab" data-tools-tab="memory" type="button">MEMORY</button>
+    </div>
+
+    <section class="jobs-tab-panel is-active" data-tools-tab-panel="reminders">
+      <div class="jobs-tracker-add">
+        <input id="reminder-text" type="text" placeholder="Remind me to...">
+        <input id="reminder-due" type="datetime-local">
+        <button class="jobs-btn" id="reminder-add" type="button">Add</button>
+      </div>
+      <label class="jobs-field" style="flex-direction: row; align-items: center; gap: 0.5rem;">
+        <input id="reminder-show-done" type="checkbox" style="width: auto;">
+        <span>show completed</span>
+      </label>
+      <div class="jobs-tracker-list" id="reminder-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tools-tab-panel="initiatives">
+      <p class="jobs-help">Choose a first step to add as an undated reminder. Nothing runs automatically.</p>
+      <button class="jobs-btn" id="initiative-refresh" type="button">Refresh suggestions</button>
+      <div class="jobs-tracker-list" id="initiative-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tools-tab-panel="news">
+      <button class="jobs-btn" id="news-fetch" type="button">Fetch tech news</button>
+      <div class="jobs-feed-list" id="news-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tools-tab-panel="science">
+      <button class="jobs-btn" id="science-fetch" type="button">Fetch science facts</button>
+      <div class="jobs-feed-list" id="science-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tools-tab-panel="learning">
+      <div class="jobs-panel-subhead" style="border-top: none; padding-top: 0;">DUE FOR REVIEW</div>
+      <button class="jobs-btn" id="learning-refresh" type="button">Check due reviews</button>
+      <div class="jobs-tracker-list" id="learning-due-list"></div>
+
+      <div class="jobs-panel-subhead">ADD AN ITEM</div>
+      <div class="jobs-doc-add">
+        <input id="learning-topic" type="text" placeholder="Topic (e.g. CAP theorem)">
+        <textarea id="learning-summary" rows="3" placeholder="Summary"></textarea>
+        <input id="learning-takeaway" type="text" placeholder="Key takeaway">
+        <button class="jobs-btn" id="learning-add" type="button">Save for spaced repetition</button>
+      </div>
+    </section>
+    <section class="jobs-tab-panel" data-tools-tab-panel="memory">
+      <p class="jobs-hint">Everything here goes into <em>every</em> system prompt, in full &mdash; and into every resume draft. This is what Kyra durably believes about you.</p>
+      <p class="jobs-hint" id="memnote-weight"></p>
+      <div class="jobs-tracker-add">
+        <input id="memnote-category" type="text" placeholder="Category (e.g. preferences)">
+        <input id="memnote-text" type="text" placeholder="The fact to remember">
+        <button class="jobs-btn" id="memnote-add" type="button">Add</button>
+      </div>
+      <div class="jobs-tracker-list" id="memnote-list"></div>
+    </section>
+
+  </aside>
+
+  <main class="stage">
+    <div class="core-wrap" id="core-wrap">
+      <svg class="core" viewBox="0 0 240 240" aria-hidden="true">
+        <circle class="ring ring-outer" cx="120" cy="120" r="108"></circle>
+        <circle class="ring ring-tick" cx="120" cy="120" r="108"></circle>
+        <circle class="ring ring-mid" cx="120" cy="120" r="84"></circle>
+        <circle class="ring ring-inner" cx="120" cy="120" r="58"></circle>
+        <circle class="ring ring-core" cx="120" cy="120" r="34"></circle>
+        <circle class="core-dot" cx="120" cy="120" r="5"></circle>
+      </svg>
+      <div class="core-readout">
+        <div class="core-label" id="core-label">STANDBY</div>
+        <div class="core-sub" id="core-sub">awaiting input</div>
+      </div>
+    </div>
+
+    <div class="transcript-bar">
+      <button id="transcript-clear" class="ghost-btn" type="button" title="Forget the transcript kept in this browser">CLEAR</button>
+    </div>
+    <section class="transcript" id="transcript" aria-live="polite">
+      <div class="line line-kyra">
+        <span class="line-tag">KYRA</span>
+        <span class="line-text">Systems online. What are we working on, Duc?</span>
+      </div>
+    </section>
+    <section id="pending-actions" class="pending-actions" aria-label="Actions waiting for approval" aria-live="polite"></section>
+  </main>
+
+  <footer class="input-bar">
+    <div class="voice-mode-toggle" role="group" aria-label="Voice input mode">
+      <button class="voice-mode-btn is-active" data-mode="ptt" id="btn-ptt" type="button">PTT</button>
+      <button class="voice-mode-btn" data-mode="handsfree" id="btn-handsfree" type="button">HANDS-FREE</button>
+    </div>
+    <div class="mic-wrap">
+      <button id="mic" type="button" class="mic-btn" data-state="idle" aria-label="Voice input" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" fill="currentColor"/>
+          <path d="M6 11a1 1 0 0 0-2 0 8 8 0 0 0 7 7.94V21H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-2.06A8 8 0 0 0 20 11a1 1 0 0 0-2 0 6 6 0 0 1-12 0Z" fill="currentColor"/>
+        </svg>
+      </button>
+      <span class="mic-label" id="mic-label">MIC OFF</span>
+    </div>
+    <div class="voice-mode-toggle" role="group" aria-label="Speak replies">
+      <button class="voice-mode-btn" id="btn-speak" type="button" aria-pressed="false" title="Read her replies aloud">SPEAK</button>
+    </div>
+    <div class="input-frame">
+      <span class="bracket" aria-hidden="true">&#91;</span>
+      <input id="input" type="text" autocomplete="off" spellcheck="false" placeholder="type your command&hellip;" />
+      <span class="bracket" aria-hidden="true">&#93;</span>
+    </div>
+    <button id="send" type="button" aria-label="Send">
+      <span>SEND</span>
+    </button>
+  </footer>
+
+  <audio id="reply-audio" hidden></audio>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

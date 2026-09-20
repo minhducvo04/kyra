@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: replace __KYRA_ROOT__ with the absolute checkout path when installing, for example
+     sed "s#__KYRA_ROOT__#$PWD#g" deploy/com.kyra.home-sampler.plist > ~/Library/LaunchAgents/com.kyra.home-sampler.plist -->
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.kyra.home-sampler</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__KYRA_ROOT__/.venv/bin/python</string>
+        <string>__KYRA_ROOT__/scripts/home_sampler.py</string>
+        <string>--backfill</string>
+    </array>
+    <key>WorkingDirectory</key><string>__KYRA_ROOT__</string>
+    <key>StartInterval</key><integer>300</integer>
+    <key>StandardOutPath</key><string>__KYRA_ROOT__/data/home-sampler.log</string>
+    <key>StandardErrorPath</key><string>__KYRA_ROOT__/data/home-sampler.err</string>
+    <key>Umask</key><integer>63</integer>
+    <key>EnvironmentVariables</key>
+    <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+</dict>
+</plist>

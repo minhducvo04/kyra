@@ -1,0 +1,85 @@
+{"message": "can you remind me to submit the reimbursement form on Friday", "path": "tool", "backend": "claude", "note": "add_reminder"}
+{"message": "don't let me forget to water the plants tonight", "path": "tool", "backend": "claude", "note": "add_reminder"}
+{"message": "what's still on my plate", "path": "tool", "backend": "claude", "note": "list_reminders"}
+{"message": "show me everything I've asked you to remember to do", "path": "tool", "backend": "claude", "note": "list_reminders"}
+{"message": "the dentist one is done, tick it off", "path": "tool", "backend": "claude", "note": "complete_reminder"}
+{"message": "I finished the tax thing, you can close that reminder", "path": "tool", "backend": "claude", "note": "complete_reminder"}
+{"message": "bump the gym reminder to Sunday", "path": "tool", "backend": "claude", "note": "snooze_reminder"}
+{"message": "move that call reminder to next Tuesday instead", "path": "tool", "backend": "claude", "note": "snooze_reminder"}
+{"message": "what happened in tech this morning", "path": "tool", "backend": "claude", "note": "tech_news"}
+{"message": "give me the headlines from hacker news", "path": "tool", "backend": "claude", "note": "tech_news"}
+{"message": "anything new from NASA or science today", "path": "tool", "backend": "claude", "note": "science_facts"}
+{"message": "pull the latest science stories for me", "path": "tool", "backend": "claude", "note": "science_facts"}
+{"message": "save what you just explained about Raft so I review it next week", "path": "tool", "backend": "claude", "note": "save_learning_item"}
+{"message": "put that CAP theorem summary into my review queue", "path": "tool", "backend": "claude", "note": "save_learning_item"}
+{"message": "anything due for review today", "path": "tool", "backend": "claude", "note": "due_learning_reviews"}
+{"message": "what should I be revising right now", "path": "tool", "backend": "claude", "note": "due_learning_reviews"}
+{"message": "I got the consistent hashing one right, mark it reviewed", "path": "tool", "backend": "claude", "note": "mark_learning_reviewed"}
+{"message": "I forgot the B-tree one completely, reset it", "path": "tool", "backend": "claude", "note": "mark_learning_reviewed"}
+{"message": "log that I applied to Databricks for a platform engineer role", "path": "tool", "backend": "claude", "note": "add_job_application"}
+{"message": "track a new application: Cursor, AI engineer, applied today", "path": "tool", "backend": "claude", "note": "add_job_application"}
+{"message": "which companies am I still waiting to hear from", "path": "tool", "backend": "claude", "note": "list_job_applications"}
+{"message": "list my open applications", "path": "tool", "backend": "claude", "note": "list_job_applications"}
+{"message": "Epsilon moved me to a phone screen, update it", "path": "tool", "backend": "claude", "note": "update_job_application_status"}
+{"message": "Cursor rejected me, mark that one closed", "path": "tool", "backend": "claude", "note": "update_job_application_status"}
+{"message": "draft a cover letter for this Anthropic posting", "path": "tool", "backend": "claude", "note": "draft_application_material"}
+{"message": "write me two resume bullets for a data engineering role", "path": "tool", "backend": "claude", "note": "draft_application_material"}
+{"message": "fill in the application at job-boards.greenhouse.io/acme/jobs/99 for me", "path": "tool", "backend": "claude", "note": "autofill_job_application"}
+{"message": "autofill that greenhouse form I pasted", "path": "tool", "backend": "claude", "note": "autofill_job_application"}
+{"message": "remember that my brother's name is Alex", "path": "tool", "backend": "claude", "note": "save_memory_note"}
+{"message": "note for later: I hate early morning meetings", "path": "tool", "backend": "claude", "note": "save_memory_note"}
+{"message": "keep in mind I'm allergic to moonpea", "path": "tool", "backend": "claude", "note": "save_memory_note"}
+{"message": "morning! how's it going", "path": "text", "backend": "local", "note": "casual"}
+{"message": "ugh long day, just want to chat for a bit", "path": "text", "backend": "local", "note": "casual"}
+{"message": "tell me something fun about octopuses", "path": "text", "backend": "local", "note": "casual science, not a fetch"}
+{"message": "what's your favorite kind of weather", "path": "text", "backend": "local", "note": "casual"}
+{"message": "did you know honey never spoils? wild right", "path": "text", "backend": "local", "note": "casual"}
+{"message": "say something encouraging, I'm nervous", "path": "text", "backend": "local", "note": "casual"}
+{"message": "haha ok fair point", "path": "text", "backend": "local", "note": "casual"}
+{"message": "what's 15% of 80", "path": "text", "backend": "local", "note": "trivial"}
+{"message": "explain how Raft handles leader election in depth", "path": "text", "backend": "claude", "note": "explain a topic"}
+{"message": "walk me through the tradeoffs of consistent hashing vs range partitioning", "path": "text", "backend": "claude", "note": "explain a topic"}
+{"message": "help me think through how to structure the migration to Postgres", "path": "text", "backend": "claude", "note": "careful reasoning"}
+{"message": "can you coordinate the refactor plan with Claude Code", "path": "text", "backend": "claude", "note": "work coordination"}
+{"message": "give me a summary of how transformers use attention", "path": "text", "backend": "claude", "note": "explain a topic"}
+{"message": "review my argument: is it better to shard by user id or by time here", "path": "text", "backend": "claude", "note": "careful reasoning"}
+{"message": "why does my LaTeX resume overflow to two pages sometimes", "path": "text", "backend": "claude", "note": "explain / reasoning"}
+{"message": "what does a good STAR answer for Ownership look like", "path": "text", "backend": "claude", "note": "explain a topic"}
+{"message": "can you write a cover letter about octopuses for fun", "path": "text", "backend": "local", "note": "hard: 'cover letter' but not a job application"}
+{"message": "remind me how quicksort works", "path": "text", "backend": "claude", "note": "hard: 'remind' but it's an explanation, not a reminder"}
+{"message": "what's the news with my sister lately", "path": "text", "backend": "local", "note": "hard: 'news' but casual"}
+{"message": "I applied a patch to the router yesterday", "path": "text", "backend": "local", "note": "hard: 'applied' but not a job application"}
+{"message": "remember when we talked about black holes? that was fun", "path": "text", "backend": "local", "note": "hard: 'remember' but casual, nothing to save"}
+{"message": "should I save my learning notes in markdown or a database", "path": "text", "backend": "claude", "note": "hard: 'save learning' but asking for advice"}
+{"message": "list the pros and cons of Kubernetes for a small team", "path": "text", "backend": "claude", "note": "hard: 'list' but an explanation"}
+{"message": "is science news usually reliable", "path": "text", "backend": "local", "note": "hard: 'science news' but casual opinion"}
+{"message": "how do I fill out a W-4 form", "path": "text", "backend": "claude", "note": "hard: 'fill out form' but not a job application"}
+{"message": "can you snooze for a second, I need to think", "path": "text", "backend": "local", "note": "hard: 'snooze' but casual"}
+{"message": "what jobs did people have before computers", "path": "text", "backend": "local", "note": "hard: 'jobs' but casual"}
+{"message": "add a note to the design doc that we chose SQLite", "path": "text", "backend": "claude", "note": "hard: 'note' but not a memory note about Duc"}
+{"message": "my sister Alex is visiting next week, remember that", "path": "tool", "backend": "claude", "note": "save_memory_note - person fact"}
+{"message": "set something so I don't miss the 3pm standup", "path": "tool", "backend": "claude", "note": "add_reminder - no keyword 'remind'"}
+{"message": "add Alex Rivera at Northwind to my outreach list, she's a Cloudvale alum on the payments team", "path": "tool", "backend": "claude", "note": "add_outreach_contact"}
+{"message": "draft the LinkedIn note for my Northwind contact", "path": "tool", "backend": "claude", "note": "draft_outreach_note"}
+{"message": "copy the follow-up for Alex so I can paste it", "path": "tool", "backend": "claude", "note": "copy_outreach_note"}
+{"message": "Alex accepted my connection request, log that", "path": "tool", "backend": "claude", "note": "update_outreach_status"}
+{"message": "which of my outreach follow-ups are overdue", "path": "tool", "backend": "claude", "note": "list_outreach"}
+{"message": "read the warning signs in this posting: Senior-ish Junior Engineer, 5+ years, $60k-$180k, fast-paced...", "path": "tool", "backend": "claude", "note": "analyze_job_posting"}
+{"message": "target this one: jobs.ashbyhq.com/moonharbor/8f2a1c", "path": "tool", "backend": "claude", "note": "target_job_posting - no keyword beyond 'target' + URL"}
+{"message": "what's a good salary range for a new grad SWE in NYC?", "path": "text", "backend": "claude", "note": "hard: salary/job talk but advice, not a posting to analyze"}
+{"message": "how do I write a good LinkedIn note in general", "path": "text", "backend": "claude", "note": "hard: 'LinkedIn note' but general advice, no contact"}
+{"message": "what does a reposted job usually mean", "path": "text", "backend": "claude", "note": "hard: 'reposted job' but an explanation, no posting given"}
+{"message": "my cousin's recruiter friend ghosted her, brutal", "path": "text", "backend": "local", "note": "hard: 'recruiter' but casual"}
+{"message": "what did we decide about the recency weight in memory retrieval", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "find that note where I wrote down my writing voice", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "search my digests for the Anthropic posting", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "what does CLAUDE.md say about the resume token budget", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "look up what I saved about the Northwind application", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "dig up the cover letter I wrote for the Ashby role", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
+{"message": "use the Northwind resume for that application", "path": "tool", "backend": "claude", "note": "set_application_resume"}
+{"message": "attach the tailored Moonharbor pdf to the Moonharbor application", "path": "tool", "backend": "claude", "note": "set_application_resume"}
+{"message": "set the resume on the Stripe application to the one we just made", "path": "tool", "backend": "claude", "note": "set_application_resume"}
+{"message": "what's the difference between BM25 and TF-IDF", "path": "text", "backend": "claude", "note": "bait: lookup-shaped but general knowledge"}
+{"message": "how do I search for a file by name in bash", "path": "text", "backend": "claude", "note": "bait: lookup-shaped but general knowledge"}
+{"message": "what should I look for in a startup offer", "path": "text", "backend": "claude", "note": "bait: look for != search my data"}
+{"message": "I searched everywhere for my keys this morning", "path": "text", "backend": "local", "note": "bait: casual search"}

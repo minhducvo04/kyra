@@ -1,0 +1,16 @@
+{"message": "how humid is it in here", "path": "tool", "backend": "claude", "note": "humidifier_status"}
+{"message": "is the humidifier on right now", "path": "tool", "backend": "claude", "note": "humidifier_status"}
+{"message": "what's the humidity in my room", "path": "tool", "backend": "claude", "note": "humidifier_status"}
+{"message": "turn the humidifier off", "path": "tool", "backend": "claude", "note": "humidifier_control"}
+{"message": "set the humidity to 50 percent", "path": "tool", "backend": "claude", "note": "humidifier_control"}
+{"message": "put the humidifier on auto", "path": "tool", "backend": "claude", "note": "humidifier_control"}
+{"message": "the air feels dry, crank the mist up", "path": "tool", "backend": "claude", "note": "humidifier_control"}
+{"message": "switch the humidifier display off, it's too bright", "path": "tool", "backend": "claude", "note": "humidifier_control"}
+{"message": "what humidity is best for sleeping", "path": "text", "backend": "claude", "note": "near-miss: a fact question, no device"}
+{"message": "how does an ultrasonic humidifier actually work", "path": "text", "backend": "claude", "note": "near-miss: explanation, no device"}
+{"message": "it's so humid outside today, I hate it", "path": "text", "backend": "local", "note": "near-miss: small talk"}
+{"message": "remind me to refill the humidifier tank tonight", "path": "tool", "backend": "claude", "note": "near-miss: set_reminder, not the device"}
+{"message": "turn on the night light", "path": "tool", "backend": "claude", "note": "humidifier_control"}
+{"message": "dim the humidifier light to about half", "path": "tool", "backend": "claude", "note": "humidifier_control"}
+{"message": "night light off please, I'm going to bed", "path": "tool", "backend": "claude", "note": "humidifier_control"}
+{"message": "is it bad to sleep with a night light on", "path": "text", "backend": "claude", "note": "near-miss: a fact question, no device"}

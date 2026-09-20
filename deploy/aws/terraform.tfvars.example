@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+region        = "us-west-2"
+allowed_cidrs = ["203.0.113.4/32"] # your public IP: curl -s https://checkip.amazonaws.com
+
+# Optional HTTPS: an ACM certificate in the same region for a domain you point at the ALB.
+# acm_certificate_arn = "arn:aws:acm:us-west-2:123456789012:certificate/..."
+
+# Pause without destroying (RDS and EFS keep billing; Fargate stops):
+# api_desired_count    = 0
+# worker_desired_count = 0

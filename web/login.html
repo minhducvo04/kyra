@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en" data-backend="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KYRA</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='25' x='4' font-size='24' fill='%2329d8ff'%3E%E2%97%88%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  /* Self-contained: the HUD's own tokens, but none of its layout, so this page
+     cannot break when app.js or the panel CSS changes. */
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .login-card { width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--grid);
+                border-radius: 4px; padding: 28px 24px; }
+  .login-card .wordmark { justify-content: center; margin-bottom: 4px; }
+  .login-sub { text-align: center; color: var(--text-faint); font-size: 11px; letter-spacing: .18em;
+               text-transform: uppercase; margin-bottom: 22px; }
+  .login-card label { display: block; color: var(--text-dim); font-size: 11px; letter-spacing: .12em;
+                      text-transform: uppercase; margin-bottom: 8px; }
+  .login-card input { width: 100%; box-sizing: border-box; background: var(--void); color: var(--text);
+                      border: 1px solid var(--grid); border-radius: 3px; padding: 11px 12px;
+                      font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+  .login-card input:focus { outline: none; border-color: var(--accent-dim); box-shadow: 0 0 0 2px var(--accent-glow); }
+  .login-card button { width: 100%; margin-top: 16px; padding: 11px; cursor: pointer;
+                       background: var(--accent-dim); color: var(--text); border: 1px solid var(--accent);
+                       border-radius: 3px; font-family: 'Orbitron', sans-serif; font-size: 12px;
+                       letter-spacing: .16em; text-transform: uppercase; }
+  .login-card button[disabled] { opacity: .5; cursor: default; }
+  .login-error { margin-top: 14px; color: var(--danger); font-size: 12px; min-height: 1.2em;
+                 font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="login-wrap">
+    <form class="login-card" id="login-form">
+      <div class="wordmark">
+        <span class="wordmark-mark" aria-hidden="true">◈</span>
+        <span class="wordmark-text">KYRA</span>
+      </div>
+      <div class="login-sub">Access token required</div>
+      <label for="token">Token</label>
+      <input id="token" name="token" type="password" autocomplete="current-password" autofocus
+             spellcheck="false" required>
+      <button type="submit" id="login-btn">Enter</button>
+      <div class="login-error" id="login-error" role="alert"></div>
+    </form>
+  </div>
+<script>
+  const form = document.getElementById("login-form");
+  const err = document.getElementById("login-error");
+  const btn = document.getElementById("login-btn");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    err.textContent = "";
+    btn.disabled = true;
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: document.getElementById("token").value }),
+      });
+      if (res.ok) { window.location.href = "/"; return; }
+      // The server's own message, so a throttle reads as a throttle and not as a wrong token.
+      const body = await res.json().catch(() => null);
+      err.textContent = body?.error?.message || `Rejected (${res.status})`;
+    } catch {
+      err.textContent = "Could not reach the server.";
+    }
+    btn.disabled = false;
+  });
+</script>
+</body>
+</html>

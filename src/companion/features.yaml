@@ -1,0 +1,105 @@
+# Kyra feature map. Hand-kept by Duc and the agents; rendered on the HUD by companion.features.
+# status per slice: planned | red | building | done. A feature's percent is done slices over all slices.
+features:
+  - id: loop
+    name: Working loop
+    depends_on: []
+    slices:
+      - {id: A01, name: Usage ledger, status: done}
+      - {id: A02, name: Tiers and readiness, status: done}
+      - {id: A03, name: Assignment records, status: done}
+      - {id: W2, name: Dispatch from the page, status: done}
+      - {id: D06, name: Second build after a real run, status: done}
+      - {id: W3, name: Brief answers by model, status: done}
+  - id: busy
+    name: Busy mode
+    depends_on: []
+    slices:
+      - {id: F01, name: Tenant seam, status: done}
+      - {id: F02, name: Document QA, status: done}
+      - {id: F03, name: Task cards, status: done}
+      - {id: F04, name: Drafting with guards, status: done}
+      - {id: F05, name: Provider terms and deployment, status: planned}
+  - id: headset
+    name: Vision Pro client
+    depends_on: [loop]
+    slices:
+      - {id: V01, name: Orb and card, status: done}
+      - {id: V02, name: Second opinion, status: done}
+      - {id: V03, name: Taps verified in the simulator, status: planned}
+  - id: console
+    name: Console and design
+    depends_on: []
+    slices:
+      - {id: P01, name: CONSOLE panel, status: done}
+      - {id: P02, name: One token set and header, status: done}
+      - {id: W4, name: Feature map, status: done}
+      - {id: W6, name: Job list drag, status: done}
+  - id: memory
+    name: Memory palace
+    depends_on: [console]
+    slices:
+      - {id: W5, name: Memory map and dots, status: done}
+  - id: ci
+    name: Test impact
+    depends_on: []
+    slices:
+      - {id: W1, name: Impacted tests first, status: done}
+  - id: reels
+    name: Learning reels
+    depends_on: []
+    slices:
+      - {id: R-A, name: Slice A, status: done}
+  # Phase 1 of the whole-system plan (docs/whole-system-vision.md, docs/plans/2026-09-17-whole-system-phase-1.md).
+  - id: room
+    name: The room (hub, sensors, actuators)
+    depends_on: []
+    slices:
+      - {id: H1, name: HomeBackend and Home Assistant client, status: planned}
+      - {id: H2, name: room_status and set_room tools, status: planned}
+      - {id: H3, name: Sensor sampler to env.db, status: planned}
+      - {id: H4, name: Humidity and CO2 automations, status: planned}
+  - id: body
+    name: The body (one health line a day)
+    depends_on: [headset]
+    slices:
+      - {id: B1, name: iPhone target with HealthKit read, status: planned}
+      - {id: B2, name: Health summary endpoint, status: planned}
+      - {id: B3, name: Morning brief from the summary, status: planned}
+  - id: broker
+    name: Brain broker
+    depends_on: []
+    slices:
+      - {id: K1, name: Request origin and block tiers, status: planned}
+      - {id: K2, name: Policy and capability layers, status: planned}
+      - {id: K3, name: Reachability and fallback, status: planned}
+      - {id: K4, name: Tailnet and HTTPS, status: planned}
+  - id: gate
+    name: Outbound gate
+    depends_on: [broker]
+    slices:
+      - {id: G1, name: OutboundGate with audit and pseudonyms, status: planned}
+      - {id: G2, name: Every cloud call through the gate, status: planned}
+      - {id: G3, name: Untrusted content rule, status: planned}
+  - id: ledger
+    name: Life ledger and review inbox
+    depends_on: [room, body, console]
+    slices:
+      - {id: L1, name: daily_features and baselines, status: planned}
+      - {id: L2, name: Activity sampler, status: planned}
+      - {id: L3, name: Turn traces with signals, status: planned}
+      - {id: L4, name: Review inbox and labels, status: planned}
+  - id: scorecard
+    name: Scorecard
+    depends_on: [ledger]
+    slices:
+      - {id: S1, name: eval.py registry with recorded and live tiers, status: planned}
+      - {id: S2, name: SCORECARD section in the digest, status: planned}
+      - {id: S3, name: Held-out hash guard, status: planned}
+  - id: attention
+    name: Attention mechanics
+    depends_on: [reels, scorecard]
+    slices:
+      - {id: T1, name: Reels only in breaks with a cap, status: planned}
+      - {id: T2, name: Batched notifications with a daily cap, status: planned}
+      - {id: T3, name: Streaks with a freeze, status: planned}

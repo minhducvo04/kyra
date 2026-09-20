@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: replace __KYRA_ROOT__ with the absolute checkout path before installing
+     as ~/Library/LaunchAgents/com.kyra.daily-digest.plist. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.kyra.daily-digest</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__KYRA_ROOT__/.venv/bin/python</string>
+        <string>__KYRA_ROOT__/scripts/daily_digest.py</string>
+    </array>
+    <key>WorkingDirectory</key><string>__KYRA_ROOT__</string>
+    <key>StartCalendarInterval</key>
+    <dict><key>Hour</key><integer>5</integer><key>Minute</key><integer>0</integer></dict>
+    <key>StandardOutPath</key><string>__KYRA_ROOT__/data/digests/launchd.log</string>
+    <key>StandardErrorPath</key><string>__KYRA_ROOT__/data/digests/launchd.err</string>
+    <key>EnvironmentVariables</key>
+    <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+</dict>
+</plist>

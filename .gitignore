@@ -1,0 +1,81 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Env / secrets. Every .env variant except the tracked template.
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+
+# Vector store / data
+/data/
+*.sqlite3
+chroma_db/
+
+# Claude Code handoff drafts - can contain private conversation context
+handoff/
+
+# Throwaway experiments (pyproject excludes it from ruff too)
+scratchpad/
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Terraform (deploy/aws): local state holds the DB password; tfvars holds your IP/account
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# Xcode build output and per-user state (the project file itself is tracked)
+apple/.build/
+apple/**/build/
+apple/**/*.xcodeproj/xcuserdata/
+apple/**/*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Personal documents, wherever they land.
+# /data/ above already covers the real stores (essays, transcripts, resumes,
+# applicant profile, job-search notes). These patterns are the second line: a
+# personal file dropped anywhere else in the tree stays out of a public repo by
+# default. The repo tracks zero files of these types, so nothing is hidden that
+# was meant to ship. If you ever genuinely need to commit one: git add -f <path>.
+*.doc
+*.docx
+*.pdf
+*.pages
+*.key
+*.numbers
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+*.odt
+*.rtf
+*.tex
+
+# Test impact history (companion.test_impact), private runtime state
+.pytest_history.jsonl
+
+# Personal planning and briefs never enter the public tree (AGENTS.md section 2, rule 7).
+# Put them under data/private_docs/ and reference the path. These patterns catch the
+# names such files have carried before they were caught by hand.
+docs/**/*Brief*
+docs/**/*brief*
+docs/**/*Handoff*
+docs/**/*handoff*
+docs/**/*personal*
+docs/**/*private*
+docs/private/
+*.private.md
