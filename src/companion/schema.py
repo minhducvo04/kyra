@@ -118,6 +118,28 @@ job_applications = Table(
     Column("updated_at", String(64), nullable=False),
 )
 
+# Posting-specific outreach drafts; separate from a contact's ongoing conversation.
+job_outreach_plans = Table(
+    "job_outreach_plans", metadata,
+    Column("application_id", Integer, primary_key=True),
+    Column("contact_id", Integer),
+    Column("kind", String(32), nullable=False),
+    Column("recipient", Text, nullable=False),
+    Column("note", Text, nullable=False),
+    Column("apply_by_at", String(64)),
+    Column("review_state", String(32), nullable=False),
+    Column("created_at", String(64), nullable=False),
+)
+
+job_application_events = Table(
+    "job_application_events", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("application_id", Integer, nullable=False, index=True),
+    Column("status", String(32), nullable=False),
+    Column("at", String(64), nullable=False),
+    Column("note", Text),
+)
+
 # v2 slice 3: the job queue. One row per long-running task (a resume fit loop
 # runs 1-2 minutes with several model calls and must not sit inside an HTTP
 # request). payload/progress/result are JSON text so the table is portable

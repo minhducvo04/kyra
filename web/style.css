@@ -1,5 +1,32 @@
 :root { --idle-speed: 140s; --mid-speed: 90s; --inner-speed: 46s; }
 
+#script-error {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2147483647;
+  max-height: 45vh;
+  overflow: auto;
+  padding: 12px 16px;
+  background: #420b0b;
+  color: #fff;
+  border: 3px solid #ffcc66;
+  font: 14px/1.5 monospace;
+  pointer-events: auto;
+  user-select: text;
+}
+#script-error pre { white-space: pre-wrap; overflow-wrap: anywhere; color: inherit; }
+#script-error button {
+  background: #fff;
+  color: #210000;
+  border: 2px solid #ffcc66;
+  padding: 8px 12px;
+  margin-right: 8px;
+  min-height: 44px;
+  font: inherit;
+}
+
 #map-panel { z-index: 31; }
 #map-panel button, #map-toggle { min-height: 44px; }
 #map-close { min-width: 44px; }
@@ -15,6 +42,18 @@
 #map-slices { font-size: var(--text-sm); overflow-wrap: anywhere; }
 #map-slices h3 { font-size: inherit; }
 #map-slices li { margin-block: var(--space-2); }
+.system-map-scroll { overflow: auto; max-height: 65vh; }
+#system-map { width: 1120px; font: var(--text-sm) var(--font-mono); }
+#system-map text { fill: var(--text); }
+#system-map .map-status { fill: var(--text-dim); font-size: var(--text-xs); }
+#system-map [data-node] { cursor: pointer; }
+#system-map [data-state="planned"] .map-card { stroke-dasharray: 6 4; }
+#system-map [data-node]:is(:hover, :focus) .map-card { stroke: var(--accent); stroke-width: 2; }
+#system-map-detail { font-size: var(--text-sm); overflow-wrap: anywhere; }
+@media (min-width: 900px) {
+  #map-panel.is-wide { width: min(1200px, 96vw); }
+  #map-panel.is-wide #system-map { width: 100%; }
+}
 
 #initiative-list .jobs-tracker-item {
   display: flex;
@@ -1419,3 +1458,213 @@ body[data-focus-evening="true"] .hud-stage { filter: brightness(0.82); }
 .privacy-stale { color: var(--attention); }
 #console-privacy > button { margin-bottom: 0.75rem; }
 #console-privacy-report { margin-top: 0.75rem; overflow-wrap: anywhere; }
+
+.privacy-label-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .privacy-label-columns { grid-template-columns: 1fr; } }
+
+/* Attention stays bounded, with source evidence and native snooze controls. */
+.attention-content { padding: 1rem; overflow-y: auto; }
+.attention-card { margin-bottom: 1rem; overflow-wrap: anywhere; }
+.attention-card[data-severity="2"] { border-left: 3px solid var(--attention); }
+.attention-card h3 { font-size: var(--text-sm); margin: 0 0 0.5rem; }
+.attention-card p { margin: 0.5rem 0; }
+.attention-snooze { display: flex; align-items: end; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.attention-snooze label { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; font-size: var(--text-xs); }
+.attention-snooze input { min-height: 44px; max-width: 100%; box-sizing: border-box; background: var(--panel-2); color: var(--text); border: 1px solid var(--grid); font: inherit; }
+#attention-panel button { min-height: 44px; }
+#attention-grouped { border-top: 1px solid var(--border); font-size: var(--text-sm); }
+.team-status-link { display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; white-space: normal; }
+.team-status-notices { overflow-wrap: anywhere; margin-bottom: 1rem; }
+.team-status-notice { color: var(--attention); border-left: 3px solid var(--attention); padding-left: 0.75rem; }
+.team-status-card .jobs-hint, .team-status-notices .jobs-hint, #attention-status, #progress-status {
+  color: var(--text-dim); font-size: var(--text-xs); line-height: 1.5;
+}
+
+.line-more-btn {
+  align-self: flex-start;
+  min-height: 44px;
+  border: 1px solid var(--grid);
+  background: var(--panel-2);
+  color: var(--accent);
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  cursor: pointer;
+}
+.line-more-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Progress uses explicit denominators; unknown scope has no filled bar. */
+.progress-content { padding: 1rem; overflow-y: auto; }
+.progress-content h2 { font-size: var(--text-sm); }
+.progress-today { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.progress-count { display: flex; flex-direction: column; gap: 0.25rem; font-size: var(--text-xs); }
+.progress-count strong { font-size: var(--text-lg); }
+.progress-lead { margin-bottom: 1rem; overflow-wrap: anywhere; }
+.progress-lead h3 { margin: 0 0 0.5rem; font-size: var(--text-sm); }
+.progress-lead p { margin: 0.5rem 0; }
+.progress-lead[data-stalled="true"] { border-left: 3px solid var(--attention); }
+.progress-stalled { color: var(--attention); }
+.progress-bar { height: 0.65rem; border: 1px solid var(--grid); background: var(--panel-2); overflow: hidden; }
+.progress-fill { display: block; height: 100%; background: var(--accent); }
+.progress-unknown { border-style: dashed; background: transparent; }
+#progress-panel button { min-height: 44px; }
+
+.learning-content { padding: 1rem; overflow-y: auto; }
+.learning-content h2, .learning-card h3 { font-size: var(--text-sm); }
+.learning-card { margin: 0 0 1rem; overflow-wrap: anywhere; }
+.learning-card h3 { margin-top: 0; }
+.learning-card iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; }
+.learning-answer[hidden] { display: none; }
+.learning-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.learning-options { display: grid; gap: 0.5rem; }
+.learning-options button { text-align: left; white-space: normal; overflow-wrap: anywhere; }
+#learning-panel button { min-height: 44px; }
+.learning-feedback { white-space: pre-wrap; }
+
+/* Evidence stays readable even for long file names. */
+.reflection-card { overflow-wrap: anywhere; }
+.reflection-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+#reflection-feed { margin-top: 1.5rem; }
+
+/* Daily source cards remain readable on narrow HUDs. */
+.daily-content { padding: 1rem; overflow-y: auto; }
+.daily-section { margin: 1rem 0; }
+.daily-card, .daily-path { overflow-wrap: anywhere; }
+.daily-section h2 { font-size: 1rem; }
+
+/* Private export charts use plain SVG, with explicit gaps. */
+.myself-content { padding: 1rem; overflow-y: auto; overflow-wrap: anywhere; }
+.myself-content h2 { font-size: var(--text-sm); }
+.myself-line { width: 100%; height: auto; }
+.myself-line path { fill: none; stroke: var(--accent); stroke-width: 2; }
+.myself-line circle { fill: var(--accent); }
+.myself-line text { fill: currentColor; font-size: 10px; }
+
+/* Workspace is a panel shell. Focus sound and timing have their own lifecycle. */
+.workspace-page { height: 100dvh; }
+.workspace-page .app-header { flex: 0 0 auto; padding: 8px 24px; }
+.workspace-page .jobs-panel { display: none; position: relative; inset: auto; width: 100%; max-width: none; min-height: 0; flex: 1; transform: none; transition: none; border-left: 0; }
+.workspace-page .jobs-panel.is-open { display: flex; }
+.workspace-page #map-panel.is-wide { width: 100%; }
+#workspace-notices { flex: 0 0 auto; max-height: 120px; overflow: auto; padding: 8px 20px; border-bottom: 1px solid var(--grid); background: var(--panel-2); font: 13px/1.5 var(--font-sans, sans-serif); }
+#workspace-notices p { margin: 4px 0; overflow-wrap: anywhere; }
+#workspace-notices [role="alert"] { color: var(--error, #ffb1a0); }
+.workspace-page .focus-chip { align-self: flex-start; margin: 6px 20px; min-height: 44px; cursor: pointer; }
+.workspace-page .pending-actions { max-height: none; max-width: none; }
+.workspace-page .jobs-panel-header { flex: 0 0 auto; }
+.workspace-page .jobs-tabs { flex-wrap: wrap; flex-shrink: 0; }
+.workspace-page .jobs-panel > * { min-width: 0; }
+
+/* Public hiring candidates share the JOBS controls and typography. */
+.scout-card { padding: 1rem 0; border-bottom: 1px solid currentColor; overflow-wrap: anywhere; }
+.scout-card h3 { margin: 0 0 .5rem; }
+.scout-card a { display: block; margin: .4rem 0; }
+.scout-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+
+.ready-card { padding: 1rem; margin: .75rem 0; border: 1px solid currentColor; overflow-wrap: anywhere; }
+.ready-card.is-selected { outline: 2px solid var(--accent, #7ecfff); outline-offset: 2px; }
+.ready-card a { display: block; margin: .5rem 0; }
+.ready-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+/* Device cards retain native select controls and readable touch targets. */
+.device-card { margin-top: 16px; }
+.device-control { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; flex-wrap: wrap; }
+.device-control select, .device-control input { min-height: 44px; max-width: 100%; }
+.device-control input:focus-visible, .device-control select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* Owl and orb share the same presence state and readable status labels. */
+:root {
+  --owl-color: #F5F3ED;
+  --owl-crest-color: #F4BCD2;
+  --owl-belly-color: #F4BCD2;
+  --owl-wings-color: #86CFC9;
+  --owl-eyes-color: #58CBCD;
+  --owl-beak-color: #E6A2B8;
+  --owl-feet-color: #E6A2B8;
+}
+.presence-avatar { position: relative; display: flex; flex-direction: column; align-items: center; flex: 0 0 auto; margin-bottom: 0.5rem; }
+body[data-skin="owl"] #core-wrap, body[data-skin="orb"] #kyra-owl { display: none; }
+.presence-avatar .core-readout { position: static; min-height: 30px; text-align: center; }
+body[data-skin="orb"] .presence-avatar .core-readout { position: absolute; top: calc(50% - 28px); }
+#skin-toggle { min-height: 32px; padding: 4px 14px; margin-top: 4px; border-radius: 20px; color: var(--text-dim); }
+#skin-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#kyra-owl { --owl-level: 0; width: min(28vh, 216px); height: min(28vh, 216px); overflow: visible; filter: drop-shadow(0 0 16px var(--accent-glow)); }
+#kyra-owl .owl-body, #kyra-owl .owl-wing { fill: var(--owl-color); stroke: #b9c6cf; stroke-width: 1.5; stroke-linejoin: round; }
+#kyra-owl .owl-face { fill: #fff; fill-opacity: 0.55; }
+#kyra-owl .owl-belly { fill: var(--owl-belly-color); }
+#kyra-owl .owl-crest { fill: var(--owl-crest-color); }
+#kyra-owl .owl-wing { fill: var(--owl-wings-color); }
+#kyra-owl .owl-iris { fill: var(--owl-eyes-color); }
+#kyra-owl .owl-feathers { fill: none; stroke: #b9c6cf; stroke-width: 2; stroke-linecap: round; }
+#kyra-owl .owl-shadow { fill: var(--accent); opacity: 0.12; }
+#kyra-owl .owl-eye-white { fill: #fff; }
+#kyra-owl .owl-pupil { fill: #172b3a; }
+#kyra-owl .owl-glint { fill: #fff; }
+#kyra-owl .owl-blush { fill: #e8bcb6; opacity: 0.5; }
+#kyra-owl .owl-beak { fill: var(--owl-beak-color); stroke: #b57b90; stroke-width: 1; }
+#kyra-owl .owl-feet { stroke: var(--owl-feet-color); stroke-width: 4; }
+#kyra-owl .owl-mouth { fill: #503c31; transform: scaleY(0); }
+#kyra-owl .owl-sleepy { display: none; stroke: #172b3a; stroke-width: 4; }
+#kyra-owl :is(.owl-eye, .owl-head, .owl-wing, .owl-ruffle, .owl-mouth, .owl-beak) { transform-box: fill-box; transform-origin: center; }
+#kyra-owl .owl-head { transform-origin: center 75%; }
+#kyra-owl .owl-wing { transform-origin: center top; }
+body[data-presence="idle"] #kyra-owl .owl-eye { animation: owl-blink 5.8s infinite; }
+body[data-presence="listening"] #kyra-owl .owl-head { transform: rotate(-9deg); }
+body[data-presence="listening"] #kyra-owl .owl-wing-right { transform: rotate(-12deg); }
+body[data-presence="thinking"] #kyra-owl .owl-pupil { transform: translate(3px, -6px); }
+body[data-presence="thinking"] #kyra-owl .owl-head { transform: rotate(6deg); }
+body[data-presence="speaking"] #kyra-owl .owl-mouth { transform: scaleY(var(--owl-level)); }
+body[data-presence="speaking"] #kyra-owl .owl-beak { transform: translateY(calc(-3px * var(--owl-level))); }
+body[data-presence="interrupted"] #kyra-owl .owl-ruffle { animation: owl-ruffle 0.38s ease-out; }
+body[data-presence="interrupted"] #kyra-owl .owl-wing-left { transform: rotate(18deg); }
+body[data-presence="interrupted"] #kyra-owl .owl-wing-right { transform: rotate(-18deg); }
+body[data-presence="failed"] #kyra-owl .owl-eye { visibility: hidden; }
+body[data-presence="failed"] #kyra-owl .owl-sleepy { display: block; }
+body[data-presence="failed"] #kyra-owl .owl-head { transform: rotate(8deg) translateY(3px); }
+body[data-presence="thinking"] .core-label { color: var(--accent); }
+@keyframes owl-blink { 0%, 43%, 47%, 100% { transform: scaleY(1); } 45% { transform: scaleY(0.08); } }
+@keyframes owl-ruffle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-5deg); } 60% { transform: rotate(4deg); } }
+@media (max-width: 560px) {
+  #kyra-owl { width: min(20vh, 132px); height: min(20vh, 132px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #kyra-owl, #kyra-owl * { animation: none !important; transition: none !important; }
+  #kyra-owl .owl-mouth { transform: scaleY(0) !important; }
+  #kyra-owl .owl-beak { transform: none !important; }
+}
+
+/* Saved room readings, opened explicitly for one completed Focus block. */
+.focus-room-disclosure { min-width: 0; margin-top: 0.4rem; }
+.focus-room-disclosure > button { min-height: 44px; white-space: normal; color: var(--text); }
+.focus-room-recap { margin-top: 0.5rem; padding: 0.65rem; border: 1px solid var(--grid); border-radius: 2px; background: var(--panel-2); color: var(--text-dim); overflow-wrap: anywhere; }
+.focus-room-recap[hidden] { display: none; }
+.focus-room-recap p { margin: 0 0 0.4rem; }
+.focus-room-recap .focus-note { color: var(--text-dim); }
+.focus-room-slots { display: block; width: 100%; height: 24px; margin: 0.5rem 0; }
+.focus-room-slots rect { fill: var(--accent); }
+.focus-room-slots .is-missing { fill: none; stroke: var(--text-dim); stroke-width: 1; vector-effect: non-scaling-stroke; }
+
+/* Readable workspace copy without changing individual panel layouts. */
+.workspace-page :is(.jobs-hint, .jobs-help, .jobs-status, [role="status"], .focus-note) { font: 14px/1.6 var(--font-sans, sans-serif); color: var(--text-dim); opacity: 1; }
+.workspace-page :is(button, input:not([type="checkbox"]):not([type="radio"]), select) { min-height: 44px; }
+.workspace-page .jobs-panel :is(p, label) { overflow-wrap: anywhere; }
+.workspace-page .jobs-panel a { color: var(--accent); }
+/* The Idea Lab uses readable editorial cards inside the existing panel shell. */
+#ideas-panel{width:min(1100px,96vw);font-family:system-ui,-apple-system,sans-serif;background:#101b23}
+#learning-panel:has(#learning-lessons [data-lesson]){width:min(1000px,96vw)}
+.idea-lab-intro{padding:28px 28px 10px}.idea-lab-intro h1{font-size:36px;line-height:1.12;letter-spacing:-1px;margin:12px 0;color:#eef8f4}.idea-lab-intro p{font-size:15px;line-height:1.6;color:#acc2c9;max-width:720px}.idea-lab-intro a{color:#8cd9c4;font-size:13px}.idea-journey{display:flex;align-items:center;flex-wrap:wrap;gap:14px;background:#1c3037;border:1px solid #35535a;border-radius:12px;padding:18px;margin:20px 0;font-size:13px;color:#cfebe3}.idea-journey a{color:#b2edda;text-underline-offset:4px}
+#idea-desk{padding:12px 28px 28px}#idea-desk button,#learning-lessons button{font:inherit;cursor:pointer;border:1px solid #456273;background:#223944;color:#d8ebe9;border-radius:7px;padding:9px 13px}#idea-desk button:disabled,#learning-lessons button:disabled{opacity:.6;cursor:default}#idea-desk a,#learning-lessons a{color:#91dac6;text-underline-offset:4px}#idea-desk input,#idea-desk textarea,#idea-desk select,#learning-lessons input{font:inherit;font-size:14px;background:#0b171f;border:1px solid #3d5768;color:#e2eeef;border-radius:6px;padding:10px;max-width:100%;box-sizing:border-box}#idea-desk textarea{width:100%;min-height:78px;resize:vertical}#idea-desk label{display:block;font-size:13px;line-height:1.5;color:#b8d0d7;margin:12px 0 5px}
+#idea-desk [data-desk-item]{border:1px solid #344b56;border-radius:14px;background:#162630;padding:24px;margin:18px 0}#idea-desk h2{font-size:24px;line-height:1.3}#idea-desk h3{font-size:21px;line-height:1.35;color:#e5f3f0}#idea-desk p{font-size:15px;line-height:1.7;color:#bcd0d6}#idea-desk small{font-size:12px;color:#96b5bf}
+.prototype-entry{margin:8px 28px 32px;padding:26px;border:1px solid #766653;border-radius:16px;background:#292823;scroll-margin-top:24px}.prototype-entry h2{font-size:26px;color:#f3dfbf}.prototype-entry p{line-height:1.65;font-size:14px;max-width:720px}.prototype-entry a.jobs-btn{display:inline-block;margin:8px 0;color:#ffe6bd;border-color:#a18a67;text-decoration:none}
+#learning-lessons{font-family:system-ui,-apple-system,sans-serif;margin:16px 0 30px;padding-bottom:28px;border-bottom:1px solid #385260}#learning-lessons h2{font-size:28px;line-height:1.2}#learning-lessons h3{font-size:21px}#learning-lessons p,#learning-lessons li{font-size:15px;line-height:1.7;color:#c3d4db}#learning-lessons svg{max-width:100%;height:auto}#learning-lessons fieldset{border:1px solid #45576b;border-radius:12px;margin:18px 0;padding:20px}#learning-lessons button{margin:4px}#learning-lessons [data-lesson]{max-width:920px}
+@media(max-width:600px){.idea-lab-intro{padding:20px 16px 8px}.idea-lab-intro h1{font-size:29px}#idea-desk{padding:8px 16px 20px}#idea-desk [data-desk-item]{padding:18px}.prototype-entry{margin:8px 16px 24px;padding:20px}}
+
+.idea-journey button{font:inherit;background:none;border:0;padding:0;color:#b2edda;text-decoration:underline;text-underline-offset:4px;cursor:pointer}
+
+.concept-lesson{max-width:1050px;margin-inline:auto;line-height:1.6}.concept-lesson button:focus-visible,.concept-lesson a:focus-visible{outline:3px solid #b9edda;outline-offset:3px}.lesson-journey{padding:16px;border:1px solid #3d656c;border-radius:10px;background:#1a333b}.lesson-diagram{padding:20px;border:1px solid #516676;border-radius:14px;background:#142b35}.lesson-step-controls,.lesson-actions{display:flex;flex-wrap:wrap;gap:8px}.lesson-step-controls button[aria-pressed=true]{font-weight:750;text-decoration:underline;background:#325d5c!important}.lesson-score-row{display:grid;grid-template-columns:minmax(120px,1fr) 1fr minmax(130px,1fr);gap:12px;align-items:center;margin-block:14px;font-size:13px;color:#dceae8}.lesson-score-row meter{width:100%;height:28px;accent-color:#8adabe}.lesson-feedback{font-weight:650}.lesson-explanation{max-width:820px}.lesson-choices{display:grid;grid-template-columns:1fr 1fr;gap:8px}.lesson-choices button{text-align:left}.lesson-question{margin-block:24px;padding-top:16px;border-top:1px solid #405463}.lesson-actions p{flex-basis:100%}.lesson-sources a{overflow-wrap:anywhere}.prototype-entry label{display:block;margin:14px 0 5px;font-size:13px}.prototype-entry textarea{display:block;width:100%;max-width:720px;min-height:64px;box-sizing:border-box;background:#151c20;color:#e6eeec;padding:10px;border:1px solid #686553;border-radius:6px;font:inherit;font-size:14px}.prototype-entry button{margin:14px 0;padding:10px 14px;background:#dcc6a5;border:0;color:#29221a;border-radius:7px;font:inherit;cursor:pointer}
+@media(max-width:700px){.lesson-score-row,.lesson-choices{grid-template-columns:1fr}}
+
+#ideas-panel{overflow-y:auto}#ideas-panel>*{flex-shrink:0}#ideas-panel>.jobs-panel-header{position:sticky;top:0;background:#101b23;z-index:1}.idea-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}.idea-depth summary{cursor:pointer;color:#a6e6d4;padding:8px 0}.idea-editor{padding:24px;border:1px solid #6aa494;border-radius:12px;background:#182e33;margin:22px 0}.idea-saved-list>.idea-card{padding:22px;border:1px solid #40525f;border-radius:12px;margin:14px 0}
+body.standalone #ideas-panel,body.standalone #learning-panel:has(#learning-lessons [data-lesson]){width:100%;max-width:1200px;margin-inline:auto;border-inline:1px solid #253942}body.standalone #learning-panel:has(#learning-lessons [data-lesson]){max-width:1080px}body.standalone .app-header nav a[href="/atlas"]{display:inline-flex}
+
+/* Local Idea Lab exploration controls. */
+.idea-filters{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:20px 0;padding:16px;border:1px solid #395561;border-radius:10px;background:#12252e}.idea-filters label{flex:1 1 180px;margin:0!important}.idea-filters input,.idea-filters select{display:block;width:100%;margin-top:6px}.idea-filters p{flex-basis:100%;margin:0!important;font-size:13px!important}.idea-card-copy{padding:14px;border:1px solid #4b746c;border-radius:8px;margin-top:12px}.idea-card-copy textarea{font-family:ui-monospace,monospace!important;font-size:12px!important}.lesson-weight-sliders{display:flex;flex-wrap:wrap;gap:18px;border:0;padding:12px 0;margin:10px 0}.lesson-weight-sliders legend{font-size:14px;font-weight:650}.lesson-weight-control{display:flex;flex:1 1 150px;align-items:center;flex-wrap:wrap;gap:8px;font-size:14px}.lesson-weight-control input[type=range]{width:100%;padding:0!important;accent-color:#96ddca}.lesson-weight-control output{margin-left:auto;font-weight:750;font-variant-numeric:tabular-nums}.lesson-storage-note{font-size:12px;color:#a7c7c2}

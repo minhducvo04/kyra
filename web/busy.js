@@ -162,3 +162,101 @@ action(async () => {
   await refresh();
   message(workflows.length ? "" : "No approved workflows are available yet.");
 });
+
+// Daily report: the app prepares the sheets and the email drafts; the person sends each and ticks it.
+let dailyDate = null;
+const outlookLabels = {
+  created: "Đã tạo nháp trong Outlook và mở sẵn để kiểm tra.",
+  failed: "Outlook không tạo được nháp. Hãy mở file .eml bên dưới.",
+  waiting: "Chờ gửi email ngày trước, rồi bấm “Tạo nháp Outlook”.",
+  dry_run: "Chạy thử: chưa mở Outlook.",
+  off: "Mở file .eml để có email nháp."
+};
+function dailyReminder(s) {
+  if (!s.configured) return `Chưa có cấu hình. Cần tạo file ${s.config_path}.`;
+  return {
+    off_day: `Hôm nay nghỉ. Ngày làm việc tiếp theo: ${s.next_working_day}.`,
+    holiday: `Hôm nay là ngày lễ (${s.report_date}); vẫn có sheet, không nhắc gửi.`,
+    prepare: `Chưa chuẩn bị báo cáo ${s.report_date}.`,
+    send: `Đã chuẩn bị báo cáo ${s.report_date}. Hãy mở email nháp, kiểm tra và tự bấm Gửi.`,
+    overdue: `Chưa gửi báo cáo hôm nay (${s.report_date}). Đã quá ${s.remind_after}.`,
+    sent: `Đã gửi báo cáo ${s.report_date}.`
+  }[s.reminder] || "";
+}
+async function dailyPost(path, body) {
+  const response = await fetch(`/api/busy/daily-report/${path}`, {method: "POST",
+    headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || "Không làm được.");
+  return data;
+}
+function draftRow(day, draft, template, sent) {
+  const row = node("div", "", "daily-draft");
+  const language = template.language ? ` (${template.language})` : "";
+  row.append(node("p", `${template.subject}${language} → ${template.to.join(", ") || "chưa có người nhận"}`));
+  if (draft) {
+    row.append(node("p", outlookLabels[draft.outlook?.status] || ""));
+    if (draft.outlook?.error) row.append(node("p", `Lỗi Outlook: ${draft.outlook.error}`));
+    const eml = node("a", "Mở email nháp (.eml)");
+    eml.href = `/api/busy/daily-report/files/${day}/eml?template=${encodeURIComponent(template.id)}`;
+    eml.download = "";
+    row.append(eml);
+  }
+  const label = node("label", "", "check");
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = Boolean(sent[template.id]);
+  box.addEventListener("change", () => dailyPost("sent", {date: day, sent: box.checked, template: template.id})
+    .then(dailyRefresh).catch(error => { byId("daily-result").textContent = error.message; }));
+  label.append(box, ` Đã gửi “${template.subject}” ngày ${day}`);
+  row.append(label);
+  return row;
+}
+function dayBlock(day, drafts, sent, templates, holiday) {
+  const block = node("div", "", "daily-day");
+  block.append(node("h3", `Ngày ${day}${holiday ? " · ngày lễ" : ""}`));
+  templates.forEach(template => block.append(draftRow(day, drafts?.[template.id], template, sent || {})));
+  const waiting = templates.some(t => drafts?.[t.id] && !sent?.[t.id] && drafts[t.id].outlook?.status !== "created"
+    && drafts[t.id].outlook?.status !== "off");
+  if (waiting) {
+    const again = node("button", "Tạo nháp Outlook");
+    again.type = "button";
+    again.addEventListener("click", () => dailyPost("drafts", {date: day}).then(dailyRefresh)
+      .catch(error => { byId("daily-result").textContent = error.message; }));
+    block.append(again);
+  }
+  return block;
+}
+async function dailyRefresh() {
+  const s = await (await fetch("/api/busy/daily-report")).json();
+  dailyDate = s.today || null;
+  byId("daily-reminder").textContent = dailyReminder(s);
+  byId("daily-report").classList.toggle("overdue", s.reminder === "overdue");
+  document.title = s.reminder === "overdue" ? "(!) Busy mode" : "Busy mode";
+  const ready = Boolean(s.configured && s.working_day);
+  const missed = s.missed || [];
+  byId("daily-missed").replaceChildren(...missed.map(day => node("li", `Chưa có báo cáo ngày ${day}.`)),
+    ...(s.missed_error ? [node("li", s.missed_error)] : []));
+  byId("daily-prepare").hidden = !ready || Boolean(s.prepared || s.all_sent);
+  byId("daily-prepare").textContent = missed.length
+    ? `Chuẩn bị báo cáo hôm nay và ${missed.length} ngày còn thiếu` : "Chuẩn bị báo cáo hôm nay";
+  byId("daily-links").hidden = !s.prepared;
+  if (s.prepared) {
+    byId("daily-workbook").href = `/api/busy/daily-report/files/${dailyDate}/workbook`;
+    byId("daily-result").textContent = `Sheet ${s.prepared.sheet} (chép từ ${s.prepared.source_sheet}).`;
+    byId("daily-warnings").replaceChildren(...s.prepared.warnings.map(text => node("li", text)));
+  }
+  const blocks = (s.unsent || []).map(day => dayBlock(day.date, day.drafts, day.sent, s.templates, false));
+  if (ready) blocks.push(dayBlock(s.today, s.prepared?.drafts, s.sent, s.templates, s.holiday));
+  byId("daily-days").replaceChildren(...blocks);
+}
+byId("daily-prepare").addEventListener("click", async () => {
+  byId("daily-result").textContent = "Đang chuẩn bị...";
+  try {
+    const data = await dailyPost("prepare", {date: dailyDate});
+    await dailyRefresh();
+    if (data.missed.length) byId("daily-result").textContent += ` Đã làm thêm ${data.missed.length} ngày còn thiếu.`;
+  } catch (error) { byId("daily-result").textContent = error.message; }
+});
+dailyRefresh().catch(() => { byId("daily-reminder").textContent = "Không tải được trạng thái báo cáo."; });
+setInterval(() => dailyRefresh().catch(() => {}), 5 * 60 * 1000);

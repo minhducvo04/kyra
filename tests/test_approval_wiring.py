@@ -22,6 +22,7 @@ from tests.test_humidifier import FakeHumidifier
 
 # name -> (side_effect, untrusted_output). humidifier_* only register with credentials; checked separately below.
 CLASSIFICATION = {
+    "bulb_status": (False, False), "bulb_control": (True, False),
     "add_reminder": (True, False), "list_reminders": (False, False), "complete_reminder": (True, False),
     "snooze_reminder": (True, False),
     "save_learning_item": (True, False), "due_learning_reviews": (False, False), "mark_learning_reviewed": (True, False),
@@ -33,10 +34,10 @@ CLASSIFICATION = {
     "list_outreach": (False, False), "draft_outreach_note": (True, False),
     "analyze_job_posting": (False, True), "target_job_posting": (True, True),
     "start_focus_block": (True, False), "end_focus_block": (True, False), "focus_status": (False, False),
-    "search_kyra_data": (False, True), "suggest_initiatives": (False, False),
+    "search_kyra_data": (False, True), "look_up": (False, True), "suggest_initiatives": (False, False),
     "tech_news": (False, True), "science_facts": (False, True),
 }
-NEVER_PREAPPROVED = {"humidifier_control", "autofill_job_application", "copy_outreach_note"}
+NEVER_PREAPPROVED = {"bulb_control", "purifier_control", "humidifier_control", "autofill_job_application", "copy_outreach_note"}
 
 
 # --- 1 and 2: classification and the default policy ---------------------------------------------------

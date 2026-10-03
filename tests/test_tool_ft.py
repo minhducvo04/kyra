@@ -334,7 +334,7 @@ def test_gen_hints_constrain_the_hard_categories():
 
     assert "greenhouse.io" in GEN_HINTS["autofill_job_application"]
     # find-then-act messages must point at items that actually exist in the fixture
-    assert "book dentist appointment" in GEN_HINTS["find_then_act"] and "Stripe" in GEN_HINTS["find_then_act"]
+    assert "book dentist appointment" in GEN_HINTS["find_then_act"] and "Northwind" in GEN_HINTS["find_then_act"]
     assert "CAP theorem" in GEN_HINTS["save_learning_item"]
     calls = []
 

@@ -3,6 +3,107 @@
 _Run 2026-09-05 on an Apple M5 Max (36 GB), MLX 0.32 / mlx-lm 0.31.3. Code: `src/companion/router_ft.py`,
 `scripts/router_ft.py`. Numbers below are filled in by the eval step; this file is the write-up, not the raw log._
 
+## Round 8 (2026-09-25): preserve v6 while adding simple-local routing
+
+**Neither seed meets the activation bar; keep v6 active.** The primary candidate recovers main-suite
+path accuracy and improves local routing, but regresses on simple-local and initiatives paths.
+Assignment 133 changes training data and an experimental prompt only; production is unchanged.
+
+- Preserve the exact v6 train/validation membership: 1,968 / 218 rows across all 43 categories. No old
+  message is deleted, rewritten or moved between splits; keyword-bait negatives stay in their categories.
+- Claude Sonnet 5 generated six batches for one `simple_local` category. Of 306 returned strings, 26
+  were excluded by normalization against old data, other new rows or held-out sets. Builder review
+  excluded three ambiguous/non-stable rows; 277 remain, split 250 / 27 with seed 7.
+- Review only old text/Claude rows against the new policy. The teacher proposed 22 flips; the builder
+  retained five ambiguous old labels and accepted 17 text/Claude-to-text/local flips (13 train, 4 valid).
+  Categories: lookup bait 14, room bait 1, explanation bait 2. The full changed-row list and rejected
+  proposals remain in the private experiment report; no new tool labels or category deletions.
+- Final dataset: 2,218 train / 245 validation. The prompt preserves the v6 tool clause and changes only
+  the text/backend policy. It must accompany any future candidate activation; weights alone do not
+  encode the complete experiment configuration.
+- Two fresh LoRA runs, seeds 7 and 13: Qwen2.5-1.5B-Instruct-4bit, 8 layers, batch 4, learning rate
+  1e-4, masked prompt, sequence cap 512, 1,500 iterations. Full validation and checkpoints every 100
+  steps. Select the lowest printed validation loss among saved checkpoints; break ties by earlier
+  step, then lower seed. Freeze both checkpoints and the primary seed before candidate scoring.
+- Score the deployed routing layers on nine suites, with original and precommitted policy-v2 gold.
+  The committed 30-case v8 final suite is scored once per frozen model at the final evaluation stage, never for
+  recipe or checkpoint selection. Read the missing simple-local fixture from its immutable original
+  commit rather than changing the branch's tests. Keep data and evaluation runtime separate from
+  production stores and router logs.
+- Preserve and disclose inherited leakage: under the existing normalizer v6 has two matches in the
+  later everyday suite and one in each confidence set (the confidence sets are exclusion-only here).
+  Report everyday with and without its two inherited matches; the full suite keeps the stated bar.
+  No v6 overlap with the fresh final suite. New rows are blocked against every held-out set, including
+  the final suite, without sending held-out text to the teacher. The final holdout stays out of the
+  model's training and validation files. A pre-score identity audit found its line 26 repeats an older
+  initiatives case: report the unchanged 30-case set and the 29-new-case subset separately, without
+  rewriting the fixture or changing the stated acceptance bar.
+- Acceptance is fixed before scoring: no suite loses more than two percentage points of path accuracy
+  versus the deployed baseline; local-case exact routing improves on both simple-local and v8-final.
+  Report both seeds, including a failure. Do not select a different recipe or seed from test scores.
+
+### Frozen selection and results
+
+Seed 7 selects step 600 (printed full-validation loss 0.009); seed 13 selects step 1000 (0.011).
+Seed 7 is primary by the predetermined validation rule. Both ran 1,500 steps; peak trainer memory
+was 3.617 GB. No candidate held-out score was read before both selections were frozen.
+The deployed baseline reproduces all eight prior suite scores exactly. Every model/suite pair was
+scored once; original and policy-v2 gold are computed from the same predictions.
+
+| Suite (n) | Baseline old / v2 / path | Seed 7 old / v2 / path | Seed 13 old / v2 / path |
+|---|---|---|---|
+| main (85) | 92.9% / 91.8% / 95.3% | 91.8% / 92.9% / 95.3% | 89.4% / 88.2% / 91.8% |
+| holdout2 (22) | 95.5% / 95.5% / 100.0% | 90.9% / 90.9% / 100.0% | 95.5% / 95.5% / 100.0% |
+| humidifier (16) | 100.0% / 87.5% / 100.0% | 100.0% / 87.5% / 100.0% | 100.0% / 87.5% / 100.0% |
+| purifier (14) | 71.4% / 71.4% / 92.9% | 71.4% / 71.4% / 92.9% | 71.4% / 71.4% / 92.9% |
+| bulb (14) | 85.7% / 85.7% / 100.0% | 78.6% / 78.6% / 100.0% | 85.7% / 85.7% / 100.0% |
+| everyday (30) | 83.3% / 83.3% / 96.7% | 96.7% / 96.7% / 100.0% | 83.3% / 83.3% / 86.7% |
+| simple_local (28) | 67.9% / 67.9% / 96.4% | 82.1% / 82.1% / 89.3% | 75.0% / 75.0% / 89.3% |
+| initiatives (10) | 80.0% / 80.0% / 90.0% | 60.0% / 60.0% / 80.0% | 90.0% / 90.0% / 100.0% |
+| v8_final (30) | 73.3% / 73.3% / 96.7% | 90.0% / 90.0% / 96.7% | 83.3% / 83.3% / 96.7% |
+
+| Model | Simple-local local cases | V8-final local cases | Path bar | Overall bar |
+|---|---|---|---|---|
+| baseline | 12/20 (60.0%) | 8/15 (53.3%) | reference | reference |
+| 7 | 19/20 (95.0%) | 14/15 (93.3%) | FAIL: simple_local, initiatives | FAIL |
+| 13 | 16/20 (80.0%) | 11/15 (73.3%) | FAIL: main, everyday, simple_local | FAIL |
+
+Everyday without two inherited matches (old and policy-v2 exact are identical):
+- baseline: n=28, exact 82.1%, path 96.4%.
+- 7: n=28, exact 96.4%, path 100.0%.
+- 13: n=28, exact 82.1%, path 85.7%.
+
+V8-final 29-new-case diagnostic (original and policy-v2 gold are identical):
+- baseline: n=29, exact 72.4%, path 96.6%.
+- 7: n=29, exact 89.7%, path 96.6%.
+- 13: n=29, exact 82.8%, path 96.6%.
+
+**Decision: reject both for activation.** Seed 7's path drops are 7.14 percentage points on simple-local
+and 10 points on initiatives; seed 13 drops 3.53 on main, 10 on everyday, and 7.14 on simple-local.
+Both improve local-case routing, but that does not waive the per-suite path limit. The final suite's
+improvement is real within this measurement; it is not an activation pass or an answer-quality test.
+
+Retaining v6's mixture avoided the prior primary candidate's large main-suite path regression.
+This supports the negative-category diagnosis but does not isolate its cause: new data, labels and
+training outcomes also differ. The remaining primary errors are advice/writing over-triggering tools
+and indirect initiative requests failing to reach tools. Do not tune another checkpoint on these
+results. A future design to discuss is preserving the existing tool/text decision and measuring a
+separate text-backend decision, with fresh final evaluation data and a latency check; not built here.
+
+Verification: local run excluding the reserved model-sandbox module reported **2 failed, 1715 passed,
+3 skipped in 124.73s**. Native OCR passes in Claude's external check (7 handwriting tests), and Claude's
+7 model-sandbox checks pass. The old branch's duplicate guard mishandles the policy overlay; the final
+fixture also has the acknowledged repeated initiative case. Claude fixed those guard contracts on
+master (PRs 67 and 69); this experiment branch was deliberately not merged mid-training. Ruff and all
+three privacy guards pass. Report these qualifications rather than claiming a green full branch suite.
+Data and evaluation audits verify preserved v6 membership, recorded label changes, no new training
+matches to held-out sets, unchanged selection/recipe hashes and one final pass per model.
+
+Evidence: `data/router_ft/assignment-133-candidate/` and `data/verifications/assignment-133/` in the
+router-v8 worktree, with a portable candidate bundle under the main checkout's
+`data/router_ft/assignment-133-candidate/`; the private handoff report is `data/private_docs/assignment-133-result.md` in the
+main checkout. No production adapter is activated by this experiment.
+
 ## The question
 
 Every auto-mode turn starts with the router's classifier deciding `tool` vs `text` and, for text, `claude` vs
@@ -329,3 +430,104 @@ steer what gets generated.
 
 **Decision: activated.** `KYRA_CLASSIFIER_ADAPTER` points at `qwen1.5b-v6-c1200`. Verified through the real
 `TurnRouter`: 16/16 humidifier paths, and a real spoken-style turn answered from the device.
+
+## Round 7 (2026-09-25): simple answers local, candidate only
+
+**Outcome: do not activate either candidate.** The validation-selected seed 7
+improves simple-local from 67.9% to 85.7%, but main path accuracy falls from
+95.3% to 80.0% and holdout2 path from 100% to 77.3%. Seed 13 improves simple-local
+to 96.4% but still regresses on those suites. Selection remains seed 7; choosing
+13 after seeing its test scores would violate the predeclared selection rule.
+
+The policy is local for simple facts, definitions, conversions, spelling and
+arithmetic; Claude for depth, advice, writing, synthesis and supplied personal
+context. Requests for tools retain the tool path and its existing approvals and
+outbound gate. This is a measured candidate, not an activation. The production
+COMPACT_SYSTEM and adapter setting are unchanged. The candidate prompt is stored
+with its adapters under the ignored router-simple-local worktree data directory;
+activation would need that exact prompt as well as the selected weights.
+
+The new handwritten 28-case suite was committed at 6a29cac before generation.
+All router held-out and confidence suites are excluded by normalized message,
+including from reused synthetic examples; their fingerprints are saved. No
+held-out prompt was sent to the teacher or used to choose a checkpoint.
+Claude's separately committed policy-v2 overlay (46d8bb8) changes three old labels
+for secondary scoring; the original suites remain byte-identical.
+
+Generation completed ten 60-example categories through the gated Claude client
+before the API refused further calls for insufficient credit. The remainder is
+explicitly mixed-source: Codex independently authored 25 synthesis and 25
+fictional-personal-context examples and small device-intent combinations; prior
+synthetic coordination examples were reused. Prior tool examples were retained;
+old text categories were otherwise removed to avoid contradictory policy labels.
+No account recharge, private-data upload or live-device command was performed.
+The generated rows and exact generation/assembly scripts remain ignored.
+
+After deduplication: 2,150 examples (1,451 tool/Claude, 422 text/local, 277
+text/Claude). Fixed seed-7 90/10 split: 1,935 train, 215 validation; normalized
+held-out overlap zero, train/validation messages disjoint. Both fresh LoRA runs
+use Qwen2.5-1.5B-Instruct-4bit, 8 layers, batch 4, learning rate 1e-4, prompt
+masking, length 512 and 1,300 iterations (about 2.7 epochs); seeds 7 and 13.
+Validate over the entire validation set and save every 100 iterations. Select
+the lowest printed validation loss among saved checkpoints; ties choose the
+earlier iteration and then lower seed. Freeze selection before held-out scoring.
+
+Evaluation uses TurnRouter.route_unlogged in isolated auto-mode state, preserving
+the acknowledgement rule and complexity bias, without writing the production
+router log. It measures routing decisions, not the local answer model's factual
+quality. Latency excludes one warm-up; it is single-machine wall time.
+
+Limitations: teacher labels are synthetic, the authored device combinations have
+shared templates across the split, and very low validation loss is not proof of
+real-world generalization. The two seeds share one data split; they quantify
+training variation, not uncertainty over independent datasets.
+
+### Frozen selection and held-out results
+
+| Seed | Selected iteration | Printed validation loss |
+|---|---:|---:|
+| 7 | 1100 | 0.000 |
+| 13 | 900 | 0.001 |
+
+Printed losses have three-decimal precision; 0.000 is not proof of zero loss.
+Both checkpoints were selected before candidate held-out evaluation; overall
+selection is seed 7. Every table cell below is original exact / policy-v2 exact /
+path accuracy. The policy overlay changes only main and humidifier labels.
+
+| Suite (n) | Baseline old / v2 / path | Seed 7 old / v2 / path | Seed 13 old / v2 / path |
+|---|---|---|---|
+| main (85) | 92.9% / 91.8% / 95.3% | 70.6% / 71.8% / 80.0% | 77.6% / 77.6% / 82.4% |
+| holdout2 (22) | 95.5% / 95.5% / 100.0% | 59.1% / 59.1% / 77.3% | 81.8% / 81.8% / 86.4% |
+| humidifier (16) | 100.0% / 87.5% / 100.0% | 75.0% / 87.5% / 93.8% | 75.0% / 87.5% / 93.8% |
+| purifier (14) | 71.4% / 71.4% / 92.9% | 100.0% / 100.0% / 100.0% | 92.9% / 92.9% / 100.0% |
+| bulb (14) | 85.7% / 85.7% / 100.0% | 85.7% / 85.7% / 92.9% | 92.9% / 92.9% / 100.0% |
+| everyday (30) | 83.3% / 83.3% / 96.7% | 93.3% / 93.3% / 96.7% | 96.7% / 96.7% / 96.7% |
+| simple_local (28) | 67.9% / 67.9% / 96.4% | 85.7% / 85.7% / 89.3% | 96.4% / 96.4% / 96.4% |
+| initiatives (10) | 80.0% / 80.0% / 90.0% | 90.0% / 90.0% / 100.0% | 80.0% / 80.0% / 90.0% |
+
+Mean routing latency: about 0.186-0.191 s for seed 7 and 0.187-0.195 s for seed
+13 on suites other than everyday; everyday averages about 0.137-0.138 s because
+acknowledgements bypass the classifier. Baseline is about 0.195-0.197 s, everyday
+0.142 s. This small difference is not a deployment justification. Per-suite p90,
+per-case errors and full curves are in the private verification bundle.
+
+**Codex's mistake and next experiment:** removing every old text category except
+coordination discarded valuable unchanged casual and keyword-bait negatives,
+not just examples whose backend label conflicted with the new policy. Broad
+text-to-tool regressions are consistent with that loss of coverage, but this
+mixed-source/prompt/data change does not isolate causality. A follow-up should
+preserve unaffected independent examples, adjudicate only genuinely conflicting
+policy labels, and have Claude write a fresh holdout before another experiment.
+Do not copy these test misses into training or repeatedly tune against them.
+The new policy also needs an answer-quality check on the local answer model;
+this work measures the classifier only.
+
+Verification: 1715 passed, 2 skipped in 53.46s; Claude separately ran the seven
+reserved sandbox tests (0.70s). Ruff and privacy guards pass. No adapter or
+production prompt activated, no held-out files edited, no push. Persistent
+private bundle: `data/router_ft/assignment-129-candidate/` in the main checkout;
+it includes selected weights, candidate prompt, data, hashes, scripts, loss
+curves, baseline/candidate evaluations and the precommitted overlay. Working
+proof also remains at `data/verifications/assignment-129/` in the
+router-simple-local worktree. The bundle's selection.json points to its durable
+copies; it is not a runtime configuration.

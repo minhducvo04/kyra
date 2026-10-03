@@ -29,7 +29,6 @@ solves temporal reasoning. If it ever needs real point-in-time
 tracking, that's a rewrite, not a tweak - documented here so nobody
 "fixes" it into silently dropping history instead.
 """
-import fcntl
 import hashlib
 import json
 import re
@@ -40,6 +39,7 @@ from datetime import datetime
 from pathlib import Path
 
 from companion import provider
+from companion.file_lock import exclusive
 from companion.outbound import ReleasePolicy
 from companion.paths import DATA_DIR, write_json
 from companion.privacy import UNKNOWN, PrivacyClass, Tier, combine
@@ -152,12 +152,8 @@ class MarkdownMemoryNotesStore(MemoryNotesStore):
     @contextmanager
     def _writing(self):
         # Web requests, tools and other processes share the same sidecar/temp file.
-        with (self._dir / ".labels.lock").open("a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(lock, fcntl.LOCK_UN)
+        with (self._dir / ".labels.lock").open("a") as lock, exclusive(lock):
+            yield
 
     def _labels(self) -> dict:
         try:
@@ -285,6 +281,8 @@ class MarkdownMemoryNotesStore(MemoryNotesStore):
         blocks = []
         has_text = False
         for path in sorted(self._dir.glob("*.md")):
+            if path.is_symlink():
+                continue  # A notes category must not pull in a file outside the notes directory.
             raw = path.read_bytes()
             # Match read_text's universal newlines while hashing original bytes.
             text = raw.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n").strip()

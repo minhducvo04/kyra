@@ -27,8 +27,9 @@ _HEALTH_PATTERNS = (
                r"injur(?:y|ed)|sick|nausea)\b", re.IGNORECASE),
     # Mental state.
     re.compile(r"\b(?:anxious|anxiety|depressed|depression|panic)\b", re.IGNORECASE),
-    # Alcohol and caffeine intake (conservative even without an intake verb).
-    re.compile(r"\b(?:alcohol|wine|beer|liquor|caffeine|coffee|espresso|tea)\b", re.IGNORECASE),
+    # Alcohol and caffeine intake (conservative even without an intake verb). A "coffee chat" is a meeting,
+    # not intake: it held every follow-up in a job-search room (2026-10-02).
+    re.compile(r"\b(?:alcohol|wine|beer|liquor|caffeine|coffees?(?![\s-]+chats?\b)|espresso|tea)\b", re.IGNORECASE),
     # Pain words.
     re.compile(r"\b(?:pain|painful|aches?|aching|headaches?|migraine|sore|hurts?)\b", re.IGNORECASE),
 )

@@ -20,6 +20,7 @@ OUTREACH = (Tier.T2, frozenset({C.job_search, C.third_party}))
 UNKNOWN = (Tier.T2, frozenset({C.unknown}))
 
 RESULT_LABELS = {
+    "bulb_status": T1, "bulb_control": T1,
     "add_reminder": T1, "list_reminders": T1, "complete_reminder": T1, "snooze_reminder": T1,
     "save_learning_item": T1, "due_learning_reviews": T1, "mark_learning_reviewed": T1,
     "start_focus_block": T1, "end_focus_block": T1, "focus_status": T1,
@@ -29,7 +30,7 @@ RESULT_LABELS = {
     "analyze_job_posting": JOB, "target_job_posting": JOB,
     "add_outreach_contact": OUTREACH, "copy_outreach_note": OUTREACH, "update_outreach_status": OUTREACH,
     "list_outreach": OUTREACH, "draft_outreach_note": OUTREACH,
-    "save_memory_note": UNKNOWN, "search_kyra_data": UNKNOWN, "suggest_initiatives": UNKNOWN,
+    "save_memory_note": UNKNOWN, "search_kyra_data": UNKNOWN, "look_up": UNKNOWN, "suggest_initiatives": UNKNOWN,
 }
 
 
@@ -49,6 +50,9 @@ def test_the_room_tools_are_personal_but_not_sensitive():
 
     backend = FakeHumidifier()
     assert HumidifierStatusTool(backend).result_label == T1 and HumidifierControlTool(backend).result_label == T1
+    from companion.purifier import PurifierControlTool, PurifierStatusTool
+
+    assert PurifierStatusTool.result_label == PurifierControlTool.result_label == T1
     assert RoomStatusTool.result_label == T1
 
 

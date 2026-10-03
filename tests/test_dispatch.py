@@ -54,10 +54,13 @@ def wl():
 
 
 @pytest.fixture
-def dp():
+def dp(monkeypatch):
     import companion.dispatch as dispatch
 
-    return dispatch
+    monkeypatch.setenv("KYRA_LOOP_HEADLESS", "true")
+    dispatch.get_settings.cache_clear()
+    yield dispatch
+    dispatch.get_settings.cache_clear()
 
 
 @pytest.fixture

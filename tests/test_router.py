@@ -74,7 +74,7 @@ def test_route_session_mode_beats_classifier():
 
 def test_route_classifier_decides_and_complexity_biases():
     set_mode("auto")
-    d = _router('{"path":"text","backend":"local","reason":"casual"}').route("hi")
+    d = _router('{"path":"text","backend":"local","reason":"casual"}').route("tell me a joke")
     assert (d.path, d.backend, d.overridden, d.decompose_biased) == ("text", "local", False, False)
     d = _router('{"path":"tool","backend":"claude","reason":"news"}').route("any tech news")
     assert d.path == "tool"
@@ -85,11 +85,11 @@ def test_route_classifier_decides_and_complexity_biases():
 
 def test_route_classifier_failure_hands_the_turn_to_claude_with_tools():
     set_mode("auto")
-    d = _router(RuntimeError("model missing")).route("hi")
+    d = _router(RuntimeError("model missing")).route("tell me a joke")
     assert d.path == "tool" and d.backend == "claude" and "RuntimeError" in d.error
-    d = _router("garbage").route("hi")
+    d = _router("garbage").route("tell me a joke")
     assert d.backend == "claude" and "unparseable" in d.reason
-    d = _router('{"path":"weird","backend":"weird"}').route("hi")
+    d = _router('{"path":"weird","backend":"weird"}').route("tell me a joke")
     assert (d.path, d.backend) == ("text", "claude")  # a parsed-but-odd answer still means text
 
 
@@ -113,8 +113,8 @@ def test_adapter_spec_uses_compact_prompt_and_same_decision_shape():
     assert d.path == "tool" and clf.seen[0] == COMPACT_SYSTEM and clf.seen[1] == "remind me to stretch"
     # few-shot path still sends the long prompt with the message embedded
     clf2 = Recording('{"path":"text","backend":"local"}')
-    TurnRouter(ToolRegistry([]), classifier=clf2, adapter_spec="").route("hi")
-    assert clf2.seen[0] == "" and "User message: hi" in clf2.seen[1]
+    TurnRouter(ToolRegistry([]), classifier=clf2, adapter_spec="").route("tell me a joke")
+    assert clf2.seen[0] == "" and "User message: tell me a joke" in clf2.seen[1]
 
 
 def test_warm_loads_the_classifier_without_logging_a_decision(tmp_path, monkeypatch):

@@ -11,10 +11,16 @@ markdown never reaches the synthesiser. The transcript still shows the reply
 as written; only the audio is cleaned.
 """
 import re
+from dataclasses import dataclass
+
+SPOKEN_MAX_SENTENCES = 2
+SPOKEN_MAX_WORDS = 25
+MORE_CUE = "Details are on screen."
 
 SPOKEN_REGISTER = (
-    "This reply will be read aloud, not shown on a screen: answer in two or three short spoken sentences, "
-    "no lists, no headings, no markdown, no links. If a tool will take a moment, say so first."
+    "Answer first, in at most two short spoken sentences totaling at most 25 words. "
+    "Keep the opening free of lists, headings, markdown and links. "
+    "Put any further detail after the short answer; it stays on screen, not read aloud."
 )
 
 _FENCE_RE = re.compile(r"```.*?```", re.S)
@@ -82,3 +88,47 @@ def take_sentences(buffer: str, final: bool = False) -> tuple[list[str], str]:
             sentences.append(tail)
         rest = ""
     return [s for s in sentences if s], rest
+
+
+@dataclass
+class SpokenBudget:
+    """One turn's spoken prefix; the screen cue is outside the answer budget."""
+
+    words: int = 0
+    sentences: int = 0
+    withheld: bool = False
+    _cued: bool = False
+
+    def admit(self, sentence: str) -> str | None:
+        text = spoken_text(sentence)
+        if not text:
+            return None
+        words = text.split()
+        if self.withheld or self.sentences >= SPOKEN_MAX_SENTENCES:
+            self.withheld = True
+            return None
+        if self.words + len(words) > SPOKEN_MAX_WORDS:
+            self.withheld = True
+            if self.sentences:
+                return None
+            # Keep a prefix at a word boundary, never part of a word.
+            text = " ".join(words[:SPOKEN_MAX_WORDS]).rstrip(".,;:") + "."
+        self.words += len(text.split())
+        self.sentences += 1
+        return text
+
+    def closing(self) -> str | None:
+        if self.withheld and not self._cued:
+            self._cued = True
+            return MORE_CUE
+        return None
+
+
+def spoken_reply(reply: str) -> tuple[str, bool]:
+    """Bound the audio only, keeping the caller's written reply intact."""
+    budget = SpokenBudget()
+    sentences, _ = take_sentences(spoken_text(reply), final=True)
+    parts = [speech for sentence in sentences if (speech := budget.admit(sentence))]
+    if cue := budget.closing():
+        parts.append(cue)
+    return " ".join(parts), budget.withheld

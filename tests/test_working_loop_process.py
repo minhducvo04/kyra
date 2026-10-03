@@ -75,3 +75,19 @@ def test_codex_populated_state_is_accepted_but_custom_config_is_refused(tmp_path
         with pytest.raises(process.ProcessNotStarted, match="codex_state_customized"):
             process._codex_state_directory()
         entry.rmdir() if name == "rules" else entry.unlink()
+
+
+def test_claude_path_finds_desktop_build_in_hashed_folder(tmp_path, monkeypatch):
+    """Claude desktop 2.1.286 nests the CLI one hashed folder deeper."""
+    from companion import working_loop_process as wlp
+
+    base = tmp_path / "Library/Application Support/Claude/claude-code"
+    for version, build in (("2.1.284", "4819fdb9b264"), ("2.1.286", "f2326db61802")):
+        binary = base / version / build / "claude.app/Contents/MacOS/claude"
+        binary.parent.mkdir(parents=True)
+        binary.write_text("")
+    monkeypatch.setattr(wlp.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(wlp.shutil, "which", lambda name: None)
+    monkeypatch.setattr(wlp, "get_settings", lambda: type("S", (), {"claude_cli_path": None})())
+
+    assert wlp._claude_path() == str(base / "2.1.286/f2326db61802/claude.app/Contents/MacOS/claude")

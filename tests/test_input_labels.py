@@ -133,3 +133,12 @@ def test_the_web_front_door_labels_what_it_receives(monkeypatch):
     webapp._answer("my resting heart rate is up")
     tier, classes = captured["input_label"]
     assert tier == Tier.T2 and {C.conversation, C.health} <= classes and C.unknown not in classes
+
+
+def test_a_coffee_chat_is_a_meeting_not_caffeine_intake():
+    """2026-10-02: every follow-up in Duc's job-search room was held as health content because the plan says
+    'coffee-chat ask'. The idiom is social; drinking coffee is still health."""
+    for text in ("ask the alumni for a 15-minute coffee chat", "cold contacts get a coffee-chat ask", "two coffee chats this week"):
+        assert _classes(text) == {C.conversation}, text
+    for text in ("I had three coffees before bed", "too much coffee and no sleep", "an espresso at 11pm"):
+        assert C.health in _classes(text), text

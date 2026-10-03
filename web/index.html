@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-backend="claude">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,38 +13,111 @@
 <link rel="stylesheet" href="/static/tokens.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/navigation.css">
+<link rel="stylesheet" href="/static/atlas.css">
 </head>
-<body>
-  <div class="scanlines" aria-hidden="true"></div>
-  <div class="vignette" aria-hidden="true"></div>
-
+<body class="workspace-page">
 <header class="app-header">
   <a class="app-brand" href="/" aria-label="Kyra home"><span aria-hidden="true">◈</span>KYRA</a>
-  <span class="app-page">Talk</span>
-  <nav aria-label="Main navigation"><a href="/" aria-current="page">Talk</a><a href="/loop">Loop</a></nav>
-  <div class="app-status"><span class="status-dot" aria-hidden="true"></span><span id="status-text">ONLINE</span></div>
+  <span class="app-page">Today</span>
+
 </header>
-    <div class="header-controls">
-      <div class="backend-toggle" role="group" aria-label="Model backend">
-        <button class="backend-btn is-active" data-backend="auto" id="btn-auto" type="button">
-          <span class="dot"></span>AUTO
-        </button>
-        <button class="backend-btn" data-backend="claude" id="btn-claude" type="button">
-          <span class="dot"></span>CLAUDE
-        </button>
-        <button class="backend-btn" data-backend="local" id="btn-local" type="button">
-          <span class="dot"></span>LOCAL
-        </button>
-      </div>
-      <span class="focus-chip" id="focus-chip" hidden aria-live="polite"></span>
-      <button class="jobs-toggle" id="map-toggle" type="button" aria-controls="map-panel" aria-expanded="false">MAP</button>
-      <button class="jobs-toggle" id="console-toggle" type="button" aria-controls="console-panel" aria-expanded="false">CONSOLE</button>
-      <button class="jobs-toggle" id="room-toggle" type="button" aria-controls="room-panel" aria-expanded="false">ROOM</button>
-      <button class="jobs-toggle" id="focus-toggle" type="button">FOCUS</button>
-      <button class="jobs-toggle" id="search-toggle" type="button">SEARCH</button>
-      <button class="jobs-toggle" id="tools-toggle" type="button">TOOLS</button>
-      <button class="jobs-toggle" id="jobs-toggle" type="button">JOBS</button>
+<nav id="companion-navigation" class="companion-nav unified-nav" aria-label="Kyra companions"></nav>
+<script src="/static/navigation.js?v=08cd03c0"></script>
+<button class="focus-chip" id="focus-chip" type="button" hidden aria-live="polite"></button>
+<section id="workspace-notices" aria-label="Workspace updates" aria-live="polite" hidden></section>
+
+  <aside class="jobs-panel" id="attention-panel" aria-hidden="true" aria-label="Attention" inert>
+    <div class="jobs-panel-header">
+      <span>ATTENTION</span>
+      <button id="attention-close" type="button" aria-label="Close attention">&times;</button>
     </div>
+    <div class="attention-content">
+      <button class="jobs-btn" id="attention-refresh" type="button">REFRESH</button>
+      <p class="jobs-hint" id="attention-status" role="status">Checking signals…</p>
+      <section id="pending-actions" class="pending-actions" aria-label="Actions waiting for approval" aria-live="polite"></section>
+      <div id="attention-cards"></div>
+      <div id="attention-grouped" aria-label="More items"></div>
+      <section id="reflection-feed" aria-labelledby="reflection-heading">
+        <h3 id="reflection-heading">REFLECT</h3>
+        <p class="jobs-hint">Local suggestions, up to three a day. Check the evidence. Votes guide future suggestions; “Do it” only creates an unsent LOOP draft.</p>
+        <p id="reflection-status" class="jobs-hint" role="status"></p>
+        <div id="reflection-cards"></div>
+      </section>
+    </div>
+  </aside>
+
+  <aside class="jobs-panel" id="progress-panel" aria-hidden="true" aria-label="Progress" inert>
+    <div class="jobs-panel-header">
+      <span>PROGRESS</span>
+      <button id="progress-close" type="button" aria-label="Close progress">&times;</button>
+    </div>
+    <div class="progress-content">
+      <button class="jobs-btn" id="progress-refresh" type="button">REFRESH</button>
+      <p class="jobs-hint" id="progress-status" role="status"></p>
+      <h2>Today</h2>
+      <div id="progress-today" class="progress-today"></div>
+      <p id="progress-line"></p>
+      <h2>Current leads</h2>
+      <div id="progress-leads"></div>
+    </div>
+  </aside>
+
+  <aside class="jobs-panel" id="learning-panel" aria-hidden="true" aria-label="Learning" inert>
+    <div class="jobs-panel-header">
+      <span>LEARNING</span>
+      <button id="learning-close" type="button" aria-label="Close learning">&times;</button>
+    </div>
+    <div class="learning-content">
+      <button class="jobs-btn" id="learning-tab-refresh" type="button">REFRESH</button>
+      <p class="jobs-hint" id="learning-status" role="status"></p>
+      <p id="learning-streak"></p>
+      <section id="learning-lessons" aria-label="Visual lessons"></section>
+      <h2>Due now</h2>
+      <div id="learning-items"></div>
+      <h2>Reels</h2>
+      <div id="learning-reels"></div>
+    </div>
+  </aside>
+
+  <aside class="jobs-panel" id="daily-panel" aria-hidden="true" aria-label="Daily" inert>
+    <div class="jobs-panel-header">
+      <span>DAILY</span>
+      <button id="daily-close" type="button" aria-label="Close daily">&times;</button>
+    </div>
+    <div class="daily-content">
+      <button class="jobs-btn" id="daily-refresh" type="button">REFRESH</button>
+      <p class="jobs-hint" id="daily-status" role="status"></p>
+      <div id="daily-sections"></div>
+    </div>
+  </aside>
+
+  <aside class="jobs-panel" id="myself-panel" aria-hidden="true" aria-label="Myself" inert>
+    <div class="jobs-panel-header">
+      <span>MYSELF</span>
+      <button id="myself-close" type="button" aria-label="Close myself">&times;</button>
+    </div>
+    <div class="myself-content">
+      <button class="jobs-btn" id="myself-refresh" type="button">REFRESH</button>
+      <p class="jobs-hint" id="myself-status" role="status"></p>
+      <p class="jobs-hint">Health export only, shown on this Mac. Missing days remain gaps. No model interpretation.</p>
+      <h2>Latest recorded night</h2><p id="myself-last"></p>
+      <h2>Asleep hours · 30 days</h2>
+      <svg id="myself-sleep" class="myself-line" viewBox="0 0 360 140" role="img" aria-label="Asleep hours per night"></svg>
+      <p id="myself-sleep-caption" class="jobs-hint"></p>
+      <h2>Resting heart rate · 30 days</h2>
+      <svg id="myself-heart" class="myself-line" viewBox="0 0 360 140" role="img" aria-label="Resting heart rate daily median in bpm"></svg>
+      <p id="myself-heart-caption" class="jobs-hint"></p>
+    </div>
+  </aside>
+
+  <aside class="jobs-panel is-wide" id="ideas-panel" aria-hidden="true" aria-label="Idea Lab" inert>
+    <div class="jobs-panel-header"><span>IDEA LAB</span><button id="ideas-close" type="button" aria-label="Close Idea Lab">&times;</button></div>
+    <div class="idea-lab-intro"><p class="atlas-eyebrow">DISCOVER · UNDERSTAND · TRY</p><h1>Make room for a good idea.</h1><p>Read something useful. Find the concept behind it. Turn a possibility into a small experiment.</p>
+      <div class="idea-journey" role="group" aria-label="Idea journey"><span>01 Discover</span><span aria-hidden="true">→</span><a href="#learning">02 Understand</a><span aria-hidden="true">→</span><button id="idea-try" type="button">03 Try the sample</button><span aria-hidden="true">↺</span><span>Keep what you learn</span></div><a href="/atlas">See how this connects to Kyra ↗</a></div>
+    <div id="idea-desk"></div>
+    <section id="prototype-sample" class="prototype-entry"><p class="atlas-eyebrow">YOUR FIRST WORKING EXPERIMENT</p><h2>The Experiment Picker</h2><p>Compare candidate ideas against weighted criteria, change an assumption, then write the smallest test of your winner. This is an original, editable sample; it does not generate arbitrary apps.</p><a id="prototype-launch" class="jobs-btn" href="http://[::1]:8431/" target="_blank" rel="noopener noreferrer">Open local sample ↗</a><p class="jobs-hint">Separate local prototype server. Its content cannot call Kyra. If the sample is not running, start it from the local prototype instructions. No sharing or deployment occurs.</p><label for="prototype-problem">Problem to test</label><textarea id="prototype-problem" placeholder="What is getting in the way?"></textarea><label for="prototype-hypothesis">Your hypothesis</label><textarea id="prototype-hypothesis" maxlength="500" placeholder="What might work, and why?"></textarea><label for="prototype-experiment">Smallest next experiment</label><textarea id="prototype-experiment" placeholder="What will you try and observe?"></textarea><button type="button" id="prototype-save">Save experiment idea</button><p id="prototype-seed" role="status"></p></section>
+  </aside>
 
   <aside class="jobs-panel" id="map-panel" aria-hidden="true" aria-label="Map" inert>
     <div class="jobs-panel-header">
@@ -52,20 +125,31 @@
       <button id="map-close" type="button" aria-label="Close map">&times;</button>
     </div>
     <div class="jobs-tabs" role="tablist" aria-label="Map">
-      <button class="jobs-tab is-active" id="map-tab-features" data-map-tab="features" type="button" role="tab" aria-selected="true" aria-controls="map-features">FEATURES</button>
+      <button class="jobs-tab is-active" id="map-tab-overview" data-map-tab="overview" type="button" role="tab" aria-selected="true" aria-controls="map-overview">OVERVIEW</button>
+      <button class="jobs-tab" id="map-tab-features" data-map-tab="features" type="button" role="tab" aria-selected="false" aria-controls="map-features" tabindex="-1">FEATURES</button>
       <button class="jobs-tab" id="map-tab-memory" data-map-tab="memory" type="button" role="tab" aria-selected="false" aria-controls="map-memory" tabindex="-1">MEMORY</button>
+      <button class="jobs-tab" id="map-tab-system" data-map-tab="system" type="button" role="tab" aria-selected="false" aria-controls="map-system" tabindex="-1">SYSTEM</button>
     </div>
-    <section class="jobs-tab-panel is-active" id="map-features" data-map-tab-panel="features" role="tabpanel" aria-labelledby="map-tab-features">
+    <section class="jobs-tab-panel is-active atlas-embedded" id="map-overview" data-map-tab-panel="overview" role="tabpanel" aria-labelledby="map-tab-overview"><div class="atlas-toolbar"><div role="group" aria-label="Map view"><button type="button" data-atlas-view="all" aria-pressed="true">Whole Kyra</button><button type="button" data-atlas-view="ideas" aria-pressed="false">The idea journey</button></div><a class="atlas-open" href="/atlas">Open full Atlas ↗</a></div><p class="atlas-status" role="status"></p><div class="atlas-workspace"><div class="atlas-canvas"><svg role="group" aria-label="Kyra feature connections"></svg></div><aside class="atlas-detail" aria-live="polite"></aside></div><section class="atlas-guide" aria-label="Where to start"></section></section>
+    <section class="jobs-tab-panel" id="map-features" data-map-tab-panel="features" role="tabpanel" aria-labelledby="map-tab-features">
       <p class="jobs-hint" id="map-summary" aria-live="polite"></p>
       <svg id="feature-map" role="group" aria-label="Feature blueprint"></svg>
       <div id="map-slices" aria-live="polite" tabindex="-1"></div>
     </section>
     <section class="jobs-tab-panel" id="map-memory" data-map-tab-panel="memory" role="tabpanel" aria-labelledby="map-tab-memory">
+      <p><a href="/workspace#memory">Edit memory notes</a></p>
       <button class="jobs-btn" id="memory-map-refresh" type="button">REFRESH</button>
       <p class="jobs-hint">Room size shows note count. Colour shows age: fresh, 30+ days, or unknown. Small nodes are threads.</p>
       <div id="memory-map-summary" aria-live="polite"></div>
       <svg id="memory-map" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 180" aria-label="Memory rooms and session threads"></svg>
       <div id="memory-map-detail" aria-live="polite"></div>
+    </section>
+    <section class="jobs-tab-panel" id="map-system" data-map-tab-panel="system" role="tabpanel" aria-labelledby="map-tab-system">
+      <button class="jobs-btn" id="system-map-refresh" type="button">REFRESH</button>
+      <p class="jobs-hint" id="system-map-summary" aria-live="polite"></p>
+      <p class="jobs-hint">Dashed: planned. Available: implemented. Verified: dated evidence, not a live health check. Scroll across the four lanes and select a node for details.</p>
+      <div class="system-map-scroll"><svg id="system-map" role="group" aria-label="Devices, tools, stores and features"></svg></div>
+      <div id="system-map-detail" aria-live="polite" tabindex="-1"></div>
     </section>
   </aside>
 
@@ -91,7 +175,10 @@
     </section>
     <section class="jobs-tab-panel" id="console-privacy" data-console-tab-panel="privacy" role="tabpanel" aria-labelledby="console-tab-privacy">
       <button class="jobs-btn" id="console-privacy-refresh" type="button">REFRESH</button>
+      <button class="jobs-btn" id="console-privacy-suggest" type="button">Suggest labels</button>
+      <p id="console-privacy-suggest-status" class="console-badge" role="status"></p>
       <h3>Notes privacy labels</h3>
+      <p class="console-badge">Suggested labels are local model guesses. Review changes, especially removals. Only Apply changes a file's label.</p>
       <p class="console-badge">Review each notes file before saving its label. A stale label means the file changed and needs review again.</p>
       <div id="console-privacy-files" aria-live="polite"></div>
       <h3>Outbound dry-run summary · last 30 days</h3>
@@ -116,6 +203,8 @@
       <button class="jobs-tab is-active" data-tab="draft" type="button">DRAFT</button>
       <button class="jobs-tab" data-tab="profile" type="button">PROFILE</button>
       <button class="jobs-tab" data-tab="tracker" type="button">TRACKER</button>
+      <button class="jobs-tab" data-tab="scout" type="button">SCOUT</button>
+      <button class="jobs-tab" data-tab="ready" type="button">READY</button>
       <button class="jobs-tab" data-tab="outreach" type="button">OUTREACH</button>
       <button class="jobs-tab" data-tab="autofill" type="button">AUTOFILL</button>
       <button class="jobs-tab" data-tab="apply" type="button">APPLY</button>
@@ -275,6 +364,7 @@
         <input id="tracker-company" type="text" placeholder="Company">
         <input id="tracker-role" type="text" placeholder="Role">
         <input id="tracker-link" type="text" placeholder="Link (optional)">
+        <select id="tracker-status" aria-label="Initial application status"></select>
         <button class="jobs-btn" id="tracker-add" type="button">Add</button>
       </div>
       <p>Drag an application to a status column, or use its status menu.</p>
@@ -282,6 +372,7 @@
         <section data-tracker-column="targeting"><h3>targeting</h3></section>
         <section data-tracker-column="ready_to_submit"><h3>ready to submit</h3></section>
         <section data-tracker-column="needs_attention"><h3>needs attention</h3></section>
+        <section data-tracker-column="prepared"><h3>prepared</h3></section>
         <section data-tracker-column="applied"><h3>applied</h3></section>
         <section data-tracker-column="referral_pending"><h3>referral pending</h3></section>
         <section data-tracker-column="interviewing"><h3>interviewing</h3></section>
@@ -289,6 +380,21 @@
         <section data-tracker-column="rejected"><h3>rejected</h3></section>
         <section data-tracker-column="withdrawn"><h3>withdrawn</h3></section>
       </div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tab-panel="ready">
+      <p>Prepared documents become READY after a successful fill with a live browser window. You review and submit on the employer’s site.</p>
+      <p>Keys: j / k select, o open, a confirm “I submitted”, s skip. Disabled while typing.</p>
+      <button class="jobs-btn" id="ready-refresh" type="button">Refresh</button>
+      <p id="ready-status" role="status" aria-live="polite"></p>
+      <div id="ready-list"></div>
+    </section>
+
+    <section class="jobs-tab-panel" data-tab-panel="scout">
+      <p>Public hiring leads. Approve a company to watch its board; no application is sent.</p>
+      <button class="jobs-btn" id="scout-refresh" type="button">Refresh</button>
+      <p id="scout-status" role="status" aria-live="polite"></p>
+      <div id="scout-list"></div>
     </section>
 
     <section class="jobs-tab-panel" data-tab-panel="outreach">
@@ -371,10 +477,11 @@
         <button class="search-chip" data-kind="conversation" type="button">CHAT</button>
       </div>
 
-      <div class="search-actions">
+      <div class="search-actions" style="flex-wrap: wrap;">
         <button class="jobs-btn" id="search-run" type="button">SEARCH</button>
         <button class="jobs-btn" id="search-answer" type="button">SYNTHESIZE ANSWER</button>
         <button class="jobs-btn" id="search-reindex" type="button">REINDEX</button>
+        <button class="jobs-btn" id="search-outside" type="button" hidden>OUTSIDE: search DuckDuckGo</button>
       </div>
 
       <label class="search-private">
@@ -385,7 +492,22 @@
       <div class="search-status" id="search-status"></div>
       <div class="search-answer" id="search-answer-box" hidden></div>
       <div class="search-results" id="search-results"></div>
+      <section id="search-outside-results" aria-label="Outside search results" hidden></section>
     </section>
+  </aside>
+
+  <aside class="jobs-panel" id="devices-panel" aria-hidden="true" aria-label="Devices" inert>
+      <p><a href="/cast-devices">Cast devices: approve or revoke on this Mac</a></p>
+    <div class="jobs-panel-header">
+      <span>DEVICES</span>
+      <button id="devices-close" type="button" aria-label="Close Devices">&times;</button>
+    </div>
+    <div class="jobs-tab-panel is-active">
+      <p class="jobs-hint">Kasa controls use your local network. Levoit controls use the VeSync cloud and may take time to appear in status.</p>
+      <button class="jobs-btn" id="devices-refresh" type="button">Refresh status</button>
+      <p class="jobs-status" id="devices-status" role="status" aria-live="polite"></p>
+      <div id="devices-cards"></div>
+    </div>
   </aside>
 
   <aside class="jobs-panel" id="room-panel" aria-hidden="true" aria-label="Room" inert>
@@ -397,12 +519,7 @@
       <p class="jobs-status" id="room-humidity">Humidity: unavailable · Target: unavailable</p>
       <svg id="room-history" viewBox="0 0 360 96" role="img" aria-label="Humidity over the last 24 hours; breaks indicate missing readings" hidden></svg>
       <p class="jobs-status" id="room-history-caption" role="status" aria-live="polite"></p>
-      <label class="jobs-check"><input id="room-display" type="checkbox" role="switch" disabled> Display <span id="room-display-pending"></span></label>
-      <label class="jobs-check"><input id="room-light" type="checkbox" role="switch" disabled> Night light <span id="room-light-pending"></span></label>
-      <label class="jobs-field">
-        <span>Night light brightness: <output id="room-brightness-value" for="room-brightness">40%</output> <span id="room-brightness-pending"></span></span>
-        <input id="room-brightness" type="range" min="40" max="100" value="40" disabled>
-      </label>
+      <a class="jobs-btn" id="room-devices" href="#devices">Device controls</a>
       <button class="jobs-btn" id="room-refresh" type="button">Refresh</button>
       <p class="jobs-status" id="room-status" role="status" aria-live="polite"></p>
     </section>
@@ -489,6 +606,7 @@
 
     <section class="jobs-tab-panel" data-focus-tab-panel="about">
       <div class="focus-about" id="focus-about"></div>
+      <p class="focus-note">Loaded app.js: <code id="app-js-stamp">unknown</code></p>
     </section>
   </aside>
 
@@ -498,14 +616,7 @@
       <button id="tools-close" type="button" aria-label="Close">&times;</button>
     </div>
 
-    <div class="jobs-tabs" role="tablist">
-      <button class="jobs-tab is-active" data-tools-tab="reminders" type="button">REMINDERS</button>
-      <button class="jobs-tab" data-tools-tab="initiatives" type="button">SUGGESTIONS</button>
-      <button class="jobs-tab" data-tools-tab="news" type="button">NEWS</button>
-      <button class="jobs-tab" data-tools-tab="science" type="button">SCIENCE</button>
-      <button class="jobs-tab" data-tools-tab="learning" type="button">LEARNING</button>
-      <button class="jobs-tab" data-tools-tab="memory" type="button">MEMORY</button>
-    </div>
+
 
     <section class="jobs-tab-panel is-active" data-tools-tab-panel="reminders">
       <div class="jobs-tracker-add">
@@ -528,19 +639,15 @@
 
     <section class="jobs-tab-panel" data-tools-tab-panel="news">
       <button class="jobs-btn" id="news-fetch" type="button">Fetch tech news</button>
-      <div class="jobs-feed-list" id="news-list"></div>
+      <div class="jobs-feed-list" id="news-list"><p class="jobs-hint">Choose Fetch tech news to load headlines.</p></div>
     </section>
 
     <section class="jobs-tab-panel" data-tools-tab-panel="science">
       <button class="jobs-btn" id="science-fetch" type="button">Fetch science facts</button>
-      <div class="jobs-feed-list" id="science-list"></div>
+      <div class="jobs-feed-list" id="science-list"><p class="jobs-hint">Choose Fetch science facts to load articles.</p></div>
     </section>
 
     <section class="jobs-tab-panel" data-tools-tab-panel="learning">
-      <div class="jobs-panel-subhead" style="border-top: none; padding-top: 0;">DUE FOR REVIEW</div>
-      <button class="jobs-btn" id="learning-refresh" type="button">Check due reviews</button>
-      <div class="jobs-tracker-list" id="learning-due-list"></div>
-
       <div class="jobs-panel-subhead">ADD AN ITEM</div>
       <div class="jobs-doc-add">
         <input id="learning-topic" type="text" placeholder="Topic (e.g. CAP theorem)">
@@ -550,6 +657,7 @@
       </div>
     </section>
     <section class="jobs-tab-panel" data-tools-tab-panel="memory">
+      <p><a href="/workspace#map" data-memory-map>Explore memory connections</a></p>
       <p class="jobs-hint">Everything here goes into <em>every</em> system prompt, in full &mdash; and into every resume draft. This is what Kyra durably believes about you.</p>
       <p class="jobs-hint" id="memnote-weight"></p>
       <div class="jobs-tracker-add">
@@ -562,63 +670,9 @@
 
   </aside>
 
-  <main class="stage">
-    <div class="core-wrap" id="core-wrap">
-      <svg class="core" viewBox="0 0 240 240" aria-hidden="true">
-        <circle class="ring ring-outer" cx="120" cy="120" r="108"></circle>
-        <circle class="ring ring-tick" cx="120" cy="120" r="108"></circle>
-        <circle class="ring ring-mid" cx="120" cy="120" r="84"></circle>
-        <circle class="ring ring-inner" cx="120" cy="120" r="58"></circle>
-        <circle class="ring ring-core" cx="120" cy="120" r="34"></circle>
-        <circle class="core-dot" cx="120" cy="120" r="5"></circle>
-      </svg>
-      <div class="core-readout">
-        <div class="core-label" id="core-label">STANDBY</div>
-        <div class="core-sub" id="core-sub">awaiting input</div>
-      </div>
-    </div>
-
-    <div class="transcript-bar">
-      <button id="transcript-clear" class="ghost-btn" type="button" title="Forget the transcript kept in this browser">CLEAR</button>
-    </div>
-    <section class="transcript" id="transcript" aria-live="polite">
-      <div class="line line-kyra">
-        <span class="line-tag">KYRA</span>
-        <span class="line-text">Systems online. What are we working on, Duc?</span>
-      </div>
-    </section>
-    <section id="pending-actions" class="pending-actions" aria-label="Actions waiting for approval" aria-live="polite"></section>
-  </main>
-
-  <footer class="input-bar">
-    <div class="voice-mode-toggle" role="group" aria-label="Voice input mode">
-      <button class="voice-mode-btn is-active" data-mode="ptt" id="btn-ptt" type="button">PTT</button>
-      <button class="voice-mode-btn" data-mode="handsfree" id="btn-handsfree" type="button">HANDS-FREE</button>
-    </div>
-    <div class="mic-wrap">
-      <button id="mic" type="button" class="mic-btn" data-state="idle" aria-label="Voice input" aria-pressed="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" fill="currentColor"/>
-          <path d="M6 11a1 1 0 0 0-2 0 8 8 0 0 0 7 7.94V21H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-2.06A8 8 0 0 0 20 11a1 1 0 0 0-2 0 6 6 0 0 1-12 0Z" fill="currentColor"/>
-        </svg>
-      </button>
-      <span class="mic-label" id="mic-label">MIC OFF</span>
-    </div>
-    <div class="voice-mode-toggle" role="group" aria-label="Speak replies">
-      <button class="voice-mode-btn" id="btn-speak" type="button" aria-pressed="false" title="Read her replies aloud">SPEAK</button>
-    </div>
-    <div class="input-frame">
-      <span class="bracket" aria-hidden="true">&#91;</span>
-      <input id="input" type="text" autocomplete="off" spellcheck="false" placeholder="type your command&hellip;" />
-      <span class="bracket" aria-hidden="true">&#93;</span>
-    </div>
-    <button id="send" type="button" aria-label="Send">
-      <span>SEND</span>
-    </button>
-  </footer>
-
-  <audio id="reply-audio" hidden></audio>
-
+  <script src="/static/atlas.js"></script>
+  <script src="/static/ideas.js"></script>
+  <script src="/static/lessons.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

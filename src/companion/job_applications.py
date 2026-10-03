@@ -18,10 +18,12 @@ import math
 import re
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Lock
 
 from sqlalchemy import Engine, delete, insert, select, update
+from sqlalchemy.exc import IntegrityError
 
 from companion.db import engine_for_store
 from companion.latex_compile import CompileResult, compile_latex
@@ -32,7 +34,10 @@ from companion.privacy import PrivacyClass, Tier
 from companion.provider import AuditUnavailable, release_label
 from companion.resume_guard import check_resume_output, unsupported_numbers
 from companion.resume_latex import content_diff, restore_comments
+from companion.resume_paths import resolve, to_stored
+from companion.schema import job_application_events as EVENTS
 from companion.schema import job_applications as JA
+from companion.schema import job_outreach_plans as OP
 from companion.tools import Tool
 
 RESULT_LABEL = (Tier.T2, frozenset({PrivacyClass.job_search}))
@@ -45,7 +50,7 @@ logger = logging.getLogger(__name__)
 # ready_to_submit / needs_attention: set by apply_pipeline.py - the form is filled and waiting for Duc's click, or
 # something needs him first. Only Duc moves an application to applied.
 VALID_STATUSES = {
-    "targeting", "ready_to_submit", "needs_attention", "applied", "referral_pending", "interviewing", "offer", "rejected",
+    "targeting", "ready_to_submit", "needs_attention", "prepared", "applied", "referral_pending", "interviewing", "offer", "rejected",
     "withdrawn",
 }
 
@@ -121,6 +126,16 @@ class JobApplication:
     created_at: str
     updated_at: str
     resume_path: str | None = None
+    status_since: str = ""
+    apply_by_at: str | None = None
+    outreach_plan: dict | None = None
+
+
+@dataclass
+class StatusEvent:
+    status: str
+    at: str
+    note: str | None
 
 
 class JobApplicationStore:
@@ -137,11 +152,13 @@ class JobApplicationStore:
         with self._engine.begin() as conn:
             res = conn.execute(insert(JA).values(
                 company=company, role=role, link=link, status=status, notes=notes,
-                resume_path=resume_path, created_at=now, updated_at=now,
+                resume_path=to_stored(resume_path), created_at=now, updated_at=now,
             ))
+            conn.execute(insert(EVENTS).values(application_id=res.inserted_primary_key[0], status=status,
+                                               at=now, note=notes))
         return JobApplication(
             id=res.inserted_primary_key[0], company=company, role=role, link=link, status=status,
-            notes=notes, created_at=now, updated_at=now, resume_path=resume_path,
+            notes=notes, created_at=now, updated_at=now, resume_path=resolve(to_stored(resume_path)), status_since=now,
         )
 
     def set_resume(self, app_id: int, resume_path: str | None) -> JobApplication | None:
@@ -154,10 +171,10 @@ class JobApplicationStore:
             if row is None:
                 return None
             now = datetime.now(UTC).isoformat()
-            conn.execute(update(JA).where(JA.c.id == app_id).values(resume_path=resume_path, updated_at=now))
+            conn.execute(update(JA).where(JA.c.id == app_id).values(resume_path=to_stored(resume_path), updated_at=now))
         return JobApplication(
             id=app_id, company=row.company, role=row.role, link=row.link, status=row.status,
-            notes=row.notes, created_at=row.created_at, updated_at=now, resume_path=resume_path,
+            notes=row.notes, created_at=row.created_at, updated_at=now, resume_path=resolve(to_stored(resume_path)),
         )
 
     def set_link(self, app_id: int, link: str) -> JobApplication | None:
@@ -173,7 +190,7 @@ class JobApplicationStore:
             conn.execute(update(JA).where(JA.c.id == app_id).values(link=link, updated_at=now))
         return JobApplication(
             id=app_id, company=row.company, role=row.role, link=link, status=row.status,
-            notes=row.notes, created_at=row.created_at, updated_at=now, resume_path=row.resume_path,
+            notes=row.notes, created_at=row.created_at, updated_at=now, resume_path=resolve(row.resume_path),
         )
 
     def delete(self, app_id: int) -> bool:
@@ -185,6 +202,8 @@ class JobApplicationStore:
         was the name of whoever posted it on LinkedIn.
         """
         with self._engine.begin() as conn:
+            conn.execute(delete(OP).where(OP.c.application_id == app_id))
+            conn.execute(delete(EVENTS).where(EVENTS.c.application_id == app_id))
             return conn.execute(delete(JA).where(JA.c.id == app_id)).rowcount > 0
 
     def list(self, status: str | None = None) -> list[JobApplication]:
@@ -194,7 +213,38 @@ class JobApplicationStore:
         q = q.order_by(JA.c.updated_at.desc())
         with self._engine.connect() as conn:
             rows = conn.execute(q).all()
-        return [JobApplication(**r._mapping) for r in rows]
+            plans = {r.application_id: dict(r._mapping) for r in conn.execute(
+                select(OP).where(OP.c.application_id.in_([row.id for row in rows])))}
+            latest = {event.application_id: event.at for event in conn.execute(
+                select(EVENTS.c.application_id, EVENTS.c.at).where(
+                    EVENTS.c.application_id.in_([row.id for row in rows])).order_by(EVENTS.c.id))}
+        return [JobApplication(**{**r._mapping, "resume_path": resolve(r.resume_path)},
+                               status_since=latest.get(r.id, r.updated_at),
+                               apply_by_at=plans.get(r.id, {}).get("apply_by_at"),
+                               outreach_plan=plans.get(r.id)) for r in rows]
+
+    def outreach_plan(self, app_id: int) -> dict | None:
+        with self._engine.connect() as conn:
+            row = conn.execute(select(OP).where(OP.c.application_id == app_id)).first()
+        return dict(row._mapping) if row else None
+
+    def save_outreach_plan(self, app_id: int, **values) -> dict:
+        """Insert once; retries never move the deadline or overwrite the original draft."""
+        try:
+            with self._engine.begin() as conn:
+                if conn.execute(select(JA.c.id).where(JA.c.id == app_id)).first() is None:
+                    raise LookupError("application not found")
+                conn.execute(insert(OP).values(application_id=app_id, **values))
+        except IntegrityError:
+            if self.outreach_plan(app_id) is None:
+                raise
+        return self.outreach_plan(app_id)
+
+    def history(self, app_id: int) -> "list[StatusEvent]":
+        with self._engine.connect() as conn:
+            rows = conn.execute(select(EVENTS.c.status, EVENTS.c.at, EVENTS.c.note).where(
+                EVENTS.c.application_id == app_id).order_by(EVENTS.c.id)).all()
+        return [StatusEvent(**row._mapping) for row in rows]
 
     def update_status(self, app_id: int, status: str, notes: str | None = None) -> JobApplication | None:
         if status not in VALID_STATUSES:
@@ -204,12 +254,39 @@ class JobApplicationStore:
             if row is None:
                 return None
             now = datetime.now(UTC).isoformat()
-            new_notes = notes if notes is not None else row.notes
+            new_notes = "\n".join(part for part in (row.notes, notes) if part) if notes else row.notes
             conn.execute(update(JA).where(JA.c.id == app_id).values(status=status, notes=new_notes, updated_at=now))
+            conn.execute(insert(EVENTS).values(application_id=app_id, status=status, at=now, note=notes))
         return JobApplication(
             id=app_id, company=row.company, role=row.role, link=row.link, status=status,
-            notes=new_notes, created_at=row.created_at, updated_at=now, resume_path=row.resume_path,
+            notes=new_notes, created_at=row.created_at, updated_at=now, resume_path=resolve(row.resume_path), status_since=now,
         )
+
+
+class FollowUpExists(ValueError):
+    """This application already has an unfinished follow-up reminder."""
+
+
+_follow_up_lock = Lock()
+
+
+def schedule_follow_up(store, reminders, app_id, days, *, now=None):
+    if not isinstance(days, int) or isinstance(days, bool) or days < 1:
+        raise ValueError("days must be a positive integer")
+    application = next((app for app in store.list() if app.id == app_id), None)
+    if application is None:
+        raise LookupError(f"no application with id {app_id}")
+    now = now or datetime.now(UTC)
+    try:
+        due = (now + timedelta(days=days)).isoformat()
+    except OverflowError as exc:
+        raise ValueError("follow-up date is out of range") from exc
+    text = f"Follow up on application #{app_id}: {application.company}, {application.role}"
+    # Serialize clicks in the local server; the reminders store owns persistence.
+    with _follow_up_lock:
+        if any(reminder.text == text for reminder in reminders.list()):
+            raise FollowUpExists("This application already has an unfinished follow-up")
+        return reminders.add(text, due)
 
 
 class AddJobApplicationTool(Tool):
@@ -330,7 +407,7 @@ def draft_application_material(
 
 # --- LaTeX resume optimization: edits Duc's own .tex source directly and
 # hands back valid LaTeX for him to compile himself, rather than going
-# through resume_format.py's parser + resume_pdf.py's HTML/CSS render.
+# through the old parser + HTML/CSS render path (both modules since deleted).
 # Built the same day as the PDF path, once real testing on Duc's actual
 # PDF surfaced genuine text-extraction fidelity issues on LaTeX-typeset
 # output (dropped underscores in inline code, spurious spaces around
@@ -1121,8 +1198,8 @@ class SetApplicationResumeTool(Tool):
         if app is None:
             return {"error": f"no application with id {id}"}
         result = {"id": app.id, "company": app.company, "resume_path": app.resume_path}
-        if path and not Path(path).is_file():
-            result["warning"] = f"saved, but no file at {path} yet - autofill will fall back to the profile default"
+        if path and not Path(app.resume_path).is_file():
+            result["warning"] = f"saved, but no file at {app.resume_path} yet - autofill will fall back to the profile default"
         return result
 
 

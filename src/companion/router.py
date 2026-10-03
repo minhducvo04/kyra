@@ -5,7 +5,8 @@ cheapest and most-certain first:
   1. explicit override phrase ("ask claude" / "use local") - always wins
   2. sticky session mode (focus -> claude, chill -> local) - file-backed,
      shared across chat.py/voice_chat.py/web_ui.py (see session_state.py)
-  3. auto mode: a small local model classifies text-vs-tool, then backend
+  3. whole-message acknowledgements and greetings go to local text
+  4. auto mode: a small local model classifies text-vs-tool, then backend
      for the text path; the tool path always goes to Claude (the "Agent
      Specialist") - see docs/model-benchmark.md for why local wasn't
      trusted with structured tool calls yet, and docs/agentic-roadmap.md's
@@ -17,11 +18,14 @@ black box, and doubles as future preference-tuning data (see
 docs/agentic-roadmap.md, Q2/Q3).
 """
 import json
+import logging
 import re
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from companion.approvals import ApprovalError, reply_for_result
+from companion.brief import Reply
 from companion.llm import LocalLLM, ProviderUnavailable
 from companion.outbound import ReleaseRefused
 from companion.provider import AuditUnavailable
@@ -35,6 +39,8 @@ from companion.tools import ToolRegistry
 # default (Qwen2.5-14B) - classification is a much narrower task than
 # holding a conversation, see docs/agentic-roadmap.md's "queued for later".
 CLASSIFIER_MODEL = "mlx-community/Llama-3.2-3B-Instruct-4bit"
+_DISABLED_BACKEND_ADAPTERS: set[str] = set()
+_logger = logging.getLogger(__name__)
 
 # Optional fine-tuned classifier (see router_ft.py, docs/router-finetune.md):
 # env KYRA_CLASSIFIER_ADAPTER="model_repo:adapter_dir". When set, TurnRouter
@@ -43,10 +49,32 @@ CLASSIFIER_MODEL = "mlx-community/Llama-3.2-3B-Instruct-4bit"
 # decision, 17x fewer prompt tokens, 4x faster, +15 points on the held-out set.
 # Read at TurnRouter construction (not import) so .env ordering can't hide it.
 
+FIXED_LABELS = {
+    ("tool", "claude"): '{"path": "tool", "backend": "claude"}',
+    ("text", "claude"): '{"path": "text", "backend": "claude"}',
+    ("text", "local"): '{"path": "text", "backend": "local"}',
+}
+
 OVERRIDE_PHRASES = {
     "ask claude": "claude", "use claude": "claude", "claude please": "claude",
     "ask local": "local", "use local": "local", "local please": "local",
 }
+
+# Only complete messages made of these phrases qualify; a greeting prefix
+# must never swallow the request that follows it.
+ACK_RE = re.compile(
+    r"\A[\s,.!?;:…-]*(?:(?:(?:thanks|thank\s+you)(?:\s+so\s+much)?|ok(?:ay)?|"
+    r"cool|nice|great|got\s+it|sounds\s+good|that\s+worked|lol|hi|hey|hello|"
+    r"good\s+(?:morning|night)|bye|kyra)\b[\s,.!?;:…-]*)+\Z",
+    re.IGNORECASE,
+)
+
+ADVICE_RE = re.compile(
+    r"(?:^\s*(?:why|should|is\s+it\s+worth|how\s+should|what\s+would\s+you|"
+    r"help\s+me|compare|review|critique)\b|"
+    r"\b(?:salary|equity|offer|negotiat\w*|compensation|raise)\b)",
+    re.IGNORECASE,
+)
 
 # Turns this long or with multiple distinct asks get biased toward Claude
 # rather than actually decomposed into subtasks - see docs/agentic-roadmap.md,
@@ -81,9 +109,9 @@ Examples:
 - "what do I need to review today" -> {{"path": "tool", "backend": "claude", "reason": "check due reviews"}}
 - "yeah I remembered that one" -> {{"path": "tool", "backend": "claude", "reason": "mark review remembered"}}
 - "how's it going" -> {{"path": "text", "backend": "local", "reason": "casual chat"}}
-- "I applied to Stripe for a backend role, can you log it" -> {{"path": "tool", "backend": "claude", "reason": "add a job application"}}
+- "I applied to Northwind for a backend role, can you log it" -> {{"path": "tool", "backend": "claude", "reason": "add a job application"}}
 - "what jobs am I tracking right now" -> {{"path": "tool", "backend": "claude", "reason": "list job applications"}}
-- "mark the Stripe application as interviewing" -> {{"path": "tool", "backend": "claude", "reason": "update job application status"}}
+- "mark the Northwind application as interviewing" -> {{"path": "tool", "backend": "claude", "reason": "update job application status"}}
 - "help me draft a cover letter for this job posting" -> {{"path": "tool", "backend": "claude", "reason": "draft tailored job application material"}}
 - "write me a resume bullet for this role" -> {{"path": "tool", "backend": "claude", "reason": "draft tailored job application material"}}
 - "fill out this application for me: greenhouse.io/acme/jobs/123" -> {{"path": "tool", "backend": "claude", "reason": "autofill a job application form"}}
@@ -109,6 +137,7 @@ class RoutingDecision:
     decompose_biased: bool = False
     error: str | None = field(default=None)
     fallback_from: str | None = None
+    confidence: float | None = None  # Log only; never user-facing certainty.
 
     def as_log_fields(self) -> dict:
         fields = {
@@ -118,15 +147,24 @@ class RoutingDecision:
         # Only present on a fallback: the ordinary line keeps the six keys its consumers were written against.
         if self.fallback_from is not None:
             fields["fallback_from"] = self.fallback_from
+        if self.confidence is not None:
+            fields["confidence"] = self.confidence
         return fields
 
 
 class TurnRouter:
-    def __init__(self, tool_registry: ToolRegistry, classifier: LocalLLM | None = None, adapter_spec: str | None = None):
+    def __init__(
+        self, tool_registry: ToolRegistry, classifier: LocalLLM | None = None, adapter_spec: str | None = None,
+        *, backend_classifier: LocalLLM | None = None, backend_adapter_spec: str | None = None,
+    ):
         self._tools = tool_registry
         self._classifier = classifier  # lazy - only loaded the first time auto-mode classification is actually needed
         # "model_repo:adapter_dir" -> fine-tuned compact-prompt path; None/"" -> few-shot path
         self._adapter_spec = get_settings().classifier_adapter if adapter_spec is None else adapter_spec
+        self._backend_classifier = backend_classifier
+        self._backend_adapter_spec = (
+            get_settings().classifier_backend_adapter if backend_adapter_spec is None else backend_adapter_spec
+        )
 
     def route(self, user_input: str) -> RoutingDecision:
         t0 = time.time()
@@ -148,13 +186,55 @@ class TurnRouter:
             decision = RoutingDecision(path="text", backend=backend, reason=f"session mode = {mode}", overridden=True)
             return decision
 
+        if ACK_RE.fullmatch(user_input):
+            return RoutingDecision(path="text", backend="local", reason="acknowledgement rule")
+
         decision = self._classify(user_input)
-        if decision.path == "text" and _looks_complex(user_input):
+        abstained = decision.confidence is not None and decision.reason == "unsure"
+        # Optional policy, after primary routing. Never weaken its uncertainty or
+        # failure fallback, and never let the second model change the tool path.
+        if (decision.path == "text" and not abstained and decision.error is None
+                and (self._backend_classifier is not None or self._backend_adapter_spec)):
+            selected = self._choose_text_backend(user_input, decision)
+            if selected and decision.backend == "local" and ADVICE_RE.search(user_input):
+                decision.backend = "claude"
+                decision.reason += " (+ advice rule)"
+        if decision.path == "text" and not abstained and _looks_complex(user_input):
             decision.backend = "claude"
             decision.decompose_biased = True
             decision.reason += " (+ complex input biased to claude)"
 
         return decision
+
+    def _choose_text_backend(self, user_input: str, decision: RoutingDecision) -> bool:
+        try:
+            from companion.router_ft import BACKEND_SYSTEM
+
+            if self._backend_classifier is None:
+                if self._backend_adapter_spec in _DISABLED_BACKEND_ADAPTERS:
+                    return False
+                repo, adapter_dir = self._backend_adapter_spec.split(":", 1)
+                try:
+                    matches = (Path(adapter_dir) / "router-system.txt").read_bytes() == BACKEND_SYSTEM.encode("utf-8")
+                except OSError:
+                    matches = False
+                if not matches:
+                    _DISABLED_BACKEND_ADAPTERS.add(self._backend_adapter_spec)
+                    _logger.warning("Backend classifier disabled: prompt missing or mismatched; primary routing retained")
+                    return False
+                self._backend_classifier = LocalLLM(repo=repo, max_tokens=40, adapter_path=adapter_dir)
+            raw = self._backend_classifier.respond(system=BACKEND_SYSTEM, history=[], user_input=user_input)
+            parsed = _parse_json(raw)
+            if not isinstance(parsed, dict) or parsed.get("backend") not in ("local", "claude"):
+                raise ValueError("invalid backend classifier output")
+            decision.backend = parsed["backend"]
+            decision.reason += " (+ backend classifier)"
+            return True
+        except Exception as exc:
+            decision.backend = "claude"
+            decision.reason += " (+ backend classifier unavailable, defaulted to claude)"
+            decision.error = type(exc).__name__
+            return False
 
     def warm(self) -> None:
         """Load and exercise the classifier now, so the first real turn does not.
@@ -172,6 +252,24 @@ class TurnRouter:
 
     def _classify(self, user_input: str) -> RoutingDecision:
         try:
+            threshold = get_settings().router_unsure_to_claude
+            if threshold:
+                if self._classifier is None:
+                    if self._adapter_spec:
+                        repo, adapter_dir = self._adapter_spec.split(":", 1)
+                        self._classifier = LocalLLM(repo=repo, max_tokens=40, adapter_path=adapter_dir)
+                    else:
+                        self._classifier = LocalLLM(repo=CLASSIFIER_MODEL, max_tokens=120)
+                from companion.router_ft import COMPACT_SYSTEM
+
+                probabilities = self._classifier.label_probabilities(
+                    system=COMPACT_SYSTEM, user_input=user_input, labels=FIXED_LABELS,
+                )
+                path, backend = max(probabilities, key=probabilities.get)
+                confidence = probabilities[path, backend]
+                if confidence < threshold:
+                    return RoutingDecision("text", "claude", "unsure", confidence=confidence)
+                return RoutingDecision(path, backend, "classifier decision", confidence=confidence)
             if self._adapter_spec:
                 if self._classifier is None:
                     repo, adapter_dir = self._adapter_spec.split(":", 1)
@@ -250,7 +348,7 @@ def _parse_json(raw: str) -> dict | None:
         return None
 
 
-MODE_COMMANDS = {"focus mode": "focus", "chill mode": "chill", "auto mode": "auto"}
+MODE_COMMANDS = {"focus mode": "focus", "chill mode": "chill", "auto mode": "auto", "research mode": "research"}
 
 
 def handle_mode_command(text: str) -> str | None:
@@ -324,6 +422,17 @@ def _kept_local_notice(refusal):
 
 
 def route_and_answer_verbose(
+    user_input: str, conversation, router: "TurnRouter", backends: dict, registry: ToolRegistry, on_token=None,
+    register: str | None = None, *, input_label=None,
+) -> tuple[str, "RoutingDecision | None"]:
+    reply, decision = _route_and_answer_verbose(
+        user_input, conversation, router, backends, registry, on_token=on_token,
+        register=register, input_label=input_label,
+    )
+    return (reply if register == "voice" else Reply(reply, mode=get_mode())), decision
+
+
+def _route_and_answer_verbose(
     user_input: str, conversation, router: "TurnRouter", backends: dict, registry: ToolRegistry, on_token=None,
     register: str | None = None, *, input_label=None,
 ) -> tuple[str, "RoutingDecision | None"]:

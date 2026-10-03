@@ -154,10 +154,22 @@ def test_the_stream_reports_a_refusal_as_a_final_event_the_page_must_not_retry(w
 
 
 def test_the_page_treats_refused_as_final():
+    """NAV-1 (2026-09-29): the page that streamed and retried turns is gone. No web script sends a chat or voice turn,
+    so no page path can re-send a refused release; a refusal from any remaining endpoint reaches the reader with its
+    code and message, and approving a pending action (the remaining path that can release) has one call site and
+    shows a failure instead of retrying it."""
+    import re
     from pathlib import Path
 
-    js = (Path(__file__).resolve().parent.parent / "web" / "app.js").read_text(encoding="utf-8")
-    assert "refused" in js and "release_refused" in js
+    web = Path(__file__).resolve().parent.parent / "web"
+    for script in web.glob("*.js"):
+        assert not re.search(r'''["'`]/api/(chat|voice)\b''', script.read_text(encoding="utf-8")), script.name
+    js = (web / "app.js").read_text(encoding="utf-8")
+    reader = js[js.index("async function readJson"):js.index("async function readJson") + 600]
+    assert "e.code = err && err.code" in reader and "err.message" in reader
+    assert js.count("/api/actions/${encodeURIComponent(action.id)}/${decision}") == 1
+    approve = js[js.index("async function loadPendingActions"):js.index("async function loadPendingActions") + 2400]
+    assert 'addLine("error", error.message)' in approve
 
 
 def test_voice_answers_403_not_500(webapp, monkeypatch):

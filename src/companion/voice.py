@@ -69,12 +69,15 @@ class KokoroTTS(TextToSpeech):
 
     def __init__(
         self,
-        model_path: str = "data/voice_models/kokoro-v1.0.onnx",
-        voices_path: str = "data/voice_models/voices-v1.0.bin",
+        model_path: str | None = None,
+        voices_path: str | None = None,
         voice: str = "af_heart",
     ):
         from kokoro_onnx import Kokoro
 
+        folder = get_settings().models_dir / "voice_models"  # absolute, so the working directory no longer matters
+        model_path = model_path or str(folder / "kokoro-v1.0.onnx")
+        voices_path = voices_path or str(folder / "voices-v1.0.bin")
         missing = [p for p in (model_path, voices_path) if not Path(p).exists()]
         if missing:
             raise FileNotFoundError(

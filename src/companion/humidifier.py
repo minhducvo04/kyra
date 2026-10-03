@@ -68,6 +68,9 @@ class VeSyncHumidifier(Humidifier):
                 raise HumidifierError("VeSync account has no humidifier")
             device = manager.devices.humidifiers[0]
             await device.update()
+            device_id = getattr(device, "cid", None)
+            if not isinstance(device_id, str) or not device_id.strip():
+                raise HumidifierError("VeSync returned an invalid humidifier identity")
             for step in ("power", "mode", "target_humidity", "mist_level", "display"):
                 value = changes.get(step)
                 if value is None:
@@ -100,6 +103,7 @@ class VeSyncHumidifier(Humidifier):
                 await device.update()
             state = device.state
             status = {
+                "device_id": device_id,
                 "name": device.device_name,
                 "power": state.device_status,
                 "online": state.connection_status == "online",

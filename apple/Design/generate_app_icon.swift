@@ -75,10 +75,11 @@ for (name, context) in [("Back", back), ("Middle", middle), ("Front", front)] {
                  at: content.appendingPathComponent("Contents.json"))
     try png(context, at: content.appendingPathComponent("\(name).png"))
 }
-// Flat preview is design documentation only; the app consumes the three layers above.
+// Flat preview is for a quick look only and goes to the temp dir, never the repository.
 let preview = canvas()
 for layer in [back, middle, front] {
     preview.draw(layer.makeImage()!, in: CGRect(x: 0, y: 0, width: side, height: side))
 }
-try png(preview, at: root.appendingPathComponent("apple/Design/KyraIcon-preview.png"))
-print("Generated three sRGB icon layers and a composite preview.")
+let previewURL = FileManager.default.temporaryDirectory.appendingPathComponent("KyraIcon-preview.png")
+try png(preview, at: previewURL)
+print("Generated three sRGB icon layers; composite preview at \(previewURL.path).")

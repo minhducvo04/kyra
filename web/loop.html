@@ -1,14 +1,16 @@
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Kyra · Loop</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/static/tokens.css">
-<link rel="stylesheet" href="/static/loop.css"><script src="/static/loop.js" defer></script></head>
+<link rel="stylesheet" href="/static/loop.css"><script src="/static/loop.js" defer></script><link rel="stylesheet" href="/static/navigation.css">
+</head>
 <body>
 <header class="app-header">
   <a class="app-brand" href="/" aria-label="Kyra home"><span aria-hidden="true">◈</span>KYRA</a>
   <span class="app-page">Loop</span>
-  <nav aria-label="Main navigation"><a href="/">Talk</a><a href="/loop" aria-current="page">Loop</a></nav>
   <div class="app-status"><span class="status-dot" aria-hidden="true"></span><span>On this Mac</span></div>
 </header>
+<nav id="companion-navigation" class="companion-nav unified-nav" aria-label="Kyra companions"></nav>
+<script src="/static/navigation.js?v=08cd03c0"></script>
 <main>
 <section class="workspace">
 <div class="intro"><h1>Ask a model and review its answer.</h1></div>
@@ -18,7 +20,7 @@
 <form id="request"><div class="row"><label>Topic<input id="topic" required maxlength="160" placeholder="What are you working on?"></label><label>Start with<select id="choice"><option value="codex-default">Codex · High</option><option value="claude-fable-high">Claude · High</option></select></label><label>Tier<select id="tier"><option value="casual">Casual</option><option value="work" selected>Work</option><option value="life_changing">Life changing</option></select></label></div><label>Your request<textarea id="prompt" required maxlength="65536" rows="5" placeholder="Describe the task and what a good result needs to include."></textarea></label><div class="form-footer"><small>Uses your signed-in plans. Answers and review comments are saved privately.</small><button id="run" type="submit">Run model</button></div></form>
 <section id="assignments" aria-labelledby="assignments-heading">
 <div class="history-heading"><h2 id="assignments-heading">Assignments</h2><button id="refresh-assignments" type="button">Refresh</button></div>
-<p class="meta">Plan with Claude, confirm a Codex build in its own worktree, then ask Claude to review the diff. Each button confirms before sending work. Build receipts appear on the card; contributions appear under the assignment topic. Advancing manually records your declaration.</p>
+<p class="meta">Choose Codex or Claude Code and hand off to its visible conversation. Queued means sent, not acknowledged. Background assignment stages are disabled by default; advancing manually records your declaration.</p>
 <details><summary>Add an assignment</summary>
 <form id="assignment-form">
 <div class="row"><label>Code<input id="assignment-code" required maxlength="160"></label><label>Title<input id="assignment-title" required></label></div>
@@ -29,6 +31,19 @@
 <div class="form-footer"><button id="save-assignment" type="submit">Add assignment</button></div>
 </form></details>
 <p id="assignments-notice" role="status"></p><div id="assignment-rows"></div>
+</section>
+<section id="destinations" aria-labelledby="destinations-heading">
+<div class="history-heading"><h2 id="destinations-heading">Conversation destinations</h2><button id="refresh-destinations" type="button">Refresh</button></div>
+<p class="meta">Pin one visible conversation for each app. Hand off uses these choices.</p>
+<div class="row">
+<label>Codex<select id="destination-codex" aria-label="Codex conversation"></select><button id="pin-codex" type="button">Pin Codex</button></label>
+<label>Claude Code<select id="destination-claude" aria-label="Claude Code conversation"></select><button id="pin-claude" type="button">Pin Claude Code</button></label>
+</div><p id="destinations-notice" role="status"></p>
+</section>
+<section id="deliveries" aria-labelledby="deliveries-heading">
+<div class="history-heading"><h2 id="deliveries-heading">Deliveries</h2><button id="refresh-deliveries" type="button">Refresh</button></div>
+<p class="meta">Completion requires a result file. An uncertain send is never retried automatically.</p>
+<p id="deliveries-notice" role="status"></p><div id="delivery-rows"></div>
 </section>
 <section id="usage" aria-labelledby="usage-heading"><div class="history-heading"><h2 id="usage-heading">USAGE</h2><button id="refresh-usage" type="button">Refresh</button></div><p class="meta">All saved topics. Token totals cover reported usage only; runs without usage are unknown. Provider-reported cost is not a subscription charge.</p><p id="usage-notice" role="status"></p><div id="usage-rows"></div></section>
 </section>

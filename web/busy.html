@@ -11,15 +11,26 @@
 </head>
 <body>
 <header class="app-header">
-  <a class="app-brand" href="/" aria-label="Kyra home"><span aria-hidden="true">◈</span>KYRA</a>
+  <a class="app-brand" href="/busy/office" aria-label="Kyra · Văn phòng"><span aria-hidden="true">◈</span>Kyra · Văn phòng</a>
   <span class="app-page">Busy mode</span>
-  <nav aria-label="Main navigation"><a href="/">Talk</a><a href="/loop">Loop</a><a href="/busy" aria-current="page">Busy mode</a></nav>
+  <nav aria-label="Điều hướng"><a href="/busy/office">Văn phòng</a><a href="/busy" aria-current="page">Duyệt tài liệu</a></nav>
   <div class="app-status"><span class="status-dot" aria-hidden="true"></span><span>On this Mac</span></div>
 </header>
 <main>
   <h1>Review and approve your documents.</h1>
   <p>For busy business people and non-technical users.</p>
   <p id="message" role="status" aria-live="polite"></p>
+  <section id="daily-report" lang="vi" aria-labelledby="daily-heading">
+    <h2 id="daily-heading">Báo cáo hằng ngày</h2>
+    <p id="daily-reminder" role="status" aria-live="polite">Đang tải...</p>
+    <ul id="daily-missed"></ul>
+    <button id="daily-prepare" type="button">Chuẩn bị báo cáo hôm nay</button>
+    <p id="daily-result"></p>
+    <ul id="daily-warnings"></ul>
+    <p id="daily-links" hidden><a id="daily-workbook" download>Tải file Excel</a></p>
+    <div id="daily-days"></div>
+    <p>Ứng dụng chỉ chuẩn bị bản nháp, không bao giờ tự gửi. Anh tự mở email, kiểm tra, thêm người nhận nếu cần và bấm Gửi.</p>
+  </section>
   <section aria-labelledby="progress-heading">
     <h2 id="progress-heading">In progress</h2>
     <div id="tasks"></div>

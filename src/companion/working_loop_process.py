@@ -128,10 +128,13 @@ def _claude_path() -> str:
     if found:
         return found
     base = Path.home() / "Library/Application Support/Claude/claude-code"
-    choices = [p for p in base.glob("*/claude.app/Contents/MacOS/claude")
-               if all(n.isdigit() for n in p.parents[3].name.split("."))]
+    # Desktop 2.1.286 added a build-hash folder: <version>[/<build>]/claude.app.
+    choices = [(p, p.relative_to(base).parts[0])
+               for pattern in ("*/claude.app/Contents/MacOS/claude", "*/*/claude.app/Contents/MacOS/claude")
+               for p in base.glob(pattern)]
+    choices = [(p, v) for p, v in choices if all(n.isdigit() for n in v.split("."))]
     if choices:
-        return str(max(choices, key=lambda p: tuple(int(n) for n in p.parents[3].name.split("."))))
+        return str(max(choices, key=lambda c: tuple(int(n) for n in c[1].split(".")))[0])
     return "claude"
 
 

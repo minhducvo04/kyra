@@ -16,7 +16,7 @@
 {"message": "what should I be revising right now", "path": "tool", "backend": "claude", "note": "due_learning_reviews"}
 {"message": "I got the consistent hashing one right, mark it reviewed", "path": "tool", "backend": "claude", "note": "mark_learning_reviewed"}
 {"message": "I forgot the B-tree one completely, reset it", "path": "tool", "backend": "claude", "note": "mark_learning_reviewed"}
-{"message": "log that I applied to Databricks for a platform engineer role", "path": "tool", "backend": "claude", "note": "add_job_application"}
+{"message": "log that I applied to Northwind for a platform engineer role", "path": "tool", "backend": "claude", "note": "add_job_application"}
 {"message": "track a new application: Cursor, AI engineer, applied today", "path": "tool", "backend": "claude", "note": "add_job_application"}
 {"message": "which companies am I still waiting to hear from", "path": "tool", "backend": "claude", "note": "list_job_applications"}
 {"message": "list my open applications", "path": "tool", "backend": "claude", "note": "list_job_applications"}
@@ -78,7 +78,7 @@
 {"message": "dig up the cover letter I wrote for the Ashby role", "path": "tool", "backend": "claude", "note": "search_kyra_data"}
 {"message": "use the Northwind resume for that application", "path": "tool", "backend": "claude", "note": "set_application_resume"}
 {"message": "attach the tailored Moonharbor pdf to the Moonharbor application", "path": "tool", "backend": "claude", "note": "set_application_resume"}
-{"message": "set the resume on the Stripe application to the one we just made", "path": "tool", "backend": "claude", "note": "set_application_resume"}
+{"message": "set the resume on the Northwind application to the one we just made", "path": "tool", "backend": "claude", "note": "set_application_resume"}
 {"message": "what's the difference between BM25 and TF-IDF", "path": "text", "backend": "claude", "note": "bait: lookup-shaped but general knowledge"}
 {"message": "how do I search for a file by name in bash", "path": "text", "backend": "claude", "note": "bait: lookup-shaped but general knowledge"}
 {"message": "what should I look for in a startup offer", "path": "text", "backend": "claude", "note": "bait: look for != search my data"}

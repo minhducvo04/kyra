@@ -8,7 +8,11 @@ import sys
 import urllib.request
 from pathlib import Path
 
-MODELS_DIR = Path(__file__).resolve().parent.parent / "data" / "voice_models"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from companion.settings import get_settings
+
+MODELS_DIR = get_settings().models_dir / "voice_models"  # KYRA_MODELS_DIR, see settings.py
 BASE_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1"
 FILES = ["kokoro-v1.0.onnx", "voices-v1.0.bin"]
 

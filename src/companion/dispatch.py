@@ -4,7 +4,7 @@ import json
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 
@@ -78,6 +78,14 @@ def _scope(assignment):
             + "\n\nAcceptance checks:\n" + "\n".join(assignment.acceptance))
 
 
+def handoff_brief(assignment, result_path: Path) -> str:
+    """Instructions for the visible builder; headless diff collection is separate."""
+    return (_scope(assignment) + f"\n\nWrite your result to {result_path}.\n"
+            "Include verification results, files changed and disagreements. "
+            "Run the acceptance checks, then commit on the assignment branch with a message saying what was verified. "
+            "Do not push. Do not touch other worktrees. If a required action is blocked, report it without bypassing it.\n")
+
+
 class Dispatcher:
     def __init__(self, store, runner: ProcessRunner, *, owner, repo_root: Path,
                  worktrees_dir: Path, timeout_seconds=1800):
@@ -98,6 +106,8 @@ class Dispatcher:
                                      choice=ALLOWLIST[choice], prompt=prompt, tier=assignment.tier)
 
     def plan(self, assignment_id) -> ExecutionRecord:
+        if not get_settings().loop_headless:
+            raise PolicyRefused("headless_disabled")
         assignment = self._assignment(assignment_id)
         if assignment.status != "assigned" or assignment.plan_run_id is not None:
             raise PolicyRefused("assignment_not_plannable")
@@ -106,6 +116,8 @@ class Dispatcher:
         return run
 
     def check_build(self, assignment_id, *, confirmed):
+        if not get_settings().loop_headless:
+            raise PolicyRefused("headless_disabled")
         # This check precedes even looking up an assignment or touching git.
         if confirmed is not True:
             raise PolicyRefused("confirmation_required")
@@ -178,6 +190,8 @@ class Dispatcher:
         return BuildReceipt(assignment.id, str(worktree), branch, process.returncode, changed, result_present, str(raw_stream))
 
     def review(self, assignment_id) -> ExecutionRecord:
+        if not get_settings().loop_headless:
+            raise PolicyRefused("headless_disabled")
         assignment = self._assignment(assignment_id)
         if assignment.status != "built" or not assignment.worktree:
             raise PolicyRefused("not_built")
@@ -199,3 +213,41 @@ class Dispatcher:
         run = self._run(assignment, "claude-fable-high", prompt)
         self.store.bind_assignment(assignment.id, owner=self.owner, review_run_id=run.id)
         return run
+
+    def handoff(self, assignment_id, *, app, kind, tasks=None, store_path=None, runner=subprocess.run, pins=None):
+        from companion import app_dispatch, app_tasks
+
+        assignment = self._assignment(assignment_id)
+        if app not in {"codex", "claude"}:
+            raise PolicyRefused("invalid_app")
+        if tasks is None:
+            tasks = (app_tasks.discover_codex(Path.home() / ".codex/sessions")
+                     + app_tasks.discover_claude(Path.home() / ".claude/sessions"))
+        candidates = [task for task in tasks if task.app == app]
+        settings = get_settings()
+        pinned = (pins or {}).get(app)
+        if not pinned and app == "codex":
+            pinned = settings.codex_task_id or None
+        try:
+            if not pinned and app == "claude" and settings.claude_session_name:
+                candidates = [task for task in candidates if task.name == settings.claude_session_name]
+                pinned = app_tasks.choose(candidates, repo=self.repo_root).id
+            task = app_tasks.choose(candidates, repo=self.repo_root, pinned_id=pinned)
+        except app_tasks.NoDestination:
+            raise PolicyRefused("no_destination") from None
+        except app_tasks.AmbiguousDestination:
+            raise PolicyRefused("ambiguous_destination") from None
+        private = self.repo_root / "data/private_docs"
+        brief = private / f"assignment-{assignment.code}.md"
+        result = private / f"assignment-{assignment.code}-result.md"
+        text = handoff_brief(assignment, result)
+        if len(text.encode()) > MAX_PROMPT_BYTES:
+            raise PolicyRefused("invalid_prompt")
+        if brief.is_symlink() or (brief.exists() and brief.read_text() != text):
+            raise PolicyRefused("assignment_brief_changed")
+        _write_private(brief, text)
+        delivery = app_dispatch.send(task, brief, result, kind=kind,
+                                     store_path=store_path or app_dispatch.DEFAULT_STORE, runner=runner)
+        if assignment.status == "draft":
+            assignment = self.store.advance_assignment(assignment.id, owner=self.owner, status="assigned")
+        return {"assignment": asdict(assignment), "delivery": delivery}

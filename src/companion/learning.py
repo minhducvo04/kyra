@@ -23,7 +23,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
-from sqlalchemy import Engine, insert, select, update
+from sqlalchemy import Engine, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
 from companion.db import engine_for_store
@@ -57,6 +57,14 @@ class LearningItem:
 
 class LearningRequestConflict(ValueError):
     """A save request key was reused with different content."""
+
+
+class StaleReview(ValueError):
+    """The schedule changed since this review card was loaded."""
+
+    def __init__(self, next_review_at: str):
+        super().__init__("This item was already reviewed. Refresh to see its current schedule.")
+        self.next_review_at = next_review_at
 
 
 class LearningStore:
@@ -107,21 +115,51 @@ class LearningStore:
             rows = conn.execute(select(T).where(T.c.next_review_at <= now).order_by(T.c.next_review_at)).all()
         return [LearningItem(**r._mapping) for r in rows]
 
-    def mark_reviewed(self, item_id: int, remembered: bool) -> dict | None:
+    def mark_reviewed(self, item_id: int, remembered: bool, *, expected_next_review_at: str | None = None) -> dict | None:
         with self._engine.begin() as conn:
-            row = conn.execute(select(T.c.review_count).where(T.c.id == item_id)).first()
+            row = conn.execute(select(T.c.review_count, T.c.next_review_at).where(T.c.id == item_id)).first()
             if row is None:
                 return None
+            if expected_next_review_at is not None and row.next_review_at != expected_next_review_at:
+                raise StaleReview(row.next_review_at)
             new_count = row.review_count + 1 if remembered else 0
             idx = min(new_count, len(REVIEW_INTERVALS_DAYS) - 1)
             next_review = (datetime.now(UTC) + timedelta(days=REVIEW_INTERVALS_DAYS[idx])).isoformat()
-            conn.execute(update(T).where(T.c.id == item_id).values(review_count=new_count, next_review_at=next_review))
+            statement = update(T).where(T.c.id == item_id)
+            if expected_next_review_at is not None:
+                statement = statement.where(T.c.next_review_at == expected_next_review_at)
+            changed = conn.execute(statement.values(review_count=new_count, next_review_at=next_review))
+            if changed.rowcount != 1:
+                current = conn.scalar(select(T.c.next_review_at).where(T.c.id == item_id))
+                if current is None:
+                    return None
+                raise StaleReview(current)
             streak = self._bump_streak(conn) if remembered else self._current_streak(conn)
         return {"review_count": new_count, "next_review_at": next_review, "streak_days": streak}
 
     def _current_streak(self, conn) -> int:
         row = conn.execute(select(S.c.streak_days).where(S.c.id == 0)).first()
         return row.streak_days if row else 0
+
+    def streak_days(self) -> int:
+        """Read the current streak without extending it or rewriting stale state."""
+        with self._engine.connect() as conn:
+            row = conn.execute(select(S.c.streak_days, S.c.last_review_date).where(S.c.id == 0)).first()
+        if row is None or row.last_review_date not in {
+            date.today().isoformat(), (date.today() - timedelta(days=1)).isoformat(),
+        }:
+            return 0
+        return row.streak_days
+
+    def summary(self) -> dict:
+        """Read scheduling and the dated streak fact, not an inferred review count."""
+        now = datetime.now(UTC).isoformat()
+        with self._engine.connect() as conn:
+            due = conn.scalar(select(func.count()).select_from(T).where(T.c.next_review_at <= now))
+            next_review = conn.scalar(select(func.min(T.c.next_review_at)).where(T.c.next_review_at > now))
+            last_review = conn.scalar(select(S.c.last_review_date).where(S.c.id == 0))
+        return {"due_items": due, "streak_days": self.streak_days(),
+                "reviewed_today": last_review == date.today().isoformat(), "next_review_at": next_review}
 
     def _bump_streak(self, conn) -> int:
         """One review counted per calendar day - reviewing 5 things today

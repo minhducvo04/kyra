@@ -1,4 +1,4 @@
-"""Sticky session mode (auto/focus/chill), shared across chat.py/voice_chat.py/
+"""Sticky session mode (auto/focus/chill/research), shared across chat.py/voice_chat.py/
 web_ui.py via a small local file - so "focus mode" set in one front door is
 respected by whichever you open next.
 
@@ -14,7 +14,7 @@ import json
 from companion.paths import DATA_DIR
 
 STATE_PATH = DATA_DIR / "session_state.json"
-VALID_MODES = {"auto", "focus", "chill"}
+VALID_MODES = {"auto", "focus", "chill", "research"}
 DEFAULT_MODE = "auto"
 
 

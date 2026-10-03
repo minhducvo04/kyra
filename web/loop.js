@@ -5,6 +5,10 @@ const cards = new Map();
 const statusClass = {queued:"queued", dispatching:"running", done:"done", failed:"failed",
   unreconciled:"needs-you", mismatch:"needs-you"};
 const errorLabel = {
+  headless_disabled:"Use Hand off to work in the visible conversation.",
+  no_destination:"No matching visible conversation was found. Open the pinned task in its app.",
+  ambiguous_destination:"More than one conversation matches. Configure a unique task or exact session name.",
+  assignment_brief_changed:"This assignment's existing brief differs. Check it before handing off again.",
   continuation_refused:"This contribution can no longer be continued. Start a fresh conversation.",
   review_context_unavailable:"An earlier turn is missing or changed. Restore its saved content before requesting this review.",
   invalid_review_lineage:"The saved conversation links cannot be verified. Start a fresh conversation with the context it needs.",
@@ -242,7 +246,7 @@ async function watchAssignmentBuild(assignmentId, jobId) {
 async function refreshAssignments() {
   $("refresh-assignments").disabled = true;
   try {
-    const {assignments} = await readJson("/api/loop/assignments");
+    const {assignments, headless_enabled = false} = await readJson("/api/loop/assignments");
     const nodes = assignments.map(assignment => {
       const card = el("article", undefined, "card");
       card.append(el("strong", `${assignment.code}: ${assignment.title}`),
@@ -263,13 +267,36 @@ async function refreshAssignments() {
       const receipt = assignmentReceipts.get(assignment.id);
       if (receipt) card.append(el("pre", JSON.stringify(receipt, null, 2), "receipt"));
       const controls = el("div");
+      const appLabel = el("label", "Conversation "), appChoice = el("select");
+      for (const [value, label] of [["codex", "Codex"], ["claude", "Claude Code"]]) {
+        const option = el("option", label); option.value = value; appChoice.append(option);
+      }
+      appLabel.append(appChoice);
+      const kindLabel = el("label", "Work "), kindChoice = el("select");
+      for (const [value, label] of [["bounded_build", "Build"], ["design", "Design"], ["review", "Review"]]) {
+        const option = el("option", label); option.value = value; kindChoice.append(option);
+      }
+      kindLabel.append(kindChoice);
+      const handoff = el("button", "Hand off"); handoff.type = "button"; handoff.dataset.action = "handoff";
+      handoff.onclick = async () => {
+        handoff.disabled = true; $("assignments-notice").textContent = "";
+        try {
+          const result = await readJson(`/api/loop/assignments/${assignment.id}/handoff`, {method:"POST",
+            headers:{"Content-Type":"application/json"}, body:JSON.stringify({app:appChoice.value, kind:kindChoice.value})});
+          await refreshAssignments(); await refreshDeliveries();
+          $("assignments-notice").textContent = `Delivery ${result.delivery.state}. Check the conversation for acknowledgment.`;
+        } catch (error) { $("assignments-notice").textContent = error.message; }
+        finally { handoff.disabled = false; }
+      };
+      controls.append(appLabel, kindLabel, handoff);
       for (const [action, label, disabled] of [
         ['plan', "Plan", assignment.status !== "assigned" || assignment.plan_run_id !== null],
         ['build', "Build", assignment.status !== "assigned" || !assignment.plan_run_id || !!assignment.worktree],
         ['review', "Review", assignment.status !== "built"]
       ]) {
         const button = el("button", label); button.type = "button"; button.dataset.action = action;
-        button.disabled = disabled || assignmentJobs.has(assignment.id);
+        button.disabled = !headless_enabled || disabled || assignmentJobs.has(assignment.id);
+        if (!headless_enabled) button.title = "Background assignment stages are disabled. Use Hand off.";
         button.onclick = async () => {
           if (!confirm(action === "build" ? `Build ${assignment.code} with Codex in a new worktree?`
             : `Ask Claude to ${action} ${assignment.code}?`)) return;
@@ -338,3 +365,64 @@ $("assignment-form").onsubmit = async event => {
   finally { $("save-assignment").disabled = false; }
 };
 refreshAssignments();
+
+async function refreshDeliveries() {
+  try {
+    const {deliveries} = await readJson("/api/loop/deliveries");
+    const nodes = deliveries.map(delivery => {
+      const card = el("article", undefined, "card");
+      card.append(el("strong", `${delivery.app === "codex" ? "Codex" : "Claude Code"}: ${delivery.task_name}`),
+        el("p", `${delivery.state} · ${delivery.kind}`, "meta"), el("p", delivery.detail));
+      if (delivery.reply) card.append(el("p", delivery.reply));
+      if (delivery.state === "ambiguous") card.append(el("p", "Check the conversation before any retry. Sending may have succeeded."));
+      return card;
+    });
+    $("delivery-rows").replaceChildren(...(nodes.length ? nodes : [el("p", "No deliveries yet.", "empty")]));
+    $("deliveries-notice").textContent = "";
+  } catch (error) { $("deliveries-notice").textContent = `Deliveries could not refresh: ${error.message}`; }
+}
+$("refresh-deliveries").onclick = refreshDeliveries;
+refreshDeliveries();
+setInterval(refreshDeliveries, 5000);
+
+
+async function refreshDestinations() {
+  $("refresh-destinations").disabled = true;
+  try {
+    const {destinations} = await readJson("/api/loop/destinations");
+    for (const app of ["codex", "claude"]) {
+      const select = $("destination-" + app);
+      const previous = select.value;
+      const options = [el("option", "Choose a conversation")]; options[0].value = "";
+      let pinned = "";
+      for (const task of destinations.filter(task => task.app === app)) {
+        const status = task.idle === null ? "" : task.idle ? " · idle" : " · busy";
+        const option = el("option", `${task.name}${status}${task.pinned ? " · pinned" : ""}`);
+        option.value = task.id; options.push(option);
+        if (task.pinned) pinned = task.id;
+      }
+      select.replaceChildren(...options);
+      select.value = previous && options.some(option => option.value === previous) ? previous : pinned;
+      $("pin-" + app).disabled = !select.value;
+    }
+    $("destinations-notice").textContent = destinations.length ? "" : "No visible conversations found for this repository.";
+  } catch (error) { $("destinations-notice").textContent = `Destinations could not refresh: ${error.message}`; }
+  finally { $("refresh-destinations").disabled = false; }
+}
+for (const app of ["codex", "claude"]) {
+  const select = $("destination-" + app), button = $("pin-" + app);
+  button.disabled = true;
+  select.onchange = () => { button.disabled = !select.value; };
+  button.onclick = async () => {
+    button.disabled = true;
+    try {
+      await readJson("/api/loop/destinations/pin", {method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({app, id:select.value})});
+      await refreshDestinations();
+      $("destinations-notice").textContent = "Conversation pinned.";
+    } catch (error) { $("destinations-notice").textContent = error.message; }
+    finally { button.disabled = !select.value; }
+  };
+}
+$("refresh-destinations").onclick = refreshDestinations;
+refreshDestinations();

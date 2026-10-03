@@ -1,40 +1,105 @@
-const transcript = document.getElementById("transcript");
-const input = document.getElementById("input");
-const sendBtn = document.getElementById("send");
-const coreWrap = document.getElementById("core-wrap");
-const coreLabel = document.getElementById("core-label");
-const coreSub = document.getElementById("core-sub");
-const statusText = document.getElementById("status-text");
-const btnAuto = document.getElementById("btn-auto");
-const btnClaude = document.getElementById("btn-claude");
-const btnLocal = document.getElementById("btn-local");
-const micBtn = document.getElementById("mic");
-const micLabel = document.getElementById("mic-label");
-const btnPtt = document.getElementById("btn-ptt");
-const btnHandsfree = document.getElementById("btn-handsfree");
-const replyAudio = document.getElementById("reply-audio");
+window.addEventListener("error", (event) => {
+  reportScriptError(event.message || event.error, `${event.filename || "unknown file"}:${event.lineno || "?"}:${event.colno || "?"}`);
+});
+window.addEventListener("unhandledrejection", (event) => {
+  reportScriptError(event.reason, "Unhandled promise rejection");
+});
 
-const backendBtns = { auto: btnAuto, claude: btnClaude, local: btnLocal };
+function scriptAssetStamp() {
+  const script = document.querySelector('script[src*="/static/app.js"]');
+  return script ? new URL(script.getAttribute("src"), location.href).searchParams.get("v") || "unversioned" : "unknown";
+}
+function reportScriptError(error, where) {
+  // Independent of app state: this also runs when initialization stopped early.
+  try {
+    let banner = document.getElementById("script-error");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.id = "script-error";
+      banner.setAttribute("role", "alert");
+      const title = document.createElement("strong");
+      title.textContent = "Something went wrong in Kyra";
+      const details = document.createElement("pre");
+      details.textContent = `Loaded app.js: ${scriptAssetStamp()}\n`;
+      const copy = document.createElement("button");
+      copy.type = "button";
+      copy.textContent = "Copy";
+      copy.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(details.textContent);
+          copy.textContent = "Copied";
+        } catch {
+          try { copy.textContent = "Copy unavailable: select the text"; } catch { /* No recursive errors. */ }
+        }
+      };
+      const reload = document.createElement("button");
+      reload.type = "button";
+      reload.textContent = "Reload";
+      reload.onclick = () => {
+        try { location.reload(); } catch (error) { reportScriptError(error, "Reload"); }
+      };
+      banner.append(title, details, copy, reload);
+      document.body.prepend(banner);
+    }
+    const details = banner.querySelector("pre");
+    const message = error && error.message ? error.message : String(error);
+    const source = error && error.stack ? `\n${error.stack}` : "";
+    // Bound repeated failures; preserve the version line and most recent details.
+    const previous = details.textContent.split("\n").slice(1).join("\n");
+    details.textContent = `Loaded app.js: ${scriptAssetStamp()}\n`
+      + `${previous}\n${where || "Unknown location"}: ${message}${source}`.slice(-12000);
+  } catch { /* Reporting must never prevent another handler or create an error loop. */ }
+}
+try {
+  document.getElementById("app-js-stamp").textContent = scriptAssetStamp();
+} catch { /* The diagnostic label is optional if the document is incomplete. */ }
 
-// --- Presence: one state for the whole interface -------------------------------
-// A companion's first job is to show what it is doing (idle / listening / thinking /
-// speaking / interrupted / failed - docs/plans/2026-09-07-human-interface.md, point 1).
-// Before this, the core ring knew two states and the mic button five, set from a
-// dozen scattered assignments. Everything now goes through setPresence(): it stamps
-// <body data-presence>, so CSS owns the look, and plays a short earcon on the
-// transitions a voice user cannot see (listen-start, reply-start, failure).
-const PRESENCE_LABELS = {
-  idle: ["STANDBY", "awaiting input"],
-  listening: ["LISTENING", "go ahead"],
-  thinking: ["PROCESSING", "querying model…"],
-  speaking: ["SPEAKING", "click mic to interrupt"],
-  interrupted: ["INTERRUPTED", "listening again"],
-  failed: ["FAULT", "check the connection"],
+function openPanelSafely(name, opener) {
+  try {
+    const result = opener();
+    if (result && typeof result.catch === "function") result.catch(error => reportScriptError(error, `Panel: ${name}`));
+    return result;
+  } catch (error) { reportScriptError(error, `Panel: ${name}`); }
+}
+
+// Existing panel routes remain available in the shared workspace shell.
+const PANEL_OPENERS = {
+  ideas: () => openPanelSafely("ideas", openIdeasPanel),
+  devices: () => openPanelSafely("devices", openDevicesPanel),
+  room: () => openPanelSafely("room", openRoomPanel),
+  focus: () => openPanelSafely("focus", openFocusPanel),
+  daily: () => openPanelSafely("daily", openDailyPanel),
+  learning: () => openPanelSafely("learning", openLearningPanel),
+  jobs: () => openPanelSafely("jobs", openJobsPanel),
+  search: () => openPanelSafely("search", openSearchPanel),
+  progress: () => openPanelSafely("progress", openProgressPanel),
+  attention: () => openPanelSafely("attention", openAttentionPanel),
+  myself: () => openPanelSafely("myself", openMyselfPanel),
+  map: () => openPanelSafely("map", openMapPanel),
+  console: () => openPanelSafely("console", openConsolePanel),
+  tools: () => openPanelSafely("tools", openToolsPanel),
 };
+let panelPoll = null;
 let presence = "idle";
 let audioCtx = null;
 
+// Panel outcomes remain visible after removal of the legacy chat transcript.
+function addLine(who, text, meta, rest = "") {
+  const notices = document.getElementById("workspace-notices");
+  const line = document.createElement("p");
+  line.textContent = [meta, text, rest].filter(Boolean).join(" ");
+  if (who === "error") line.setAttribute("role", "alert");
+  notices.hidden = false;
+  notices.append(line);
+  while (notices.children.length > 5) notices.firstElementChild.remove();
+  return line;
+}
+function setPresence(state, message) {
+  presence = state;
+  if (message) addLine("system", message);
+}
 function earcon(kind) {
+  if (!audioCtx || audioCtx.state !== "running") return;
   // Synthesised, not a file: nothing to load, and quiet enough to be a cue rather than a noise.
   // Skipped entirely when the user asked the OS for less motion - that preference is the
   // closest thing the browser has to "keep the interface calm".
@@ -60,838 +125,6 @@ function earcon(kind) {
   }
 }
 
-function setPresence(state, sub) {
-  const changed = state !== presence;
-  presence = state;
-  document.body.dataset.presence = state;
-  const [label, defaultSub] = PRESENCE_LABELS[state] || PRESENCE_LABELS.idle;
-  coreLabel.textContent = label;
-  coreSub.textContent = sub || defaultSub;
-  coreWrap.classList.toggle("is-thinking", state === "thinking");
-  if (changed && (state === "listening" || state === "speaking" || state === "failed")) earcon(state);
-}
-
-function addLine(who, text, meta) {
-  const line = document.createElement("div");
-  line.className = `line line-${who}`;
-  const tag = document.createElement("span");
-  tag.className = "line-tag";
-  tag.textContent = who === "kyra" ? "KYRA" : who === "user" ? "YOU" : "SYSTEM";
-  const body = document.createElement("span");
-  body.className = "line-text";
-  if (meta) {
-    const metaSpan = document.createElement("span");
-    metaSpan.className = "line-meta";
-    metaSpan.textContent = meta;
-    body.appendChild(metaSpan);
-  }
-  body.appendChild(document.createTextNode(text));
-  line.append(tag, body);
-  // dataset.raw is the reply itself, kept apart from the meta/interrupted spans
-  // that also live in .line-text - so saving and restoring never re-reads a badge
-  // back in as part of what she said.
-  line.dataset.who = who;
-  line.dataset.raw = text;
-  if (who === "kyra") line.appendChild(wrongButton(line));
-  transcript.appendChild(line);
-  transcript.scrollTop = transcript.scrollHeight;
-  saveTranscript();
-  return line;
-}
-
-// --- Marking a reply wrong ------------------------------------------------------
-// The 2026 problem with a companion is correction, not recognition: the answer is
-// slightly wrong and there is no way to say so. The mark saves a memory note, which
-// is loaded in full into every system prompt - so she sees it on the next turn.
-function wrongButton(line) {
-  const btn = document.createElement("button");
-  btn.className = "line-wrong-btn";
-  btn.type = "button";
-  btn.textContent = "\u2715";
-  btn.title = "Tell her this reply was wrong";
-  btn.setAttribute("aria-label", "Mark this reply as wrong");
-  btn.addEventListener("click", () => markWrong(line));
-  return btn;
-}
-
-function tagWrong(line) {
-  line.dataset.wrong = "1";
-  const btn = line.querySelector(".line-wrong-btn");
-  if (btn) btn.remove();
-  if (!line.querySelector(".line-wrong-tag")) {
-    const tag = document.createElement("span");
-    tag.className = "line-meta line-wrong-tag";
-    tag.textContent = "marked wrong";
-    line.querySelector(".line-text").appendChild(tag);
-  }
-}
-
-async function markWrong(line) {
-  try {
-    await readJson(await fetch("/api/correction", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reply: line.dataset.raw || "" }),
-    }));
-    tagWrong(line);
-    saveTranscript();
-  } catch (err) {
-    addLine("error", `couldn't save that correction — ${err.message}`);
-  }
-}
-
-// --- Keeping the transcript across a reload -------------------------------------
-// Only in this browser: the server's own history lives in the running process, so
-// a restored transcript is a record of what was said, not proof she still has the
-// context. It survives a page reload, which is what loses it in practice.
-const TRANSCRIPT_KEY = "kyra.transcript";
-const TRANSCRIPT_MAX = 200;
-
-function saveTranscript() {
-  try {
-    const lines = [...transcript.querySelectorAll(".line")].slice(-TRANSCRIPT_MAX).map((l) => ({
-      who: l.dataset.who || (l.className.match(/line-(\w+)/) || [])[1] || "system",
-      text: l.dataset.raw ?? l.querySelector(".line-text").textContent,
-      meta: (l.querySelector(".line-meta:not(.line-interrupted):not(.line-wrong-tag)") || {}).textContent || "",
-      interrupted: !!l.querySelector(".line-interrupted"),
-      wrong: l.dataset.wrong === "1",
-    }));
-    localStorage.setItem(TRANSCRIPT_KEY, JSON.stringify(lines));
-  } catch (_) {
-    // private window, storage disabled, quota - the conversation still works
-  }
-}
-
-function restoreTranscript() {
-  let saved;
-  try {
-    saved = JSON.parse(localStorage.getItem(TRANSCRIPT_KEY) || "null");
-  } catch (_) {
-    return;
-  }
-  if (!Array.isArray(saved) || !saved.length) return;
-  transcript.replaceChildren();
-  for (const l of saved) {
-    const line = addLine(l.who, l.text, l.meta || undefined);
-    if (l.interrupted) markInterrupted(line);
-    if (l.wrong) tagWrong(line);
-  }
-}
-
-function clearTranscript() {
-  try {
-    localStorage.removeItem(TRANSCRIPT_KEY);
-  } catch (_) { /* nothing stored to remove */ }
-  transcript.replaceChildren();
-  addLine("system", "transcript cleared in this browser — she still remembers the conversation");
-}
-
-function setThinking(on) {
-  setPresence(on ? "thinking" : "idle", on ? undefined : handsFreeActive ? "hands-free — just start talking" : undefined);
-  // While a reply streams, SEND becomes STOP and the input stays live: stopping
-  // is core conversation logic, not an edge case (human-interface plan, point 3),
-  // and the natural way to stop is usually to just say the next thing.
-  sendBtn.querySelector("span").textContent = on ? "STOP" : "SEND";
-  sendBtn.classList.toggle("is-stop", on);
-  sendBtn.setAttribute("aria-label", on ? "Stop generating" : "Send");
-  sendBtn.disabled = false;
-  input.disabled = false;
-  micBtn.disabled = on;
-}
-
-// --- Cancelling a reply in flight ---------------------------------------------
-// Aborting the fetch only stops the browser *listening*; the turn keeps running
-// on the server, and it would record the whole reply into history and memory -
-// so Kyra would remember saying something Duc never saw. /api/chat/cancel stops
-// the generation itself, and is awaited so the next turn can't race it.
-let inFlight = null; // { controller } while a streamed turn is running
-
-async function cancelTurn() {
-  if (!inFlight) return false;
-  const turn = inFlight;
-  turn.cancelled = true;
-  turn.controller.abort();
-  try {
-    await fetch("/api/chat/cancel", { method: "POST" });
-  } catch (_) {
-    // the browser side is already stopped; a failed stop only costs tokens
-  }
-  return true;
-}
-
-function markInterrupted(line) {
-  const body = line.querySelector(".line-text");
-  // A stopped turn never gets the `done` event that would set dataset.raw, so the
-  // partial has to be read back off the nodes the tokens were painted into -
-  // otherwise a restored transcript shows the interruption with nothing before it.
-  const painted = [...body.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join("");
-  if (painted) line.dataset.raw = painted;
-  const mark = document.createElement("span");
-  mark.className = "line-meta line-interrupted";
-  mark.textContent = "interrupted";
-  body.appendChild(mark);
-  saveTranscript();
-}
-
-function replyMeta(data) {
-  return data.actual_backend ? `${data.actual_backend}${data.path === "tool" ? " · tool" : ""}` : "";
-}
-
-// Streams a turn from /api/chat/stream, painting tokens into one Kyra line as they
-// arrive - time-to-first-token is what makes the conversation feel live. Resolves to
-// the final ChatOut, or null if nothing at all came back (the caller then falls back
-// to the whole-reply endpoint, so a proxy that buffers SSE can't break chat).
-async function streamTurn(text) {
-  const turn = { controller: new AbortController(), cancelled: false };
-  inFlight = turn;
-  const res = await fetch("/api/chat/stream", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: text }),
-    signal: turn.controller.signal,
-  });
-  if (!res.ok) {
-    if (inFlight === turn) inFlight = null;
-    try {
-      await readJson(res);
-    } catch (err) {
-      err.noRetry = true; // An HTTP failure already ended this request.
-      throw err;
-    }
-  }
-  if (!res.body) throw new Error(`server returned ${res.status}`);
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let line = null;
-  let textNode = null;
-  let final = null;
-  const handle = (event, payload) => {
-    if (event === "token") {
-      if (!line) {
-        line = addLine("kyra", "");
-        textNode = line.querySelector(".line-text").lastChild;
-        setPresence("thinking", "responding…");
-      }
-      textNode.textContent += payload;
-      transcript.scrollTop = transcript.scrollHeight;
-    } else if (event === "done") {
-      final = payload;
-      loadPendingActions();
-      if (line) {
-        textNode.textContent = payload.reply; // the authoritative text (e.g. a truncation marker)
-        line.dataset.raw = payload.reply;
-        const meta = replyMeta(payload);
-        if (meta) {
-          const metaSpan = document.createElement("span");
-          metaSpan.className = "line-meta";
-          metaSpan.textContent = meta;
-          line.querySelector(".line-text").prepend(metaSpan);
-        }
-      } else {
-        addLine("kyra", payload.reply, replyMeta(payload));
-      }
-    } else if (event === "refused") {
-      final = { ...payload, refused: true };
-      addLine("kyra", payload.message);
-    } else if (event === "error") {
-      throw new Error(payload);
-    }
-  };
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buffer.indexOf("\n\n")) >= 0) {
-        const block = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 2);
-        let event = "message";
-        let data = "";
-        for (const l of block.split("\n")) {
-          if (l.startsWith("event: ")) event = l.slice(7);
-          else if (l.startsWith("data: ")) data += l.slice(6);
-        }
-        if (data) handle(event, JSON.parse(data));
-        if (final?.refused) return final;
-      }
-    }
-  } catch (err) {
-    // An abort is the user stopping her, not a failure: keep whatever she had
-    // already said and label it, so the transcript matches what he heard.
-    if (!turn.cancelled) throw err;
-    if (line) markInterrupted(line);
-    else addLine("system", "interrupted");
-    return { cancelled: true };
-  } finally {
-    if (inFlight === turn) inFlight = null;
-  }
-  return final;
-}
-
-/* Speak her typed replies too, not just spoken turns. A voice turn already comes
-   back as audio; a typed one had no way to be heard, which made the voice half of
-   her only reachable through the microphone. Uses /api/speak and the same
-   sentence queue, so the first sentence starts while the rest is still being
-   synthesised. Off by default - she should not start talking unasked. */
-const btnSpeak = document.getElementById("btn-speak");
-let speakReplies = localStorage.getItem("kyra.speak") === "1";
-// The synthesis stream outlives the audio it produced: stopping playback without
-// stopping this keeps feeding the queue, and she starts talking again a moment
-// after being cut off. Caught by toggling SPEAK off mid-reply.
-let speakAbort = null;
-
-function applySpeakToggle() {
-  btnSpeak.classList.toggle("is-active", speakReplies);
-  btnSpeak.setAttribute("aria-pressed", speakReplies ? "true" : "false");
-}
-applySpeakToggle();
-
-btnSpeak.addEventListener("click", () => {
-  speakReplies = !speakReplies;
-  localStorage.setItem("kyra.speak", speakReplies ? "1" : "0");
-  applySpeakToggle();
-  if (!speakReplies) interruptPlayback();
-});
-
-async function speakReply(text) {
-  if (!speakReplies || !text) return;
-  speakAbort = new AbortController();
-  const mine = speakAbort;
-  try {
-    const res = await fetch("/api/speak", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-      signal: mine.signal,
-    });
-    if (!res.ok || !res.body) return;
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buffer.indexOf("\n\n")) >= 0) {
-        const chunk = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 2);
-        let event = "message";
-        let data = "";
-        for (const l of chunk.split("\n")) {
-          if (l.startsWith("event: ")) event = l.slice(7);
-          else if (l.startsWith("data: ")) data += l.slice(6);
-        }
-        // Re-checked per chunk, not once at the top: she may have been stopped
-        // since this stream started.
-        if (event === "audio" && data && speakReplies && mine === speakAbort) {
-          enqueueAudio(JSON.parse(data).b64);
-        }
-      }
-    }
-  } catch (_) {
-    // Failing to speak is not failing the turn - the reply is already on screen.
-  }
-}
-
-async function send() {
-  const text = input.value.trim();
-  if (!text) return;
-  await cancelTurn(); // saying the next thing stops the current reply
-  addLine("user", text);
-  input.value = "";
-  setThinking(true);
-  try {
-    let data = null;
-    try {
-      data = await streamTurn(text);
-    } catch (err) {
-      if (err.noRetry || ["release_refused", "audit_unavailable"].includes(err.code) || err.message.startsWith("server returned")) throw err;
-      addLine("error", `stream failed — ${err.message}`);
-    }
-    if (data && data.cancelled) {
-      setThinking(false);
-      setPresence("interrupted");
-      input.focus();
-      return;
-    }
-    if (data && data.reply) speakReply(data.reply);
-    if (!data) {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
-      });
-      data = await readJson(res);
-      addLine("kyra", data.reply, replyMeta(data));
-      loadPendingActions();
-    }
-  } catch (err) {
-    if (["release_refused", "audit_unavailable"].includes(err.code)) {
-      addLine("kyra", err.message);
-      setThinking(false);
-      saveTranscript();
-      focusSync();
-      input.focus();
-      return;
-    }
-    addLine("error", `connection lost — ${err.message}`);
-    statusText.textContent = "OFFLINE";
-    setPresence("failed");
-    sendBtn.disabled = false;
-    input.disabled = false;
-    micBtn.disabled = false;
-    input.focus();
-    return;
-  }
-  setThinking(false);
-  saveTranscript();
-  focusSync();
-  input.focus();
-}
-
-sendBtn.addEventListener("click", () => {
-  if (inFlight) cancelTurn();
-  else send();
-});
-document.addEventListener("keydown", (e) => {
-  // Escape, not the space bar the plan first sketched: the input stays enabled
-  // while she replies, so a space there is a space.
-  if (e.key === "Escape" && inFlight) cancelTurn();
-});
-input.addEventListener("keydown", (e) => {
-  // e.keyCode is deprecated but some automation/IME paths don't populate
-  // e.key reliably - check both so a real Enter keypress never gets missed.
-  if (e.key === "Enter" || e.keyCode === 13) send();
-});
-
-async function setBackend(name) {
-  if (backendBtns[name].classList.contains("is-active")) return;
-  Object.values(backendBtns).forEach((b) => b.classList.remove("is-loading"));
-  backendBtns[name].classList.add("is-loading");
-  coreSub.textContent = name === "local" ? "loading local model…" : name === "auto" ? "switching to auto…" : "switching to Claude…";
-  try {
-    const res = await fetch("/api/backend", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ backend: name }),
-    });
-    const data = await res.json();
-    applyBackend(data.backend);
-    addLine("system", `backend switched to ${data.backend.toUpperCase()}`);
-  } catch (err) {
-    addLine("error", `couldn't switch backend — ${err.message}`);
-  } finally {
-    backendBtns[name].classList.remove("is-loading");
-    coreSub.textContent = "awaiting input";
-  }
-}
-
-function applyBackend(name) {
-  document.body.dataset.backend = name;
-  document.documentElement.dataset.backend = name;
-  Object.entries(backendBtns).forEach(([key, btn]) => btn.classList.toggle("is-active", key === name));
-}
-
-btnAuto.addEventListener("click", () => setBackend("auto"));
-btnClaude.addEventListener("click", () => setBackend("claude"));
-btnLocal.addEventListener("click", () => setBackend("local"));
-
-/* ---------------- voice input ----------------
- * Two modes sharing one mic stream and one /api/voice upload path:
- *  - push-to-talk: click starts recording, click again stops and sends
- *  - hands-free: click starts a session; a simple energy-threshold VAD
- *    (no external library - just AnalyserNode) decides when an utterance
- *    starts/stops, same shape as VoiceActivityListener in listening.py,
- *    just re-implemented for the browser instead of a Silero model.
- * Sequential turn-taking is preserved on purpose, matching voice_chat.py:
- * the VAD loop and the mic itself are inert while a reply is being
- * fetched or spoken, so the mic never picks up Kyra's own TTS output.
- */
-
-let voiceMode = "ptt"; // "ptt" | "handsfree"
-let micStream = null;
-let mediaRecorder = null;
-let recordedChunks = [];
-let isRecording = false;
-let handsFreeActive = false;
-
-let vadAudioCtx = null;
-let vadAnalyser = null;
-let vadRAF = null;
-let speechRun = 0;
-let silenceRun = 0;
-const VAD_RMS_THRESHOLD = 0.02;
-const VAD_START_FRAMES = 4; // ~4 animation frames of sustained level before we trust it's speech
-const VAD_STOP_FRAMES = 35; // ~0.5s of quiet before we consider the utterance done
-
-async function ensureMicStream() {
-  if (!micStream) micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  return micStream;
-}
-
-function pickMimeType() {
-  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
-  for (const c of candidates) {
-    if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c;
-  }
-  return "";
-}
-
-const MIC_STATE_LABELS = {
-  idle: "MIC OFF",
-  recording: "● RECORDING",
-  listening: "LISTENING…",
-  processing: "THINKING…",
-  speaking: "SPEAKING — click to stop",
-};
-
-function setMicState(state) {
-  micBtn.dataset.state = state; // idle | recording | listening | processing | speaking
-  micBtn.setAttribute("aria-pressed", state === "recording" || state === "listening" ? "true" : "false");
-  micLabel.textContent = MIC_STATE_LABELS[state] || state;
-  if (state === "recording") setPresence("listening", "recording — click mic to stop");
-  else if (state === "listening") setPresence("listening", "hands-free — just start talking");
-  else if (state === "processing") setPresence("thinking", "transcribing…");
-  else if (state === "speaking") setPresence("speaking");
-  else if (presence !== "failed") setPresence("idle");
-}
-
-function startOneRecording() {
-  const stream = micStream;
-  const mimeType = pickMimeType();
-  recordedChunks = [];
-  mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-  mediaRecorder.ondataavailable = (e) => {
-    if (e.data.size > 0) recordedChunks.push(e.data);
-  };
-  const stopped = new Promise((resolve) => {
-    mediaRecorder.onstop = resolve;
-  });
-  mediaRecorder.start();
-  isRecording = true;
-  setMicState("recording");
-  return stopped;
-}
-
-function stopOneRecording() {
-  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-  isRecording = false;
-}
-
-function playReply(base64) {
-  return new Promise((resolve) => {
-    replyAudio.src = `data:audio/wav;base64,${base64}`;
-    setMicState("speaking");
-    const done = () => {
-      replyAudio.removeEventListener("ended", done);
-      resolve();
-    };
-    replyAudio.addEventListener("ended", done);
-    replyAudio.play().catch(done);
-  });
-}
-
-/* Her reply arrives one synthesised sentence at a time, so playback is a queue
-   rather than a single clip: the first sentence starts while the rest is still
-   being written and spoken (docs/voice-latency.md - 0.48s to synthesise one
-   sentence against 1.12s for a whole reply). Each chunk is its own complete WAV,
-   which is why this can be an <audio> element and not MediaSource. */
-let audioQueue = [];
-let queuePlaying = false;
-
-function speaking() {
-  return queuePlaying || !replyAudio.paused;
-}
-
-function enqueueAudio(b64) {
-  audioQueue.push(b64);
-  if (!queuePlaying) playQueue();
-}
-
-async function playQueue() {
-  queuePlaying = true;
-  setMicState("speaking");
-  while (audioQueue.length && queuePlaying) {
-    const b64 = audioQueue.shift();
-    await new Promise((resolve) => {
-      replyAudio.src = `data:audio/wav;base64,${b64}`;
-      const done = () => {
-        replyAudio.removeEventListener("ended", done);
-        resolve();
-      };
-      replyAudio.addEventListener("ended", done);
-      replyAudio.play().catch(done);
-    });
-  }
-  queuePlaying = false;
-}
-
-function interruptPlayback() {
-  // Stop the synthesis too, not just the sound, or the queue refills behind it.
-  if (speakAbort) {
-    speakAbort.abort();
-    speakAbort = null;
-  }
-  if (!speaking()) return;
-  // Drop what has not been said yet as well as what is playing, or she would
-  // carry on with the next sentence a moment after being cut off.
-  queuePlaying = false;
-  audioQueue = [];
-  replyAudio.pause();
-  replyAudio.currentTime = 0;
-  addLine("system", "interrupted");
-  setPresence("interrupted");
-}
-
-/* Reads /api/voice/stream: the transcript first (so he sees what she heard
-   before she has said anything), then one audio chunk per sentence, then the
-   written reply. Returns "no-speech" when nothing was said, false when the
-   stream could not be used at all so the caller can fall back. */
-async function streamVoiceTurn(form) {
-  let sawAudio = false;
-  try {
-    const res = await fetch("/api/voice/stream", { method: "POST", body: form });
-    if (!res.ok) await readJson(res);
-    if (!res.body) return false;
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let heard = null;
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buffer.indexOf("\n\n")) >= 0) {
-        const block = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 2);
-        let event = "message";
-        let data = "";
-        for (const l of block.split("\n")) {
-          if (l.startsWith("event: ")) event = l.slice(7);
-          else if (l.startsWith("data: ")) data += l.slice(6);
-        }
-        if (!data) continue;
-        const payload = JSON.parse(data);
-        if (event === "transcript") {
-          heard = payload.transcript;
-          if (heard) addLine("user", heard);
-        } else if (event === "audio") {
-          sawAudio = true;
-          enqueueAudio(payload.b64);
-        } else if (event === "done") {
-          if (!heard) return "no-speech";
-          if (payload.reply) addLine("kyra", payload.reply, replyMeta(payload));
-          loadPendingActions();
-        } else if (event === "refused") {
-          addLine("kyra", payload.message);
-          return true; // Terminal policy answer, never retry the upload.
-        } else if (event === "error") {
-          throw new Error(payload);
-        }
-      }
-    }
-    // Let her finish saying it before the mic goes live again.
-    while (speaking()) await new Promise((r) => setTimeout(r, 120));
-    return true;
-  } catch (err) {
-    if (["release_refused", "audit_unavailable"].includes(err.code) || sawAudio) throw err; // terminal, or already speaking
-    return false;
-  }
-}
-
-async function sendVoiceBlob(blob) {
-  if (blob.size === 0) {
-    setMicState(handsFreeActive ? "listening" : "idle");
-    return;
-  }
-  await cancelTurn(); // speaking to her supersedes a text reply still streaming
-  setMicState("processing");
-  input.disabled = true;
-  sendBtn.disabled = true;
-  try {
-    const form = new FormData();
-    form.append("audio", blob, "utterance.webm");
-    const streamed = await streamVoiceTurn(form);
-    if (streamed === "no-speech") {
-      coreSub.textContent = "didn't catch that";
-      return;
-    }
-    if (streamed === false) {
-      // A proxy that buffers SSE, or an older server: take the whole-reply path.
-      const res = await fetch("/api/voice", { method: "POST", body: form });
-      const data = await readJson(res);
-      if (!data.transcript) {
-        coreSub.textContent = "didn't catch that";
-        return;
-      }
-      addLine("user", data.transcript);
-      addLine("kyra", data.reply, replyMeta(data));
-      loadPendingActions();
-      if (data.reply_audio_b64) await playReply(data.reply_audio_b64);
-    }
-  } catch (err) {
-    if (["release_refused", "audit_unavailable"].includes(err.code)) {
-      addLine("kyra", err.message);
-      return;
-    }
-    addLine("error", `voice turn failed — ${err.message}`);
-    setPresence("failed");
-  } finally {
-    input.disabled = false;
-    sendBtn.disabled = false;
-    setMicState(handsFreeActive ? "listening" : "idle");
-    focusSync();
-  }
-}
-
-async function handlePttClick() {
-  if (isRecording) {
-    stopOneRecording();
-    return;
-  }
-  try {
-    await ensureMicStream();
-    const stopped = startOneRecording();
-    stopped.then(() => {
-      const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || "audio/webm" });
-      sendVoiceBlob(blob);
-    });
-  } catch (err) {
-    addLine("error", `microphone error — ${err.message}`);
-    setPresence("failed", "microphone unavailable");
-    micBtn.dataset.state = "idle";
-    micLabel.textContent = MIC_STATE_LABELS.idle;
-  }
-}
-
-function computeRms(analyser) {
-  const data = new Uint8Array(analyser.fftSize);
-  analyser.getByteTimeDomainData(data);
-  let sumSq = 0;
-  for (let i = 0; i < data.length; i++) {
-    const v = (data[i] - 128) / 128;
-    sumSq += v * v;
-  }
-  return Math.sqrt(sumSq / data.length);
-}
-
-function vadLoop() {
-  if (!handsFreeActive) return;
-  // Inert while she's speaking or a turn is being processed - the same
-  // sequential discipline voice_chat.py uses, so the mic never hears her.
-  if (speaking() || micBtn.dataset.state === "processing") {
-    vadRAF = requestAnimationFrame(vadLoop);
-    return;
-  }
-  const rms = computeRms(vadAnalyser);
-  if (!isRecording) {
-    if (rms > VAD_RMS_THRESHOLD) {
-      speechRun++;
-      if (speechRun >= VAD_START_FRAMES) {
-        speechRun = 0;
-        beginHandsFreeUtterance();
-      }
-    } else {
-      speechRun = 0;
-    }
-  } else if (rms < VAD_RMS_THRESHOLD) {
-    silenceRun++;
-    if (silenceRun >= VAD_STOP_FRAMES) {
-      silenceRun = 0;
-      stopOneRecording();
-    }
-  } else {
-    silenceRun = 0;
-  }
-  vadRAF = requestAnimationFrame(vadLoop);
-}
-
-function beginHandsFreeUtterance() {
-  const stopped = startOneRecording();
-  stopped.then(() => {
-    const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || "audio/webm" });
-    sendVoiceBlob(blob);
-  });
-}
-
-async function startHandsFree() {
-  try {
-    const stream = await ensureMicStream();
-    vadAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const source = vadAudioCtx.createMediaStreamSource(stream);
-    vadAnalyser = vadAudioCtx.createAnalyser();
-    vadAnalyser.fftSize = 1024;
-    source.connect(vadAnalyser);
-    handsFreeActive = true;
-    speechRun = 0;
-    silenceRun = 0;
-    setMicState("listening");
-    coreLabel.textContent = "LISTENING";
-    coreSub.textContent = "hands-free — just start talking";
-    vadLoop();
-  } catch (err) {
-    addLine("error", `microphone error — ${err.message}`);
-  }
-}
-
-function stopHandsFree() {
-  handsFreeActive = false;
-  if (vadRAF) cancelAnimationFrame(vadRAF);
-  if (isRecording) stopOneRecording();
-  if (vadAudioCtx) {
-    vadAudioCtx.close();
-    vadAudioCtx = null;
-  }
-  setMicState("idle");
-  coreLabel.textContent = "STANDBY";
-  coreSub.textContent = "awaiting input";
-}
-
-micBtn.addEventListener("click", async () => {
-  if (speaking()) {
-    interruptPlayback();
-    return;
-  }
-  if (voiceMode === "ptt") {
-    await handlePttClick();
-  } else if (handsFreeActive) {
-    stopHandsFree();
-  } else {
-    await startHandsFree();
-  }
-});
-
-function setVoiceMode(mode) {
-  if (mode === voiceMode) return;
-  if (handsFreeActive) stopHandsFree();
-  if (isRecording) stopOneRecording();
-  voiceMode = mode;
-  btnPtt.classList.toggle("is-active", mode === "ptt");
-  btnHandsfree.classList.toggle("is-active", mode === "handsfree");
-}
-
-document.getElementById("transcript-clear").addEventListener("click", clearTranscript);
-
-btnPtt.addEventListener("click", () => setVoiceMode("ptt"));
-btnHandsfree.addEventListener("click", () => setVoiceMode("handsfree"));
-
-(async function init() {
-  try {
-    const res = await fetch("/api/backend");
-    const data = await res.json();
-    applyBackend(data.backend);
-  } catch {
-    /* server not reachable yet on first paint - defaults stay as rendered */
-  }
-  restoreTranscript();
-  input.focus();
-  loadDraftDocPickers().catch(() => {}); // Draft tab is open by default - populate its doc picker up front
-})();
-
 /* ---------------- jobs panel ---------------- */
 
 const jobsToggle = document.getElementById("jobs-toggle");
@@ -899,18 +132,21 @@ const jobsPanel = document.getElementById("jobs-panel");
 const jobsClose = document.getElementById("jobs-close");
 
 function openJobsPanel() {
+  panelOpened("jobs");
   closeRoomPanel();
   jobsPanel.classList.add("is-open");
   jobsPanel.setAttribute("aria-hidden", "false");
   jobsToggle.classList.add("is-active");
+  loadDraftDocPickers().catch(() => {});
 }
 function closeJobsPanel() {
+  panelClosed("jobs");
   jobsPanel.classList.remove("is-open");
   jobsPanel.setAttribute("aria-hidden", "true");
   jobsToggle.classList.remove("is-active");
 }
 jobsToggle.addEventListener("click", () => {
-  jobsPanel.classList.contains("is-open") ? closeJobsPanel() : openJobsPanel();
+  jobsPanel.classList.contains("is-open") ? closeJobsPanel() : PANEL_OPENERS.jobs();
 });
 jobsClose.addEventListener("click", closeJobsPanel);
 
@@ -921,6 +157,8 @@ document.querySelectorAll("#jobs-panel .jobs-tab").forEach((tab) => {
       p.classList.toggle("is-active", p.dataset.tabPanel === tab.dataset.tab);
     });
     if (tab.dataset.tab === "tracker") loadTrackerList();
+    if (tab.dataset.tab === "scout") loadScout();
+    if (tab.dataset.tab === "ready") loadReady();
     if (tab.dataset.tab === "outreach") loadOutreachList();
     if (tab.dataset.tab === "profile") { loadProfile(); loadDocumentList(); }
     if (tab.dataset.tab === "draft") loadDraftDocPickers();
@@ -1418,21 +656,223 @@ applyRunBtn.addEventListener("click", async () => {
   }
 });
 
+/* -- prepared documents and live form review -- */
+const readyList = document.getElementById("ready-list");
+const readyStatus = document.getElementById("ready-status");
+let readyItems = [], readySelected = 0, readyBusy = false;
+
+function readyVisible() {
+  return jobsPanel.classList.contains("is-open") &&
+    !!document.querySelector('#jobs-panel [data-tab="ready"].is-active');
+}
+function selectReady(index) {
+  readySelected = Math.max(0, Math.min(index, readyItems.length - 1));
+  readyList.querySelectorAll(".ready-card").forEach((card, i) => {
+    card.classList.toggle("is-selected", i === readySelected);
+    card.setAttribute("aria-current", i === readySelected ? "true" : "false");
+    if (i === readySelected) card.scrollIntoView({ block: "nearest" });
+  });
+}
+async function loadReady(message = "") {
+  try {
+    const data = await readJson(await fetch("/api/ready"));
+    readyItems = data.items.filter(item => !["applied", "skipped"].includes(item.state));
+    readyStatus.textContent = message || `${data.counts.prepared} prepared · ${data.counts.ready} ready · ${data.counts.needs_input} need input`;
+    readyList.replaceChildren();
+    if (!readyItems.length) readyList.textContent = "No applications awaiting review.";
+    for (const [index, item] of readyItems.entries()) {
+      const card = document.createElement("article");
+      card.className = "ready-card";
+      card.tabIndex = 0;
+      card.addEventListener("focus", () => selectReady(index));
+      card.addEventListener("focusin", () => selectReady(index));
+      const title = document.createElement("h3");
+      title.textContent = `${item.company} · ${item.role}`;
+      const info = document.createElement("p");
+      info.textContent = `${item.state.replaceAll("_", " ")}${item.deep ? " · DEEP: deliberate review in APPLY" : ""} · ${item.fit.verdict || "unknown"} · ${item.fit.level || "unlevelled"} · years asked: ${item.fit.years_min ?? "unknown"}`;
+      const matched = document.createElement("p");
+      matched.textContent = `Matched: ${(item.fit.matched || []).join(", ") || "none"}`;
+      const age = document.createElement("p");
+      age.textContent = `${item.freshness.state} · ${item.freshness.basis} · ${item.freshness.days == null ? "age unknown" : item.freshness.days.toFixed(1) + " days"}`;
+      const reasons = document.createElement("p");
+      reasons.textContent = (item.fit.reasons || []).join("; ");
+      card.append(title, info, matched, age, reasons);
+      try {
+        const url = new URL(item.url);
+        if (["https:", "http:"].includes(url.protocol) && !url.username && !url.password) {
+          const posting = document.createElement("a"); posting.textContent = "Review posting";
+          posting.href = url.href; posting.target = "_blank"; posting.rel = "noopener noreferrer";
+          card.append(posting);
+        }
+      } catch (_) { /* Keep malformed stored URLs inert. */ }
+      for (const [kind, label, path] of [["resume", "Review resume", item.resume_path], ["letter", "Review letter (paste or attach manually)", item.cover_letter_path]]) {
+        if (!path) continue;
+        const link = document.createElement("a");
+        link.href = `/api/ready/${encodeURIComponent(item.id)}/document/${kind}`;
+        link.textContent = label;
+        link.target = "_blank"; link.rel = "noopener noreferrer";
+        card.append(link);
+      }
+      for (const question of item.questions || []) {
+        const line = document.createElement("p"); line.textContent = question; card.append(line);
+      }
+      if (item.window_live) {
+        const line = document.createElement("p");
+        const count = (item.questions || []).reduce((n, q) => n + Number(q.match(/^(\d+) custom question field/i)?.[1] || 1), 0);
+        line.textContent = count ? `window open, answer ${count} questions` : "window open, review and submit";
+        card.append(line);
+      }
+      const actions = document.createElement("div"); actions.className = "ready-actions";
+      const star = document.createElement("button"); star.type = "button"; star.className = "jobs-btn";
+      star.textContent = item.starred ? "★ Starred" : "☆ Star";
+      star.setAttribute("aria-pressed", item.starred ? "true" : "false"); star.disabled = readyBusy;
+      star.title = "Star this company for 15-minute checks and deep review on the next check.";
+      star.addEventListener("click", () => { readySelected = index; readyAction("star"); });
+      actions.append(star);
+      for (const [action, label] of [["open", "Open"], ["applied", "I submitted"], ["skip", "Skip"]]) {
+        if (action === "open" && item.window_live) continue;
+        if (action === "open" && item.resume_path == null && !item.deep) {
+          const preparing = document.createElement("span"); preparing.textContent = "Documents preparing";
+          actions.append(preparing); continue;
+        }
+        const button = document.createElement("button"); button.type = "button"; button.className = "jobs-btn";
+        button.textContent = label; button.disabled = readyBusy || (action === "open" && item.deep);
+        button.addEventListener("click", () => { readySelected = index; readyAction(action); });
+        actions.append(button);
+      }
+      card.append(actions); readyList.append(card);
+    }
+    selectReady(readySelected);
+  } catch (err) { readyStatus.textContent = `Could not load review queue: ${err.message}`; }
+}
+async function readyAction(action) {
+  const item = readyItems[readySelected];
+  if (!item || readyBusy || (action === "open" && (item.deep || item.resume_path == null || item.window_live))) return;
+  readyBusy = true;
+  readyList.querySelectorAll("button").forEach(button => { button.disabled = true; });
+  try {
+    const url = action === "star" ? "/api/ready/star" : `/api/ready/${encodeURIComponent(item.id)}/${action}`;
+    const options = action === "star" ? { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company: item.company, starred: !item.starred }) } : { method: "POST" };
+    const result = await readJson(await fetch(url, options));
+    readyBusy = false;
+    await loadReady(action === "star" ? "Company star saved." : action === "applied" ?
+      "Marked applied; follow-up scheduled in 7 days." : `State: ${result.state.replaceAll("_", " ")}`);
+  } catch (err) {
+    readyBusy = false;
+    await loadReady(`Could not save: ${err.message}`);
+  }
+}
+document.getElementById("ready-refresh").addEventListener("click", () => { if (!readyBusy) loadReady(); });
+window.addEventListener("focus", () => { if (readyVisible() && !readyBusy) loadReady(); });
+document.addEventListener("keydown", event => {
+  const target = document.activeElement;
+  if (!readyVisible() || readyBusy || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey ||
+      target?.isContentEditable || target?.closest?.('input, textarea, select, [role="textbox"], [contenteditable]')) return;
+  if (event.key === "j" || event.key === "k") {
+    event.preventDefault(); selectReady(readySelected + (event.key === "j" ? 1 : -1));
+  } else {
+    const action = { o: "open", a: "applied", s: "skip" }[event.key];
+    if (action) { event.preventDefault(); readyAction(action); }
+  }
+});
+
+/* -- public hiring leads; approval is separate from applying -- */
+
+const scoutList = document.getElementById("scout-list");
+const scoutStatus = document.getElementById("scout-status");
+document.getElementById("scout-refresh").addEventListener("click", () => loadScout());
+
+async function loadScout(message = "") {
+  scoutStatus.textContent = "Loading candidates…";
+  try {
+    const data = await readJson(await fetch("/api/scout"));
+    scoutList.replaceChildren();
+    scoutStatus.textContent = message || `${data.counts.proposed} proposed · ${data.counts.approved} approved · ${data.counts.rejected} rejected`;
+    if (!data.candidates.length) {
+      scoutList.textContent = "No candidates yet. Leads appear after a scout run.";
+    }
+    for (const candidate of data.candidates) {
+      const card = document.createElement("article");
+      card.className = "scout-card";
+      const title = document.createElement("h3");
+      title.textContent = candidate.company;
+      const detail = document.createElement("p");
+      detail.textContent = `${candidate.state} · ${candidate.source} · ${candidate.location || "Location unknown"}`;
+      const why = document.createElement("p");
+      why.textContent = candidate.why;
+      card.append(title, detail, why);
+      for (const [label, value] of [["Board", candidate.board_url], ["Website", candidate.website]]) {
+        if (!value) continue;
+        try {
+          const url = new URL(value);
+          if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) continue;
+          const link = document.createElement("a");
+          link.textContent = `${label}: ${url.hostname}`;
+          link.href = url.href;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          card.append(link);
+        } catch (_) { /* An invalid saved URL is never made clickable. */ }
+      }
+      if (!candidate.board_url) {
+        const note = document.createElement("p");
+        note.textContent = "No board yet. Approval saves the company without starting a watch.";
+        card.append(note);
+      }
+      if (candidate.state === "proposed") {
+        const actions = document.createElement("div");
+        actions.className = "scout-actions";
+        for (const [action, label] of [["approve", "Approve"], ["reject", "Reject"]]) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "jobs-btn";
+          button.textContent = label;
+          button.addEventListener("click", async () => {
+            const buttons = actions.querySelectorAll("button");
+            buttons.forEach(b => { b.disabled = true; });
+            try {
+              const result = await readJson(await fetch(`/api/scout/${encodeURIComponent(candidate.key)}/${action}`, { method: "POST" }));
+              await loadScout(result.note || "Saved");
+            } catch (err) {
+              scoutStatus.textContent = `Could not save: ${err.message}`;
+              buttons.forEach(b => { b.disabled = false; });
+            }
+          });
+          actions.append(button);
+        }
+        card.append(actions);
+      }
+      scoutList.append(card);
+    }
+  } catch (err) {
+    scoutStatus.textContent = `Could not load candidates: ${err.message}`;
+  }
+}
+
 /* -- tracker -- */
 
 const trackerCompany = document.getElementById("tracker-company");
 const trackerRole = document.getElementById("tracker-role");
 const trackerLink = document.getElementById("tracker-link");
+const trackerStatus = document.getElementById("tracker-status");
 const trackerAddBtn = document.getElementById("tracker-add");
 const trackerList = document.getElementById("tracker-list");
 
-const STATUSES = ["targeting", "ready_to_submit", "needs_attention", "applied", "referral_pending", "interviewing", "offer", "rejected", "withdrawn"];
+const STATUSES = ["targeting", "ready_to_submit", "needs_attention", "prepared", "applied", "referral_pending", "interviewing", "offer", "rejected", "withdrawn"];
+for (const status of STATUSES) {
+  const option = document.createElement("option");
+  option.value = status;
+  option.textContent = status.replaceAll("_", " ");
+  option.selected = status === "applied";
+  trackerStatus.appendChild(option);
+}
 
 async function loadTrackerList() {
   trackerList.textContent = "loading…";
   try {
     const res = await fetch("/api/job/applications");
-    const data = await res.json();
+    const data = await readJson(res);
     renderTrackerList(data.applications || []);
   } catch (err) {
     trackerList.textContent = `couldn't load — ${err.message}`;
@@ -1504,6 +944,23 @@ function renderTrackerList(apps) {
     role.className = "jobs-tracker-item-role";
     role.textContent = app.role;
     left.append(company, role);
+    if (app.apply_by_at && ["targeting", "prepared", "ready_to_submit", "needs_attention"].includes(app.status)) {
+      const deadline = document.createElement("div");
+      deadline.className = "small dim";
+      const at = new Date(app.apply_by_at);
+      const hours = Math.ceil((at.getTime() - Date.now()) / 3600000);
+      deadline.textContent = `Apply by ${at.toLocaleString()} · ${hours > 0 ? `${hours}h left` : "due now"} (referral window)`;
+      left.appendChild(deadline);
+    }
+    if (app.outreach_plan) {
+      const draft = document.createElement("details");
+      const heading = document.createElement("summary");
+      heading.textContent = "Outreach draft: humanizer review required before use";
+      const text = document.createElement("p");
+      text.textContent = `${app.outreach_plan.recipient}: ${app.outreach_plan.note}`;
+      draft.append(heading, text);
+      left.appendChild(draft);
+    }
 
     const select = document.createElement("select");
     select.className = "jobs-tracker-status";
@@ -1524,6 +981,57 @@ function renderTrackerList(apps) {
 
     top.append(left, select);
     item.appendChild(top);
+
+    const age = document.createElement("p");
+    const since = Date.parse(app.status_since);
+    const days = Math.max(0, Math.floor((Date.now() - since) / 86400000));
+    age.textContent = Number.isFinite(days) ? `${days} days in ${app.status.replaceAll("_", " ")}` : "Status date unavailable";
+    item.appendChild(age);
+    if (app.notes) {
+      const notes = document.createElement("p");
+      notes.textContent = app.notes;
+      notes.style.whiteSpace = "pre-wrap";
+      item.appendChild(notes);
+    }
+    const history = document.createElement("details");
+    const historyTitle = document.createElement("summary");
+    historyTitle.textContent = "Status history";
+    const timeline = document.createElement("div");
+    history.append(historyTitle, timeline);
+    history.addEventListener("toggle", async () => {
+      if (!history.open) return;
+      timeline.textContent = "Loading history…";
+      try {
+        const data = await readJson(await fetch(`/api/job/applications/${app.id}/history`));
+        timeline.textContent = data.events.length ? "" : "No recorded history yet.";
+        for (const event of data.events) {
+          const line = document.createElement("p");
+          line.textContent = `${new Date(event.at).toLocaleString()}: ${event.status.replaceAll("_", " ")}${event.note ? " · " + event.note : ""}`;
+          timeline.appendChild(line);
+        }
+      } catch (err) { timeline.textContent = `History unavailable: ${err.message}`; }
+    });
+    item.appendChild(history);
+
+    const follow = document.createElement("button");
+    follow.type = "button";
+    follow.className = "jobs-btn";
+    follow.textContent = "Follow up in 7 days";
+    const followNotice = document.createElement("p");
+    followNotice.setAttribute("role", "status");
+    follow.addEventListener("click", async () => {
+      follow.disabled = true;
+      try {
+        const data = await readJson(await fetch(`/api/job/applications/${app.id}/follow_up`, {
+          method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({days: 7}),
+        }));
+        followNotice.textContent = `Reminder set for ${new Date(data.reminder.due_at).toLocaleDateString()}.`;
+      } catch (err) {
+        followNotice.textContent = err.message;
+        follow.disabled = false;
+      }
+    });
+    item.append(follow, followNotice);
 
     if (app.link) {
       const link = document.createElement("a");
@@ -1546,11 +1054,11 @@ trackerAddBtn.addEventListener("click", async () => {
   if (!company || !role) return;
   trackerAddBtn.disabled = true;
   try {
-    await fetch("/api/job/applications", {
+    await readJson(await fetch("/api/job/applications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ company, role, link: trackerLink.value.trim() || null }),
-    });
+      body: JSON.stringify({ company, role, link: trackerLink.value.trim() || null, status: trackerStatus.value }),
+    }));
     trackerCompany.value = "";
     trackerRole.value = "";
     trackerLink.value = "";
@@ -2043,39 +1551,28 @@ outreachDueOnly.addEventListener("change", loadOutreachList);
 
 /* ---------------- tools panel ---------------- */
 
-const toolsToggle = document.getElementById("tools-toggle");
 const toolsPanel = document.getElementById("tools-panel");
-const toolsClose = document.getElementById("tools-close");
-
+let toolSection = "reminders";
+const toolRoutes = { reminders: "reminders", initiatives: "initiatives", news: "news", science: "science", "add-learning": "learning", memory: "memory" };
 function openToolsPanel() {
-  closeRoomPanel();
+  const route = Object.hasOwn(toolRoutes, location.hash.slice(1)) ? location.hash.slice(1) : "reminders";
+  toolSection = toolRoutes[route];
+  panelOpened("tools", route);
   toolsPanel.classList.add("is-open");
   toolsPanel.setAttribute("aria-hidden", "false");
-  toolsToggle.classList.add("is-active");
-  const activeTab = document.querySelector("#tools-panel .jobs-tab.is-active");
-  const loaders = { reminders: loadReminders, initiatives: loadInitiatives, learning: loadLearningDue, memory: loadMemoryNotes };
-  if (activeTab && loaders[activeTab.dataset.toolsTab]) loaders[activeTab.dataset.toolsTab]();
+  toolsPanel.querySelector(".jobs-panel-header span").textContent = window.KyraNavigation.label(route);
+  document.querySelectorAll("[data-tools-tab-panel]").forEach(panel => {
+    panel.classList.toggle("is-active", panel.dataset.toolsTabPanel === toolSection);
+  });
+  const loaders = { reminders: loadReminders, initiatives: loadInitiatives, memory: loadMemoryNotes };
+  if (loaders[toolSection]) loaders[toolSection]();
 }
 function closeToolsPanel() {
+  panelClosed("tools");
   toolsPanel.classList.remove("is-open");
   toolsPanel.setAttribute("aria-hidden", "true");
-  toolsToggle.classList.remove("is-active");
 }
-toolsToggle.addEventListener("click", () => {
-  toolsPanel.classList.contains("is-open") ? closeToolsPanel() : openToolsPanel();
-});
-toolsClose.addEventListener("click", closeToolsPanel);
-
-document.querySelectorAll("#tools-panel .jobs-tab").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    document.querySelectorAll("#tools-panel .jobs-tab").forEach((t) => t.classList.toggle("is-active", t === tab));
-    document.querySelectorAll("#tools-panel .jobs-tab-panel").forEach((p) => {
-      p.classList.toggle("is-active", p.dataset.toolsTabPanel === tab.dataset.toolsTab);
-    });
-    const loaders = { reminders: loadReminders, initiatives: loadInitiatives, learning: loadLearningDue, memory: loadMemoryNotes };
-    if (loaders[tab.dataset.toolsTab]) loaders[tab.dataset.toolsTab]();
-  });
-});
+document.getElementById("tools-close").addEventListener("click", closeToolsPanel);
 
 /* Suggestions are read from the daily snapshot. Only these explicit buttons act. */
 async function loadInitiatives() {
@@ -2404,95 +1901,27 @@ document.getElementById("science-fetch").addEventListener("click", async (e) => 
 
 /* -- learning -- */
 
-async function loadLearningDue() {
-  const list = document.getElementById("learning-due-list");
-  list.textContent = "loading…";
-  try {
-    const res = await fetch("/api/learning/due");
-    const data = await res.json();
-    renderLearningDue(data.due || []);
-  } catch (err) {
-    list.textContent = `couldn't load — ${err.message}`;
-  }
-}
-
-function renderLearningDue(items) {
-  const list = document.getElementById("learning-due-list");
-  list.innerHTML = "";
-  if (items.length === 0) {
-    list.textContent = "nothing due right now";
-    return;
-  }
-  for (const item of items) {
-    const el = document.createElement("div");
-    el.className = "jobs-tracker-item";
-    const top = document.createElement("div");
-    top.className = "jobs-tracker-item-top";
-    const left = document.createElement("div");
-    const topic = document.createElement("div");
-    topic.className = "jobs-tracker-item-company";
-    topic.textContent = item.topic;
-    const takeaway = document.createElement("div");
-    takeaway.className = "jobs-tracker-item-role";
-    takeaway.textContent = item.key_takeaway;
-    left.append(topic, takeaway);
-
-    const actions = document.createElement("div");
-    actions.className = "jobs-reminder-actions";
-    const yesBtn = document.createElement("button");
-    yesBtn.type = "button";
-    yesBtn.textContent = "remembered";
-    yesBtn.addEventListener("click", async () => {
-      await fetch(`/api/learning/${item.id}/review`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ remembered: true }),
-      });
-      loadLearningDue();
-    });
-    const noBtn = document.createElement("button");
-    noBtn.type = "button";
-    noBtn.textContent = "forgot";
-    noBtn.addEventListener("click", async () => {
-      await fetch(`/api/learning/${item.id}/review`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ remembered: false }),
-      });
-      loadLearningDue();
-    });
-    actions.append(yesBtn, noBtn);
-
-    top.append(left, actions);
-    const summary = document.createElement("div");
-    summary.className = "jobs-feed-item-summary";
-    summary.textContent = item.summary;
-    el.append(top, summary);
-    list.appendChild(el);
-  }
-}
-
 document.getElementById("learning-add").addEventListener("click", async () => {
   const topic = document.getElementById("learning-topic").value.trim();
   const summary = document.getElementById("learning-summary").value.trim();
   const key_takeaway = document.getElementById("learning-takeaway").value.trim();
   if (!topic || !summary || !key_takeaway) return;
   try {
-    await fetch("/api/learning", {
+    await readJson(await fetch("/api/learning", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ topic, summary, key_takeaway }),
-    });
+    }));
     document.getElementById("learning-topic").value = "";
     document.getElementById("learning-summary").value = "";
     document.getElementById("learning-takeaway").value = "";
-    loadLearningDue();
+    addLine("system", "Learning item saved. Find due items under Learn → Review.");
   } catch (err) {
     addLine("error", `couldn't save learning item — ${err.message}`);
   }
 });
 
-document.getElementById("learning-refresh").addEventListener("click", loadLearningDue);
+
 
 /* ---- SEARCH panel -------------------------------------------------------
    One front door over everything Kyra stores. The privacy rule is the same
@@ -2508,9 +1937,56 @@ const searchStatus = document.getElementById("search-status");
 const searchResults = document.getElementById("search-results");
 const searchAnswerBox = document.getElementById("search-answer-box");
 const searchSensitive = document.getElementById("search-sensitive");
+const searchOutside = document.getElementById("search-outside");
+const searchOutsideResults = document.getElementById("search-outside-results");
+let outsideQuery = "", searchGeneration = 0;
 let searchKind = "";
 
+function clearOutsideSearch() {
+  outsideQuery = "";
+  searchOutside.hidden = true;
+  searchOutsideResults.hidden = true;
+  searchOutsideResults.replaceChildren();
+}
+searchQuery.addEventListener("input", () => { searchGeneration++; clearOutsideSearch(); });
+
+searchOutside.addEventListener("click", async () => {
+  if (!outsideQuery) return;
+  const generation = searchGeneration;
+  const query = outsideQuery;
+  searchOutside.disabled = true;
+  setSearchStatus("Searching outside with the query only…");
+  try {
+    const data = await readJson(await fetch("/api/search/outside", {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({query, k: 5}),
+    }));
+    if (generation !== searchGeneration) return;
+    searchOutsideResults.replaceChildren();
+    const heading = document.createElement("h3");
+    heading.textContent = "OUTSIDE";
+    searchOutsideResults.appendChild(heading);
+    for (const hit of data.results) {
+      const row = document.createElement("div");
+      row.className = "search-hit";
+      const title = document.createElement("strong");
+      title.textContent = hit.title;
+      const link = document.createElement("a");
+      link.textContent = hit.url;
+      if (/^https?:\/\//i.test(hit.url)) { link.href = hit.url; link.target = "_blank"; link.rel = "noopener noreferrer"; }
+      const snippet = document.createElement("p");
+      snippet.textContent = hit.snippet;
+      row.append(title, document.createElement("br"), link, snippet);
+      searchOutsideResults.appendChild(row);
+    }
+    searchOutsideResults.hidden = false;
+    setSearchStatus(`${data.results.length} outside results from DuckDuckGo`);
+  } catch (err) {
+    if (generation === searchGeneration) setSearchStatus(`Outside search failed: ${err.message}`, true);
+  } finally { searchOutside.disabled = false; }
+});
+
 function openSearchPanel() {
+  panelOpened("search");
   closeRoomPanel();
   searchPanel.classList.add("is-open");
   searchPanel.setAttribute("aria-hidden", "false");
@@ -2518,12 +1994,13 @@ function openSearchPanel() {
   searchQuery.focus();
 }
 function closeSearchPanel() {
+  panelClosed("search");
   searchPanel.classList.remove("is-open");
   searchPanel.setAttribute("aria-hidden", "true");
   searchToggle.classList.remove("is-active");
 }
 searchToggle.addEventListener("click", () => {
-  searchPanel.classList.contains("is-open") ? closeSearchPanel() : openSearchPanel();
+  searchPanel.classList.contains("is-open") ? closeSearchPanel() : PANEL_OPENERS.search();
 });
 searchClose.addEventListener("click", closeSearchPanel);
 
@@ -2585,6 +2062,8 @@ function indexAge(indexedAt) {
 }
 
 async function runSearch() {
+  const generation = ++searchGeneration;
+  clearOutsideSearch();
   const body = searchBody();
   if (!body.query) return;
   searchAnswerBox.hidden = true;
@@ -2594,13 +2073,19 @@ async function runSearch() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     const data = await readJson(res);
+    if (generation !== searchGeneration) return;
     renderHits(data.hits);
+    if (data.indexed_at != null && data.found_inside === false) {
+      outsideQuery = body.query;
+      searchOutside.hidden = false;
+    }
     setSearchStatus(
       `${data.count} result${data.count === 1 ? "" : "s"}`
       + `${data.include_sensitive ? " · private docs included" : ""}`
       + ` · ${indexAge(data.indexed_at)}`
     );
   } catch (err) {
+    if (generation !== searchGeneration) return;
     searchResults.replaceChildren();
     setSearchStatus(`search failed — ${err.message}`, true);
   }
@@ -2994,7 +2479,7 @@ function focusPaint() {
   const mm = String(Math.floor(left)).padStart(2, "0");
   const ss = String(Math.floor((left % 1) * 60)).padStart(2, "0");
   focusRemaining.textContent = `${mm}:${ss}`;
-  focusChip.textContent = `FOCUS ${mm}:${ss}`;
+  focusChip.textContent = resumeFocusPlan ? `FOCUS ${mm}:${ss} · Resume sound` : `FOCUS ${mm}:${ss}`;
   const nextBreak = (focusState.plan.break_offsets || []).find((b) => b > elapsedMin);
   focusNextBreak.textContent = nextBreak
     ? `next break cue in ${Math.ceil(nextBreak - elapsedMin)} min`
@@ -3064,6 +2549,7 @@ function focusShowRunning(payload) {
 function focusShowIdle(completed) {
   focusClearTimers();
   focusState = null;
+  resumeFocusPlan = null;
   focusIdleView.hidden = false;
   focusRunningView.hidden = true;
   focusProbeView.hidden = true;
@@ -3160,6 +2646,89 @@ async function focusEnd() {
   }
 }
 
+function focusRoomRecap(sessionId) {
+  const wrap = document.createElement("div");
+  wrap.className = "focus-room-disclosure";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "jobs-btn jobs-btn-quiet";
+  button.textContent = "Room recap";
+  button.setAttribute("aria-expanded", "false");
+  const recap = document.createElement("div");
+  recap.id = `focus-room-${sessionId}`;
+  recap.className = "focus-room-recap";
+  recap.hidden = true;
+  recap.setAttribute("role", "region");
+  recap.setAttribute("aria-label", "Room recap");
+  recap.setAttribute("aria-live", "polite");
+  button.setAttribute("aria-controls", recap.id);
+  wrap.append(button, recap);
+  let loaded = false;
+  button.addEventListener("click", async () => {
+    if (button.disabled) return;
+    if (loaded) {
+      recap.hidden = !recap.hidden;
+      button.setAttribute("aria-expanded", String(!recap.hidden));
+      return;
+    }
+    recap.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    button.disabled = true;
+    recap.setAttribute("aria-busy", "true");
+    recap.textContent = "Loading saved room readings…";
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const data = await readJson(await fetch(`/api/focus/${sessionId}/room`, { cache: "no-store", signal: controller.signal }));
+      if (!wrap.isConnected) return; // Refresh replaces the row, even when its session ID is unchanged.
+      recap.replaceChildren();
+      const summary = document.createElement("p");
+      summary.textContent = data.history_state === "not_recorded" ? "No saved room history yet."
+        : data.samples === 0 ? "No usable room readings during this block."
+        : `Humidity · Min ${data.min}${data.unit} · Max ${data.max}${data.unit}`;
+      const coverage = document.createElement("p");
+      const count = `${data.samples} of ${data.expected_slots} five-minute slots with readings`;
+      coverage.textContent = `${count}. Saved readings received during this block.`;
+      const chart = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      const columns = Math.min(24, Math.max(1, data.slots.length)), rows = Math.ceil(data.slots.length / columns) || 1;
+      chart.setAttribute("viewBox", `0 0 ${columns * 5} ${rows * 14}`);
+      chart.style.height = `${Math.max(24, rows * 12)}px`;
+      chart.setAttribute("preserveAspectRatio", "none");
+      chart.setAttribute("role", "img");
+      chart.setAttribute("aria-label", `${count}. Outlined marks are missing readings; each mark is one slot, left to right then down in time order.`);
+      chart.classList.add("focus-room-slots");
+      data.slots.forEach((slot, index) => {
+        const mark = document.createElementNS(chart.namespaceURI, "rect");
+        mark.setAttribute("x", String((index % columns) * 5 + 1)); mark.setAttribute("y", String(Math.floor(index / columns) * 14 + 2));
+        mark.setAttribute("width", "3"); mark.setAttribute("height", "10");
+        if (slot.value === null) mark.classList.add("is-missing");
+        const title = document.createElementNS(chart.namespaceURI, "title");
+        title.textContent = `${slot.slot}: ${slot.value === null ? "no usable reading" : `${slot.value}${data.unit}`}`;
+        mark.appendChild(title); chart.appendChild(mark);
+      });
+      const legend = document.createElement("p");
+      legend.className = "focus-note";
+      legend.textContent = "Filled: reading. Outline: missing. Slots run left to right, then down; not monitoring time.";
+      const note = document.createElement("p");
+      note.className = "focus-note";
+      note.textContent = data.note;
+      recap.append(summary, coverage, chart, legend, note);
+      loaded = true;
+      button.textContent = "Room recap";
+    } catch (error) {
+      if (!wrap.isConnected) return;
+      recap.textContent = error.code === "owner_only" ? "Room recap is not available on this device."
+        : "Could not load saved room readings. Retry when ready.";
+      button.textContent = "Retry room recap";
+    } finally {
+      clearTimeout(timeout);
+      button.disabled = false;
+      recap.setAttribute("aria-busy", "false");
+    }
+  });
+  return wrap;
+}
+
 async function loadFocusHistory() {
   const list = document.getElementById("focus-history-list");
   list.textContent = "loading…";
@@ -3180,6 +2749,7 @@ async function loadFocusHistory() {
       sub.className = "focus-note";
       sub.textContent = `${when}${s.task ? ` · ${s.task}` : ""}${s.rating ? ` · rated ${s.rating}/5` : ""}${s.note ? ` · ${s.note}` : ""}`;
       row.append(head, sub);
+      if (Number.isSafeInteger(s.id) && s.id > 0 && s.ended_at && !s.abandoned) row.appendChild(focusRoomRecap(s.id));
       list.appendChild(row);
     }
   } catch (e) {
@@ -3211,21 +2781,38 @@ document.getElementById("focus-about").innerHTML = `
 /* -- wiring -------------------------------------------------------------- */
 
 function openFocusPanel() {
+  panelOpened("focus");
   closeRoomPanel();
   focusPanel.classList.add("is-open");
   focusPanel.setAttribute("aria-hidden", "false");
   focusToggle.classList.add("is-active");
+  if (!focusState) focusRestore();
+  if (!panelPoll) panelPoll = setInterval(focusSync, 5 * 60 * 1000);
 }
 function closeFocusPanel() {
+  panelClosed("focus");
+
   focusPanel.classList.remove("is-open");
   focusPanel.setAttribute("aria-hidden", "true");
   focusToggle.classList.remove("is-active");
 }
 focusToggle.addEventListener("click", () => {
-  focusPanel.classList.contains("is-open") ? closeFocusPanel() : openFocusPanel();
+  focusPanel.classList.contains("is-open") ? closeFocusPanel() : PANEL_OPENERS.focus();
 });
 focusClose.addEventListener("click", closeFocusPanel);
-focusChip.addEventListener("click", openFocusPanel);
+let resumeFocusPlan = null;
+function offerFocusSound(plan) {
+  resumeFocusPlan = plan;
+  focusChip.textContent = "Focus · Resume sound";
+}
+focusChip.addEventListener("click", async () => {
+  PANEL_OPENERS.focus();
+  if (resumeFocusPlan) {
+    const plan = resumeFocusPlan;
+    resumeFocusPlan = null;
+    await focusAudio.start(plan);
+  }
+});
 
 document.querySelectorAll("#focus-panel .jobs-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
@@ -3256,12 +2843,13 @@ document.querySelectorAll(".focus-rate-btn").forEach((b) => {
 async function focusSync() {
   try {
     const data = await readJson(await fetch("/api/focus/active"));
+
     focusApplyEvening(data.evening ?? data.plan?.evening);
     const runningHere = focusState !== null;
     if (data.running && !runningHere) {
       focusShowRunning(data);
-      // The turn itself was the user gesture, so starting audio here is allowed.
-      await focusAudio.start(data.plan);
+      // A restored block waits for an explicit click before starting sound.
+      offerFocusSound(data.plan);
     } else if (!data.running && runningHere) {
       focusAudio.stop(3);
       focusShowIdle(data.completed_blocks);
@@ -3277,20 +2865,15 @@ async function focusSync() {
 async function focusRestore() {
   try {
     const data = await readJson(await fetch("/api/focus/active"));
+
     focusApplyEvening(data.evening ?? data.plan?.evening);
     if (!data.running) { focusShowIdle(data.completed_blocks); return; }
     focusShowRunning(data);
-    focusChip.textContent = "FOCUS — click to resume sound";
-    const resume = async () => {
-      focusChip.removeEventListener("click", resume);
-      await focusAudio.start(data.plan);
-    };
-    focusChip.addEventListener("click", resume);
+    offerFocusSound(data.plan);
   } catch (_) {
     // server not reachable yet - the panel still opens, the block is still there
   }
 }
-focusRestore();
 
 // Wind-down must arrive on its own: without this the evening theme only applied
 // when Duc happened to send a turn, so an evening spent reading would stay on the
@@ -3299,7 +2882,6 @@ focusRestore();
 // asks rather than duplicating the constant. Slow on purpose; it is a theme, not a
 // countdown, and the same call keeps the block state in step with the other front
 // doors for free.
-setInterval(focusSync, 5 * 60 * 1000);
 
 /* ---------------- console: registry, hand-offs and run receipts ---------------- */
 const consolePanel = document.getElementById("console-panel");
@@ -3321,6 +2903,7 @@ function consoleButton(text, onClick) {
   return button;
 }
 function closeConsolePanel() {
+  panelClosed("console");
   consolePanel.classList.remove("is-open");
   consolePanel.setAttribute("aria-hidden", "true");
   consolePanel.inert = true;
@@ -3334,8 +2917,8 @@ function loadConsoleTab(name) {
   if (name === "runs") loadConsoleRuns();
   if (name === "privacy") loadConsolePrivacy();
 }
-consoleToggle.addEventListener("click", () => {
-  if (consolePanel.classList.contains("is-open")) return closeConsolePanel();
+function openConsolePanel() {
+  panelOpened("console");
   closeJobsPanel(); closeToolsPanel(); closeSearchPanel(); closeFocusPanel();
   consolePanel.inert = false;
   consolePanel.classList.add("is-open");
@@ -3345,6 +2928,9 @@ consoleToggle.addEventListener("click", () => {
   const active = consoleTabs.find((tab) => tab.classList.contains("is-active"));
   active.focus();
   loadConsoleTab(active.dataset.consoleTab);
+}
+consoleToggle.addEventListener("click", () => {
+  consolePanel.classList.contains("is-open") ? closeConsolePanel() : PANEL_OPENERS.console();
 });
 document.getElementById("console-close").addEventListener("click", closeConsolePanel);
 document.addEventListener("keydown", (event) => {
@@ -3374,10 +2960,9 @@ consoleTabs.forEach((tab, index) => {
 
 function consoleOpenPanel(destination) {
   const [panel, tab] = destination.split("/");
-  const openers = { jobs: openJobsPanel, tools: openToolsPanel, search: openSearchPanel, focus: openFocusPanel };
-  if (!openers[panel]) return;
+  if (!Object.hasOwn(PANEL_OPENERS, panel)) return;
   closeConsolePanel();
-  openers[panel]();
+  PANEL_OPENERS[panel]();
   const attribute = panel === "jobs" ? "data-tab" : `data-${panel}-tab`;
   const target = document.querySelector(`#${panel}-panel [${attribute}="${tab}"]`);
   if (target) { target.click(); target.focus(); }
@@ -3570,11 +3155,45 @@ async function loadConsoleRuns() {
 }
 let consolePrivacyRequest = 0;
 
-function notesLabelRow(file) {
+function notesLabelRow(file, suggestion) {
   const row = consoleNode("article", "", "console-card");
   row.append(consoleNode("strong", file.category));
   row.append(consoleNode("p", `${file.notes} notes · ${file.bytes} bytes`));
-  row.append(consoleNode("p", `Current label: T${file.tier}${file.classes.length ? " / " + file.classes.join(", ") : ""}`));
+  const columns = consoleNode("div", "", "privacy-label-columns");
+  columns.append(consoleNode("p", `Current label: T${file.tier}${file.classes.length ? " / " + file.classes.join(", ") : ""}`));
+  const suggested = consoleNode("div");
+  suggested.append(consoleNode("strong", "Suggested"));
+  if (!suggestion) {
+    suggested.append(consoleNode("p", "No suggestion yet."));
+  } else {
+    suggested.append(consoleNode("p", suggestion.error ? `Could not label: ${suggestion.error}` :
+      suggestion.suggested_classes.join(", ") || "T1 ordinary (no sensitive classes)"));
+    suggested.append(consoleNode("p", [
+      ...suggestion.added.map((name) => `+ ${name}`), ...suggestion.removed.map((name) => `− ${name}`),
+    ].join(" · ")));
+    const stale = suggestion.stale || suggestion.suggestion_sha256 !== file.sha256;
+    if (stale) suggested.append(consoleNode("p", "Notes changed; suggest again.", "privacy-stale"));
+    const apply = consoleNode("button", "Apply", "jobs-btn");
+    apply.type = "button";
+    apply.disabled = stale || Boolean(suggestion.error);
+    apply.addEventListener("click", async () => {
+      apply.disabled = true;
+      try {
+        const response = await fetch(`/api/notes/labels/${encodeURIComponent(file.category)}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tier: suggestion.suggested_classes.length ? 2 : 1,
+            classes: suggestion.suggested_classes, sha256: file.sha256 }),
+        });
+        await readJson(response);
+        await loadConsolePrivacy();
+      } catch (error) {
+        suggested.append(consoleNode("p", error.message, "privacy-stale"));
+      } finally { apply.disabled = stale || Boolean(suggestion.error); }
+    });
+    suggested.append(apply);
+  }
+  columns.append(suggested);
+  row.append(columns);
   if (file.stale) row.append(consoleNode("span", "stale · review needed", "privacy-stale"));
   if (file.reviewed_at) row.append(consoleNode("p", `Last reviewed: ${file.reviewed_at}`, "console-badge"));
 
@@ -3591,7 +3210,7 @@ function notesLabelRow(file) {
   const classes = consoleNode("fieldset", "", "privacy-classes");
   classes.append(consoleNode("legend", "Sensitive classes (choose at least one)"));
   const choices = [];
-  for (const name of ["conversation", "job_search", "third_party", "health"]) {
+  for (const name of ["conversation", "job_search", "third_party", "health", "ledger", "intake", "activity", "busy"]) {
     const label = consoleNode("label");
     const checkbox = consoleNode("input");
     checkbox.type = "checkbox";
@@ -3654,9 +3273,12 @@ async function loadConsolePrivacy() {
   await Promise.all([
     (async () => {
       try {
-        const body = await readJson(await fetch("/api/notes/labels"));
+        const [body, shadow] = await Promise.all([
+          fetch("/api/notes/labels").then(readJson), fetch("/api/notes/shadow").then(readJson),
+        ]);
         if (request !== consolePrivacyRequest) return;
-        files.replaceChildren(...body.files.map(notesLabelRow));
+        const suggestions = new Map(shadow.rows.map((row) => [row.category, row]));
+        files.replaceChildren(...body.files.map((file) => notesLabelRow(file, suggestions.get(file.category))));
         if (!body.files.length) files.textContent = "No saved notes files.";
       } catch (error) {
         if (request === consolePrivacyRequest) files.textContent = error.message;
@@ -3677,6 +3299,27 @@ async function loadConsolePrivacy() {
   ]);
 }
 
+document.getElementById("console-privacy-suggest").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const status = document.getElementById("console-privacy-suggest-status");
+  button.disabled = true;
+  status.textContent = "Queuing local suggestions…";
+  try {
+    const job = await readJson(await fetch("/api/notes/shadow/run", { method: "POST" }));
+    status.textContent = `Local suggestions queued (#${job.job_id}). Current labels are unchanged.`;
+    const stream = new EventSource(`/api/jobs/${job.job_id}/events`);
+    stream.addEventListener("done", async () => {
+      stream.close(); button.disabled = false;
+      status.textContent = "Finished. Review each suggestion or error below; labels are unchanged.";
+      await loadConsolePrivacy();
+    });
+    stream.addEventListener("error", () => {
+      stream.close(); button.disabled = false;
+      status.textContent = "Could not follow the job. Check CONSOLE > RUNS, then refresh labels.";
+    });
+  } catch (error) { status.textContent = error.message; button.disabled = false; }
+});
+
 document.getElementById("console-privacy-refresh").addEventListener("click", loadConsolePrivacy);
 document.getElementById("console-agents-refresh").addEventListener("click", loadConsoleAgents);
 document.getElementById("console-runs-refresh").addEventListener("click", loadConsoleRuns);
@@ -3691,13 +3334,15 @@ const mapSummary = document.getElementById("memory-map-summary");
 const mapDetail = document.getElementById("memory-map-detail");
 
 function closeMapPanel() {
-  mapPanel.classList.remove("is-open");
+  panelClosed("map");
+  mapPanel.classList.remove("is-open", "is-wide");
   mapPanel.setAttribute("aria-hidden", "true");
   mapPanel.inert = true;
   mapToggle.classList.remove("is-active");
   mapToggle.setAttribute("aria-expanded", "false");
 }
 function selectMapTab(tab) {
+  mapPanel.classList.toggle("is-wide", ["system", "overview"].includes(tab.dataset.mapTab));
   mapTabs.forEach((other) => {
     const active = other === tab;
     other.classList.toggle("is-active", active);
@@ -3707,11 +3352,13 @@ function selectMapTab(tab) {
   mapPanel.querySelectorAll("[data-map-tab-panel]").forEach((panel) => {
     panel.classList.toggle("is-active", panel.dataset.mapTabPanel === tab.dataset.mapTab);
   });
+  if (tab.dataset.mapTab === "overview") loadAtlasOverview();
   if (tab.dataset.mapTab === "features") loadFeatureMap();
   if (tab.dataset.mapTab === "memory") loadMemoryMap();
+  if (tab.dataset.mapTab === "system") loadSystemMap();
 }
-mapToggle.addEventListener("click", () => {
-  if (mapPanel.classList.contains("is-open")) return closeMapPanel();
+function openMapPanel() {
+  panelOpened("map");
   closeJobsPanel(); closeToolsPanel(); closeSearchPanel(); closeFocusPanel(); closeConsolePanel();
   mapPanel.inert = false;
   mapPanel.classList.add("is-open");
@@ -3721,11 +3368,12 @@ mapToggle.addEventListener("click", () => {
   const active = mapTabs.find((tab) => tab.classList.contains("is-active"));
   active.focus();
   selectMapTab(active);
+}
+mapToggle.addEventListener("click", () => {
+  mapPanel.classList.contains("is-open") ? closeMapPanel() : PANEL_OPENERS.map();
 });
 document.getElementById("map-close").addEventListener("click", () => { closeMapPanel(); mapToggle.focus(); });
-["jobs", "tools", "search", "focus", "console"].forEach((name) => {
-  document.getElementById(`${name}-toggle`).addEventListener("click", closeMapPanel);
-});
+
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && mapPanel.classList.contains("is-open")) {
     closeMapPanel(); mapToggle.focus();
@@ -3814,6 +3462,72 @@ async function loadFeatureMap() {
   }
 }
 
+let systemMapRequest = 0;
+async function loadSystemMap() {
+  const request = ++systemMapRequest;
+  const svg = document.getElementById("system-map");
+  const summary = document.getElementById("system-map-summary");
+  const details = document.getElementById("system-map-detail");
+  svg.replaceChildren(); details.replaceChildren();
+  summary.textContent = "Loading system map…";
+  try {
+    const data = await readJson(await fetch("/api/system-map"));
+    if (request !== systemMapRequest) return;
+    const positions = new Map();
+    const counts = data.lanes.map((lane, column) => {
+      const entries = data.nodes.filter((node) => node.lane === lane);
+      svg.append(mapSvg("text", { x: column * 280 + 16, y: 24 }, lane.toUpperCase()));
+      entries.forEach((node, row) => positions.set(node.id, { x: column * 280 + 16, y: row * 80 + 42 }));
+      return entries.length;
+    });
+    svg.setAttribute("viewBox", `0 0 1120 ${Math.max(1, ...counts) * 80 + 50}`);
+    for (const edge of data.edges) {
+      const from = positions.get(edge.from), to = positions.get(edge.to);
+      const rightward = from.x < to.x;
+      const x1 = from.x + (rightward ? 244 : 0), x2 = to.x + (rightward ? 0 : 244);
+      const wire = mapSvg("path", {
+        d: `M ${x1} ${from.y + 30} C ${(x1 + x2) / 2} ${from.y + 30}, ${(x1 + x2) / 2} ${to.y + 30}, ${x2} ${to.y + 30}`,
+        class: "map-wire",
+      });
+      wire.append(mapSvg("title", {}, `${edge.from} → ${edge.to}`));
+      svg.append(wire);
+    }
+    for (const item of data.nodes) {
+      const pos = positions.get(item.id);
+      const node = mapSvg("g", {
+        transform: `translate(${pos.x} ${pos.y})`, "data-node": item.id, "data-state": item.state,
+        role: "button", tabindex: "0", "aria-controls": "system-map-detail",
+        "aria-label": `${item.label}, ${item.state}. Show details`,
+      });
+      node.append(
+        mapSvg("rect", { width: 244, height: 62, rx: 4, class: "map-card" }),
+        mapSvg("text", { x: 10, y: 24 }, item.label.length > 26 ? `${item.label.slice(0, 25)}…` : item.label),
+        mapSvg("text", { x: 10, y: 46, class: "map-status" }, item.state),
+        mapSvg("title", {}, item.label),
+      );
+      const show = () => {
+        const heading = document.createElement("h3");
+        heading.textContent = `${item.label} · ${item.state}`;
+        details.replaceChildren(heading);
+        for (const text of [item.note || "No note recorded.", `Evidence: ${item.evidence || "Not recorded"}`, `Verified on: ${item.verified_on || "Not recorded"}`]) {
+          const p = document.createElement("p"); p.textContent = text; details.append(p);
+        }
+        details.focus();
+      };
+      node.addEventListener("click", show);
+      node.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault(); show();
+      });
+      svg.append(node);
+    }
+    summary.textContent = `${data.nodes.length} nodes · ${data.edges.length} connections · Select a node for evidence.`;
+  } catch (error) {
+    if (request === systemMapRequest) summary.textContent = `${error.message} Use Refresh to retry.`;
+  }
+}
+document.getElementById("system-map-refresh").addEventListener("click", loadSystemMap);
+
 function memoryMapNode(tag, attributes, text = "") {
   const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
   Object.entries(attributes).forEach(([name, value]) => node.setAttribute(name, value));
@@ -3869,42 +3583,18 @@ async function loadMemoryMap() {
 document.getElementById("memory-map-refresh").addEventListener("click", loadMemoryMap);
 
 
-/* Room: retain accepted requests until an explicit refresh confirms cloud status. */
+/* Room is read-only; device controls live in DEVICES. */
 const roomToggle = document.getElementById("room-toggle");
 const roomPanel = document.getElementById("room-panel");
-const roomDisplay = document.getElementById("room-display");
-const roomLight = document.getElementById("room-light");
-const roomBrightness = document.getElementById("room-brightness");
 const roomRefresh = document.getElementById("room-refresh");
 const roomStatus = document.getElementById("room-status");
-const roomLagNote = "VeSync accepted the change; its status can take about two minutes to show it.";
 let roomCloud = null;
-let roomPending = {};
 let roomBusy = false;
 
 function roomPaint() {
-  const light = roomCloud?.night_light;
-  roomDisplay.checked = roomPending.display ?? roomCloud?.display ?? false;
-  roomLight.checked = roomPending.night_light ?? light?.on ?? false;
-  roomBrightness.value = roomPending.night_light_brightness ?? light?.brightness ?? 40;
-  document.getElementById("room-brightness-value").textContent = roomBrightness.value + "%";
   document.getElementById("room-humidity").textContent =
     `Humidity: ${roomCloud?.humidity == null ? "unavailable" : roomCloud.humidity + "%"} · Target: ${roomCloud?.target_humidity == null ? "unavailable" : roomCloud.target_humidity + "%"}`;
-  for (const [id, key] of [["display", "display"], ["light", "night_light"], ["brightness", "night_light_brightness"]]) {
-    document.getElementById(`room-${id}-pending`).textContent = key in roomPending ? "(pending)" : "";
-  }
-  roomDisplay.disabled = roomBusy || !roomCloud;
-  roomLight.disabled = roomBrightness.disabled = roomBusy || !light;
   roomRefresh.disabled = roomBusy;
-}
-
-function roomAcceptStatus(status) {
-  roomCloud = status;
-  const actual = { display: status.display, night_light: status.night_light?.on,
-    night_light_brightness: status.night_light?.brightness };
-  for (const key of Object.keys(roomPending)) {
-    if (actual[key] === roomPending[key]) delete roomPending[key];
-  }
 }
 
 function roomPaintHistory(history, target) {
@@ -3963,16 +3653,14 @@ async function roomLoadHistory() {
   }
 }
 
-async function roomRequest(changes = null) {
+async function roomRequest() {
   if (roomBusy) return;
   roomBusy = true;
   roomPaint();
-  roomStatus.textContent = changes ? "Applying…" : "Refreshing…";
-  const historyRequest = changes ? Promise.resolve() : roomLoadHistory();
+  roomStatus.textContent = "Refreshing…";
+  const historyRequest = roomLoadHistory();
   try {
-    const res = await fetch("/api/humidifier", changes ? {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes),
-    } : undefined);
+    const res = await fetch("/api/humidifier");
     // readJson retains the server's error code; remember HTTP 404 for older servers too.
     const missing = res.status === 404;
     let data;
@@ -3980,20 +3668,12 @@ async function roomRequest(changes = null) {
     catch (error) {
       if (missing) {
         roomCloud = null;
-        roomPending = {};
         error.message = "Humidifier is not configured on this server.";
       }
       throw error;
     }
-    if (changes) {
-      for (const [key, value] of Object.entries(data.applied)) {
-        if (data.confirmed) delete roomPending[key];
-        else roomPending[key] = value;
-      }
-    }
-    roomAcceptStatus(data.status);
-    roomStatus.textContent = Object.keys(roomPending).length ? (data.note || roomLagNote)
-      : changes ? "Change confirmed." : "Status refreshed.";
+    roomCloud = data.status;
+    roomStatus.textContent = "Status refreshed.";
   } catch (error) {
     roomStatus.textContent = error.message;
   } finally {
@@ -4004,14 +3684,15 @@ async function roomRequest(changes = null) {
 }
 
 function closeRoomPanel() {
+  panelClosed("room");
   roomPanel.classList.remove("is-open");
   roomPanel.setAttribute("aria-hidden", "true");
   roomPanel.inert = true;
   roomToggle.classList.remove("is-active");
   roomToggle.setAttribute("aria-expanded", "false");
 }
-roomToggle.addEventListener("click", () => {
-  if (roomPanel.classList.contains("is-open")) return closeRoomPanel();
+function openRoomPanel() {
+  panelOpened("room");
   closeJobsPanel(); closeToolsPanel(); closeSearchPanel(); closeFocusPanel(); closeConsolePanel(); closeMapPanel();
   roomPanel.inert = false;
   roomPanel.classList.add("is-open");
@@ -4020,24 +3701,190 @@ roomToggle.addEventListener("click", () => {
   roomToggle.setAttribute("aria-expanded", "true");
   document.getElementById("room-close").focus();
   roomRequest();
+}
+roomToggle.addEventListener("click", () => {
+  roomPanel.classList.contains("is-open") ? closeRoomPanel() : PANEL_OPENERS.room();
 });
 document.getElementById("room-close").addEventListener("click", () => { closeRoomPanel(); roomToggle.focus(); });
-["jobs", "tools", "search", "focus", "console", "map"].forEach((name) => {
-  document.getElementById(`${name}-toggle`).addEventListener("click", closeRoomPanel);
-});
+
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && roomPanel.classList.contains("is-open")) {
     closeRoomPanel(); roomToggle.focus();
   }
 });
 roomRefresh.addEventListener("click", () => roomRequest());
-roomDisplay.addEventListener("change", () => roomRequest({ display: roomDisplay.checked }));
-roomLight.addEventListener("change", () => roomRequest({ night_light: roomLight.checked }));
-roomBrightness.addEventListener("input", () => {
-  document.getElementById("room-brightness-value").textContent = roomBrightness.value + "%";
-});
-roomBrightness.addEventListener("change", () => roomRequest({ night_light_brightness: Number(roomBrightness.value) }));
 
+
+/* Device writes are deliberate taps; status refreshes never resend them. */
+const devicesPanel = document.getElementById("devices-panel");
+const devicesToggle = document.getElementById("devices-toggle");
+const devicesStatus = document.getElementById("devices-status");
+let devicesCards = [];
+let devicesBusy = false;
+const devicesPending = new Map();
+
+function deviceValue(kind, state, key) {
+  if (kind === "humidifier" && key === "night_light") return state.night_light?.on;
+  if (kind === "humidifier" && key === "night_light_brightness") return state.night_light?.brightness;
+  return state[key];
+}
+function deviceAccept(kind, state) {
+  const pending = devicesPending.get(kind);
+  if (!pending || !state || state.online === false) return;
+  for (const [key, value] of Object.entries(pending.changes)) {
+    if (deviceValue(kind, state, key) === value) delete pending.changes[key];
+  }
+  if (!Object.keys(pending.changes).length) devicesPending.delete(kind);
+}
+function paintDevices() {
+  const list = document.getElementById("devices-cards");
+  list.replaceChildren();
+  document.getElementById("devices-refresh").disabled = devicesBusy;
+  if (!devicesCards.length) list.append(consoleNode("p", "No devices configured.", "jobs-hint"));
+  for (const card of devicesCards) {
+    const node = consoleNode("article", "", "console-card device-card");
+    const state = card.state || {};
+    const pending = devicesPending.get(card.kind);
+    node.append(consoleNode("h3", card.kind === "purifier" ? "Air purifier · Core200S" : card.kind === "bulb" ? "Kasa colour bulb · KL125" : "Humidifier"));
+    if (pending) node.append(consoleNode("p", Date.now() - pending.at < 180000
+      ? "Change sent; awaiting matching status. Refresh to check."
+      : "Still unconfirmed. Refresh status before making another change.", "jobs-status"));
+    if (card.available && card.fresh === false) node.append(consoleNode("p",
+      `No live read yet; showing status from ${Math.round(card.age_s)} s ago. Refresh to check.`, "jobs-status"));
+    if (!card.available) {
+      node.append(consoleNode("p", card.error || "Unavailable", "jobs-status"));
+      list.append(node); continue;
+    }
+    if (card.kind === "bulb") {
+      paintBulbControls(node, state);
+      list.append(node); continue;
+    }
+    if (card.kind === "purifier") {
+      const timer = state.timer;
+      node.append(consoleNode("p", `Filter life: ${state.filter_life ?? "unavailable"}${state.filter_life == null ? "" : "%"}`));
+      node.append(consoleNode("p", timer ? `Timer: ${timer.remaining_seconds} seconds remaining (${timer.action})`
+        : "Timer: no active timer reported", "jobs-hint"));
+      node.append(consoleNode("p", "No air-quality sensor. Mode and fan changes turn the purifier on; fan selects manual mode.", "jobs-hint"));
+    }
+    const fields = card.kind === "purifier" ? [
+      ["power", "Power", ["on", "off"]], ["mode", "Mode", ["manual", "sleep"]],
+      ["fan_level", "Fan level", [1, 2, 3]], ["display", "Display", [true, false]],
+      ["night_light", "Night light", ["on", "off"]], ["child_lock", "Child lock", [true, false]],
+    ] : [["display", "Display", [true, false]], ["night_light", "Night light", [true, false]],
+      ["night_light_brightness", "Night light brightness (turns light on)", null]];
+    for (const [key, title, choices] of fields) {
+      const label = consoleNode("label", title, "device-control");
+      const value = pending && Object.hasOwn(pending.changes, key) ? pending.changes[key] : deviceValue(card.kind, state, key);
+      const input = document.createElement(choices ? "select" : "input");
+      input.setAttribute("aria-label", title);
+      if (choices) {
+        if (!choices.includes(value)) {
+          const unknown = consoleNode("option", "Unknown"); unknown.value = ""; unknown.disabled = true;
+          input.append(unknown);
+        }
+        choices.forEach((choice, i) => {
+          const option = consoleNode("option", choice === true ? "On" : choice === false ? "Off" : String(choice));
+          option.value = String(i); input.append(option);
+        });
+        input.value = choices.includes(value) ? String(choices.indexOf(value)) : "";
+      } else {
+        input.type = "range"; input.min = "40"; input.max = "100"; input.step = "1";
+        input.value = String(value ?? 40);
+        label.append(consoleNode("span", ` ${value ?? "unknown"}%`));
+      }
+      input.disabled = devicesBusy;
+      input.addEventListener("change", () => deviceWrite(card.kind, { [key]: choices ? choices[Number(input.value)] : Number(input.value) }));
+      label.append(input); node.append(label);
+    }
+    list.append(node);
+  }
+}
+function paintBulbControls(node, state) {
+  node.append(consoleNode("p", `Power: ${state.power} · Brightness: ${state.brightness}%`));
+  node.append(consoleNode("p", state.color_temp != null ? `White: ${state.color_temp} K`
+    : `Colour: hue ${state.hue ?? "unknown"}°, saturation ${state.saturation ?? "unknown"}%`));
+  node.append(consoleNode("p", "Brightness, white temperature and colour turn the bulb on. Changes stay on your local network.", "jobs-hint"));
+  for (const power of ["on", "off"]) {
+    const button = consoleNode("button", power === "on" ? "Turn on" : "Turn off", "jobs-btn");
+    button.disabled = devicesBusy;
+    button.addEventListener("click", () => deviceWrite("bulb", { power })); node.append(button);
+  }
+  function number(title, min, max, value) {
+    const label = consoleNode("label", title, "device-control");
+    const input = document.createElement("input"); input.type = "number";
+    input.min = String(min); input.max = String(max); input.step = "1"; input.value = String(value);
+    input.setAttribute("aria-label", title); input.disabled = devicesBusy;
+    label.append(input); node.append(label); return input;
+  }
+  function apply(title, fields, changes) {
+    const button = consoleNode("button", title, "jobs-btn"); button.disabled = devicesBusy;
+    button.addEventListener("click", () => {
+      if (fields.every(input => input.value !== "" && input.reportValidity())) deviceWrite("bulb", changes());
+    }); node.append(button);
+  }
+  const brightness = number("Brightness (%)", 1, 100, state.brightness || 1);
+  apply("Set brightness", [brightness], () => ({ brightness: Number(brightness.value) }));
+  const temperature = number("White temperature (K)", 2500, 6500, state.color_temp ?? 3000);
+  apply("Set white", [temperature], () => ({ color_temp: Number(temperature.value) }));
+  const hue = number("Hue (degrees)", 0, 360, state.hue ?? 0);
+  const saturation = number("Saturation (%)", 0, 100, state.saturation ?? 100);
+  apply("Set colour", [hue, saturation], () => ({ hue: Number(hue.value), saturation: Number(saturation.value) }));
+}
+async function loadDevices() {
+  if (devicesBusy) return;
+  devicesBusy = true; paintDevices(); devicesStatus.textContent = "Refreshing…";
+  try {
+    const data = await readJson(await fetch("/api/devices"));
+    devicesCards = data.devices;
+    devicesCards.forEach(card => { if (card.fresh !== false) deviceAccept(card.kind, card.state); });
+    devicesStatus.textContent = "Status refreshed.";
+  } catch (error) {
+    devicesCards = [];
+    devicesStatus.textContent = `Could not refresh: ${error.message}`;
+  } finally { devicesBusy = false; paintDevices(); }
+}
+async function deviceWrite(kind, changes) {
+  if (devicesBusy) return;
+  devicesBusy = true; paintDevices(); devicesStatus.textContent = "Sending change…";
+  function remember(applied) {
+    if (!applied || !Object.keys(applied).length) return;
+    const previous = { ...(devicesPending.get(kind)?.changes || {}) };
+    if (kind === "bulb" && Object.hasOwn(applied, "hue")) delete previous.color_temp;
+    if (kind === "bulb" && Object.hasOwn(applied, "color_temp")) { delete previous.hue; delete previous.saturation; }
+    devicesPending.set(kind, { changes: { ...previous, ...applied }, at: Date.now() });
+  }
+  try {
+    const data = await readJson(await fetch(`/api/devices/${kind}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes),
+    }));
+    remember(data.applied);
+    const card = devicesCards.find(item => item.kind === kind);
+    if (card) { card.state = data.status; card.available = true; card.error = null; }
+    deviceAccept(kind, data.status);
+    devicesStatus.textContent = data.confirmed ? "Change confirmed by status." : "Change accepted; refresh to check status.";
+  } catch (error) {
+    remember(error.details?.applied);
+    devicesStatus.textContent = `${error.message} Refresh status before retrying.`;
+  } finally { devicesBusy = false; paintDevices(); }
+}
+function closeDevicesPanel() {
+  panelClosed("devices");
+  devicesPanel.classList.remove("is-open"); devicesPanel.setAttribute("aria-hidden", "true"); devicesPanel.inert = true;
+  devicesToggle.classList.remove("is-active"); devicesToggle.setAttribute("aria-expanded", "false");
+}
+function openDevicesPanel() {
+  closeOtherPanels("devices"); panelOpened("devices");
+  devicesPanel.inert = false; devicesPanel.classList.add("is-open"); devicesPanel.setAttribute("aria-hidden", "false");
+  devicesToggle.classList.add("is-active"); devicesToggle.setAttribute("aria-expanded", "true");
+  document.getElementById("devices-close").focus(); loadDevices();
+}
+devicesToggle.addEventListener("click", () => devicesPanel.classList.contains("is-open") ? closeDevicesPanel() : PANEL_OPENERS.devices());
+document.getElementById("devices-close").addEventListener("click", () => { closeDevicesPanel(); devicesToggle.focus(); });
+document.getElementById("devices-refresh").addEventListener("click", loadDevices);
+document.getElementById("room-devices").addEventListener("click", event => { event.preventDefault(); PANEL_OPENERS.devices(); });
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && devicesPanel.classList.contains("is-open")) { closeDevicesPanel(); devicesToggle.focus(); }
+});
 
 // Pending actions stay outside the saved transcript: their state belongs to the server.
 let actionsRequest = 0;
@@ -4084,4 +3931,910 @@ async function loadPendingActions() {
     if (request === actionsRequest) list.textContent = `Could not load pending actions: ${error.message}`;
   }
 }
-loadPendingActions();
+
+/* Saved Team metadata enriches existing rows by key; it never adds work. */
+function teamRun(snapshot, key) {
+  const run = snapshot?.runs?.find(item => item.key === key);
+  return run && /^[a-f0-9]{32}$/.test(run.run_id) && key === `team:${run.run_id}` ? run : null;
+}
+function appendTeamStatus(card, run) {
+  card.classList.add("team-status-card");
+  if (!run) {
+    card.append(consoleNode("p", "Saved Team details unavailable. Use Refresh to try again.", "jobs-hint"));
+    return;
+  }
+  const labels = {queued: "Getting ready", planning: "Plan requested", building: "Build requested",
+    reviewing: "Review requested", stopping: "Stop requested; worker completion unconfirmed",
+    needs_input: "Your input is needed", uncertain: "Needs a check on the Mac",
+    completed: "Work complete", stopped: "Stopped", failed: "Something needs attention"};
+  card.append(consoleNode("p", `Saved status: ${labels[run.status] || "Status unavailable"}`));
+  const identity = consoleNode("p", `Team · run ${run.run_id.slice(0, 8)}`, "jobs-hint");
+  identity.setAttribute("aria-label", `Team run ${run.run_id}`);
+  card.append(identity);
+  for (const label of [run.reason_label, run.controller_label, run.claim_label]) {
+    if (label) card.append(consoleNode("p", label, "jobs-hint"));
+  }
+  if (typeof run.room_id === "string" && /^[a-f0-9]{32}$/.test(run.room_id)) {
+    const link = consoleNode("a", "Open in Team", "jobs-btn team-status-link");
+    link.href = `/team#${encodeURIComponent(run.room_id)}`;
+    card.append(link);
+  } else {
+    card.append(consoleNode("p", "Room link unavailable.", "jobs-hint"));
+  }
+}
+function savedTime(value) {
+  const date = new Date(value * 1000);
+  return Number.isFinite(value) && Number.isFinite(date.getTime()) ? date.toLocaleString() : "unknown";
+}
+function renderTeamNotices(name, snapshot) {
+  let target = document.getElementById(`${name}-team-notices`);
+  if (!target) {
+    target = consoleNode("div", "", "team-status-notices");
+    target.id = `${name}-team-notices`;
+    document.getElementById(`${name}-status`).after(target);
+  }
+  target.replaceChildren();
+  const seen = new Set();
+  for (const notice of snapshot?.notices || []) {
+    if (!seen.has(notice.code)) {
+      seen.add(notice.code);
+      target.append(consoleNode("p", notice.text, "team-status-notice"));
+    }
+  }
+  if (snapshot?.runs?.length || seen.size) {
+    target.append(consoleNode("p", `Saved Team snapshot · read ${savedTime(snapshot.read_at)}`, "jobs-hint"));
+    target.append(consoleNode("p", `Source saves: Team ${savedTime(snapshot.team_saved_at)} · Controller ${savedTime(snapshot.controller_saved_at)} · Claims ${savedTime(snapshot.claims_saved_at)}`, "jobs-hint"));
+    target.append(consoleNode("p", "Sources were read separately; this is not live worker status.", "jobs-hint"));
+  }
+  target.hidden = !target.childElementCount;
+}
+function markEarlierSnapshot(name, reason) {
+  const status = document.getElementById(`${name}-status`);
+  status.textContent = status.dataset.readAt
+    ? `Earlier snapshot · ${reason} · read ${status.dataset.readAt}`
+    : `No saved snapshot · ${reason}`;
+}
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) return;
+  attentionRequest++; progressRequest++;
+  for (const name of ["attention", "progress"]) markEarlierSnapshot(name, "page was hidden; use Refresh");
+});
+
+/* ---------------- attention: five cards, explicit decisions ---------------- */
+const attentionPanel = document.getElementById("attention-panel");
+const attentionToggle = document.getElementById("attention-toggle");
+const attentionStatus = document.getElementById("attention-status");
+let attentionRequest = 0;
+let reflectionRequest = 0;
+
+function closeAttentionPanel() {
+  if (attentionPanel.classList.contains("is-open")) {
+    attentionRequest++;
+    markEarlierSnapshot("attention", "panel closed; use Refresh");
+  }
+  panelClosed("attention");
+  attentionPanel.classList.remove("is-open");
+  attentionPanel.setAttribute("aria-hidden", "true");
+  attentionPanel.inert = true;
+  attentionToggle.classList.remove("is-active");
+  attentionToggle.setAttribute("aria-expanded", "false");
+}
+function attentionAction(card) {
+  if (card.source === "/team") return; // Team navigation needs a matched, validated room link.
+  if (card.source === "/api/reflections") {
+    document.getElementById("reflection-feed").scrollIntoView({ block: "nearest" });
+    return;
+  }
+  closeAttentionPanel();
+  if (card.source === "/api/reminders") {
+    navigateWorkspace("reminders");
+  } else if (card.source === "/api/actions") {
+    PANEL_OPENERS.attention();
+    const list = document.getElementById("pending-actions");
+    list.tabIndex = -1;
+    list.scrollIntoView({ block: "nearest" }); list.focus();
+  } else if (["/api/outbound/report", "/api/tools/runs", "/api/jobs"].includes(card.source)) {
+    consoleToggle.click();
+    const name = card.source === "/api/outbound/report" ? "privacy" : "runs";
+    const tab = consoleTabs.find((item) => item.dataset.consoleTab === name);
+    tab.click(); tab.focus();
+  } else {
+    window.location.assign("/loop");
+  }
+}
+function attentionAge(seconds) {
+  if (seconds === null || !Number.isFinite(seconds)) return "Source age unknown";
+  if (seconds < 60) return "Source less than a minute old";
+  if (seconds < 3600) return `Source ${Math.floor(seconds / 60)} minutes old`;
+  if (seconds < 86400) return `Source ${Math.floor(seconds / 3600)} hours old`;
+  return `Source ${Math.floor(seconds / 86400)} days old`;
+}
+function attentionCard(card, snapshot) {
+  const node = consoleNode("article", "", "console-card attention-card");
+  node.dataset.severity = String(card.severity);
+  const run = card.source === "/team" ? teamRun(snapshot, card.key) : null;
+  node.append(consoleNode("h3", run?.title ?? card.title));
+  if (card.source === "/team") appendTeamStatus(node, run);
+  else {
+    node.append(consoleNode("p", card.why_now));
+    node.append(consoleNode("p", `${card.source} · ${attentionAge(card.source_age_s)}`, "jobs-hint"));
+    if (card.due_at) node.append(consoleNode("p", `Due: ${new Date(card.due_at).toLocaleString()}`, "jobs-hint"));
+    node.append(consoleButton(card.action, () => attentionAction(card)));
+  }
+  const form = consoleNode("form", "", "attention-snooze");
+  const label = consoleNode("label", "Snooze until");
+  const input = document.createElement("input");
+  input.type = "datetime-local"; input.required = true;
+  const later = new Date(Date.now() + 3600000);
+  input.value = new Date(later.getTime() - later.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  label.append(input);
+  const button = consoleNode("button", "Snooze", "jobs-btn");
+  button.type = "submit";
+  form.append(label, button);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const until = new Date(input.value);
+    if (!Number.isFinite(until.getTime()) || until.getTime() <= Date.now()) {
+      input.setCustomValidity("Choose a future time."); input.reportValidity(); return;
+    }
+    button.disabled = true;
+    try {
+      await readJson(await fetch("/api/attention/snooze", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: card.key, until: until.toISOString() }),
+      }));
+      await loadAttention();
+    } catch (error) { attentionStatus.textContent = `Could not snooze: ${error.message}`; }
+    finally { button.disabled = false; }
+  });
+  input.addEventListener("input", () => input.setCustomValidity(""));
+  node.append(form);
+  return node;
+}
+async function loadAttention() {
+  loadReflections();
+  const request = ++attentionRequest;
+  markEarlierSnapshot("attention", "refreshing");
+  try {
+    const data = await readJson(await fetch("/api/attention"));
+    if (request !== attentionRequest || document.hidden) return;
+    attentionToggle.textContent = `ATTENTION ${data.critical}`;
+    attentionToggle.setAttribute("aria-label", `Attention: ${data.critical} critical items`);
+    const cards = document.getElementById("attention-cards");
+    cards.replaceChildren(...data.cards.slice(0, 5).map(card => attentionCard(card, data.team)));
+    renderTeamNotices("attention", data.team);
+    attentionStatus.dataset.readAt = new Date().toLocaleString();
+    attentionStatus.textContent = `${data.critical} critical · ${data.snoozed} snoozed` +
+      (data.cards.length ? "" : " · No open cards in the sources checked.") + ` · read ${attentionStatus.dataset.readAt}`;
+    const grouped = document.getElementById("attention-grouped");
+    grouped.replaceChildren();
+    const names = { warning: "warnings", time: "time-sensitive items", input: "questions for you" };
+    for (const [kind, count] of Object.entries(data.grouped)) {
+      grouped.append(consoleNode("p", `${count} more ${names[kind] || kind}`));
+    }
+    if (Object.keys(data.grouped).length) {
+      grouped.append(consoleNode("p", "Review or snooze the cards above to see the next items.", "jobs-hint"));
+    }
+  } catch (error) {
+    if (request !== attentionRequest) return;
+    attentionToggle.textContent = "ATTENTION ?";
+    attentionToggle.setAttribute("aria-label", "Attention unavailable");
+    attentionStatus.textContent = `Attention unavailable: ${error.message}`;
+    if (attentionStatus.dataset.readAt) markEarlierSnapshot("attention", "refresh failed; use Refresh");
+  }
+}
+function openAttentionPanel() {
+  panelOpened("attention");
+  closeJobsPanel(); closeToolsPanel(); closeSearchPanel(); closeFocusPanel();
+  closeConsolePanel(); closeMapPanel(); closeRoomPanel();
+  attentionPanel.inert = false;
+  attentionPanel.classList.add("is-open");
+  attentionPanel.setAttribute("aria-hidden", "false");
+  attentionToggle.classList.add("is-active");
+  attentionToggle.setAttribute("aria-expanded", "true");
+  document.getElementById("attention-close").focus();
+  loadAttention();
+  loadPendingActions();
+}
+attentionToggle.addEventListener("click", () => {
+  attentionPanel.classList.contains("is-open") ? closeAttentionPanel() : PANEL_OPENERS.attention();
+});
+document.getElementById("attention-close").addEventListener("click", () => {
+  closeAttentionPanel(); attentionToggle.focus();
+});
+document.getElementById("attention-refresh").addEventListener("click", loadAttention);
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && attentionPanel.classList.contains("is-open")) {
+    closeAttentionPanel(); attentionToggle.focus();
+  }
+});
+// Refresh explicitly or on opening, so a background refresh never replaces a snooze being edited.
+
+/* ---------------- progress: stages and counts, never grades ---------------- */
+const progressPanel = document.getElementById("progress-panel");
+const progressToggle = document.getElementById("progress-toggle");
+let progressRequest = 0;
+
+function closeProgressPanel() {
+  if (progressPanel.classList.contains("is-open")) {
+    progressRequest++;
+    markEarlierSnapshot("progress", "panel closed; use Refresh");
+  }
+  panelClosed("progress");
+  progressPanel.classList.remove("is-open");
+  progressPanel.setAttribute("aria-hidden", "true");
+  progressPanel.inert = true;
+  progressToggle.classList.remove("is-active");
+  progressToggle.setAttribute("aria-expanded", "false");
+}
+function progressLead(lead, snapshot) {
+  const card = consoleNode("article", "", "console-card progress-lead");
+  if (lead.kind === "team") {
+    const run = teamRun(snapshot, lead.key);
+    card.append(consoleNode("h3", run?.title ?? lead.title));
+    appendTeamStatus(card, run);
+    return card;
+  }
+  card.append(consoleNode("h3", lead.title), consoleNode("p", `${lead.kind} · ${lead.step}`));
+  const hasPercent = Number.isFinite(lead.percent);
+  const label = hasPercent && lead.steps_total !== null
+    ? `${lead.steps_done}/${lead.steps_total} steps complete (${lead.percent}%)`
+    : hasPercent && lead.kind === "focus" ? `${lead.percent}% of planned time elapsed` : lead.step;
+  card.append(consoleNode("p", label, "jobs-hint"));
+  // Unknown scope gets an empty, unscaled track, never a made-up percentage.
+  const bar = consoleNode("div", "", "progress-bar");
+  if (hasPercent) {
+    bar.setAttribute("role", "progressbar");
+    bar.setAttribute("aria-label", `${lead.title}: ${label}`);
+    bar.setAttribute("aria-valuemin", "0");
+    bar.setAttribute("aria-valuemax", "100");
+    bar.setAttribute("aria-valuenow", String(lead.percent));
+    const fill = consoleNode("span", "", "progress-fill");
+    fill.style.width = `${Math.max(0, Math.min(100, lead.percent))}%`;
+    bar.append(fill);
+  } else {
+    bar.classList.add("progress-unknown");
+    bar.setAttribute("aria-hidden", "true");
+  }
+  card.append(bar);
+  if (lead.stalled_days !== null) {
+    card.dataset.stalled = "true";
+    card.append(consoleNode("p", `Stalled: ${lead.stalled_days} days in ${lead.step}.`, "progress-stalled"));
+  }
+  if (lead.next) card.append(consoleNode("p", `Next: ${lead.next}`));
+  if (lead.since) card.append(consoleNode("p", `Since ${new Date(lead.since).toLocaleString()}`, "jobs-hint"));
+  return card;
+}
+async function loadProgress() {
+  const request = ++progressRequest;
+  const status = document.getElementById("progress-status");
+  status.textContent = "Reading progress…";
+  markEarlierSnapshot("progress", "refreshing");
+  try {
+    const data = await readJson(await fetch("/api/progress"));
+    if (request !== progressRequest || document.hidden) return;
+    document.getElementById("progress-leads").replaceChildren(...data.leads.map(lead => progressLead(lead, data.team)));
+    renderTeamNotices("progress", data.team);
+    const counts = [
+      [data.today.focus_minutes, "focus minutes"],
+      [data.today.assignments_moved, "assignments moved"],
+      [data.today.applications_touched, "application events"],
+      [data.today.learning_reviews, "learning reviews due"],
+    ];
+    document.getElementById("progress-today").replaceChildren(...counts.map(([value, label]) => {
+      const cell = consoleNode("div", "", "progress-count");
+      cell.append(consoleNode("strong", String(value)), consoleNode("span", label));
+      return cell;
+    }));
+    document.getElementById("progress-line").textContent = data.today.line;
+    status.dataset.readAt = new Date().toLocaleString();
+    status.textContent = (data.leads.length ? `${data.leads.length} saved leads` : "No current leads.") + ` · read ${status.dataset.readAt}`;
+  } catch (error) {
+    if (request !== progressRequest) return;
+    status.textContent = `Progress unavailable: ${error.message}`;
+    if (status.dataset.readAt) markEarlierSnapshot("progress", "refresh failed; use Refresh");
+  }
+}
+function openProgressPanel() {
+  panelOpened("progress");
+  closeAttentionPanel(); closeJobsPanel(); closeToolsPanel(); closeSearchPanel();
+  closeFocusPanel(); closeConsolePanel(); closeMapPanel(); closeRoomPanel();
+  progressPanel.inert = false;
+  progressPanel.classList.add("is-open");
+  progressPanel.setAttribute("aria-hidden", "false");
+  progressToggle.classList.add("is-active");
+  progressToggle.setAttribute("aria-expanded", "true");
+  document.getElementById("progress-close").focus();
+  loadProgress();
+}
+progressToggle.addEventListener("click", () => {
+  progressPanel.classList.contains("is-open") ? closeProgressPanel() : PANEL_OPENERS.progress();
+});
+document.getElementById("progress-close").addEventListener("click", () => {
+  closeProgressPanel(); progressToggle.focus();
+});
+document.getElementById("progress-refresh").addEventListener("click", loadProgress);
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && progressPanel.classList.contains("is-open")) {
+    closeProgressPanel(); progressToggle.focus();
+  }
+});
+
+/* ---------------- learning: recall first, then reveal and review ---------------- */
+const learningPanel = document.getElementById("learning-panel");
+const learningToggle = document.getElementById("learning-toggle");
+let learningTabRequest = 0;
+let learningSummaryRequest = 0;
+
+async function loadLearningSummary() {
+  const request = ++learningSummaryRequest;
+  try {
+    const data = await readJson(await fetch("/api/learning/summary"));
+    if (request !== learningSummaryRequest) return;
+    const due = data.due_items + data.due_reels;
+    learningToggle.textContent = `LEARNING ${due}`;
+    learningToggle.setAttribute("aria-label", `Learning: ${due} reviews due`);
+    document.getElementById("learning-streak").textContent = `${data.streak_days}-day streak · ` +
+      (data.reviewed_today ? "Successful review today" : "No successful review recorded today");
+    document.getElementById("learning-status").textContent = `${due} reviews due` +
+      (data.next_review_at ? ` · Next scheduled: ${new Date(data.next_review_at).toLocaleString()}` : "");
+  } catch (error) {
+    if (request !== learningSummaryRequest) return;
+    learningToggle.textContent = "LEARNING ?";
+    document.getElementById("learning-streak").textContent = "";
+    document.getElementById("learning-status").textContent = `Learning summary unavailable: ${error.message}`;
+  }
+}
+function learningItemCard(item) {
+  const card = consoleNode("article", "", "console-card learning-card");
+  card.append(consoleNode("h3", item.topic));
+  const answer = consoleNode("div", "", "learning-answer");
+  answer.hidden = true;
+  answer.append(consoleNode("p", item.key_takeaway));
+  if (item.summary) answer.append(consoleNode("p", item.summary, "jobs-hint"));
+  const actions = consoleNode("div", "", "learning-actions");
+  const status = consoleNode("p", "", "jobs-hint");
+  status.setAttribute("role", "status");
+  for (const [label, remembered] of [["Remembered", true], ["Forgot", false]]) {
+    const button = consoleNode("button", label, "jobs-btn");
+    button.type = "button";
+    button.addEventListener("click", async () => {
+      const buttons = [...actions.querySelectorAll("button")];
+      buttons.forEach(b => { b.disabled = true; });
+      status.textContent = "Saving review…";
+      try {
+        const result = await readJson(await fetch(`/api/learning/${item.id}/review`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ remembered, expected_next_review_at: item.next_review_at }),
+        }));
+        const days = Math.max(0, Math.ceil((new Date(result.next_review_at).getTime() - Date.now()) / 86400000));
+        status.textContent = `Saved; next in ${days} ${days === 1 ? "day" : "days"}.`;
+        status.tabIndex = -1; status.focus();
+        await loadLearningSummary();
+      } catch (error) {
+        status.textContent = `Review not confirmed: ${error.message}. Refresh before trying again.`;
+        if (error.code === "stale_review") {
+          await loadLearningTab();
+          document.getElementById("learning-items").prepend(status);
+        }
+      }
+    });
+    actions.append(button);
+  }
+  answer.append(actions);
+  const show = consoleNode("button", "Show", "jobs-btn");
+  show.type = "button";
+  show.setAttribute("aria-expanded", "false");
+  show.addEventListener("click", () => {
+    answer.hidden = !answer.hidden;
+    show.textContent = answer.hidden ? "Show" : "Hide";
+    show.setAttribute("aria-expanded", String(!answer.hidden));
+  });
+  card.append(show, answer, status);
+  return card;
+}
+function learningReelCard(reel) {
+  const card = consoleNode("article", "", "console-card learning-card");
+  card.append(consoleNode("h3", reel.learning_objective), consoleNode("p", reel.source_title, "jobs-hint"));
+  let url;
+  try { url = new URL(reel.embed_url); } catch { /* Malformed sources are never embedded. */ }
+  if (url && url.protocol === "https:" && url.hostname === "www.youtube-nocookie.com" &&
+      /^\/embed\/[A-Za-z0-9_-]{11}$/.test(url.pathname) && !url.username && !url.password && !url.port) {
+    const frame = document.createElement("iframe");
+
+    frame.title = reel.source_title || reel.learning_objective;
+    frame.loading = "lazy";
+    frame.referrerPolicy = "strict-origin-when-cross-origin";
+    frame.allow = "encrypted-media; picture-in-picture; fullscreen";
+    frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-presentation");
+    const play = consoleNode("button", "Play clip", "jobs-btn");
+    play.type = "button";
+    play.addEventListener("click", () => { frame.src = url.href; play.replaceWith(frame); }, { once: true });
+    card.append(play);
+  } else if (url && url.protocol === "https:" && !url.username && !url.password) {
+    const link = consoleNode("a", "Open source", "jobs-hint");
+    link.href = url.href; link.target = "_blank"; link.rel = "noopener noreferrer";
+    card.append(link);
+  } else {
+    card.append(consoleNode("p", "Clip unavailable.", "jobs-hint"));
+  }
+  card.append(consoleNode("p", reel.question.stem));
+  const options = consoleNode("div", "", "learning-options");
+  const feedback = consoleNode("p", "", "learning-feedback");
+  feedback.setAttribute("role", "status");
+  for (const option of reel.question.options) {
+    const button = consoleNode("button", option.text, "jobs-btn");
+    button.type = "button";
+    button.addEventListener("click", async () => {
+      const buttons = [...options.querySelectorAll("button")];
+      buttons.forEach(b => { b.disabled = true; });
+      feedback.textContent = "Checking answer…";
+      try {
+        const result = await readJson(await fetch(`/api/reels/${reel.moment_id}/answer`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: reel.kind, chosen: option.text }),
+        }));
+        feedback.textContent = result.message;
+        if (!result.correct) buttons.forEach(b => { b.disabled = false; });
+        await loadLearningSummary();
+      } catch (error) {
+        feedback.textContent = `Answer not confirmed: ${error.message}. Refresh before trying again.`;
+      }
+    });
+    options.append(button);
+  }
+  card.append(options, feedback);
+  return card;
+}
+async function loadLearningTab() {
+  lessonView().load();
+  const request = ++learningTabRequest;
+  loadLearningSummary();
+  await Promise.all([
+    ["/api/learning/due", "learning-items", learningItemCard, "No items due now."],
+    ["/api/reels/due", "learning-reels", learningReelCard, "No reel reviews due now."],
+  ].map(async ([url, id, render, empty]) => {
+    const list = document.getElementById(id);
+    list.textContent = "Loading…";
+    try {
+      const data = await readJson(await fetch(url));
+      if (request !== learningTabRequest) return;
+      list.replaceChildren(...data.due.map(render));
+      if (!data.due.length) list.textContent = empty;
+    } catch (error) {
+      if (request !== learningTabRequest) return;
+      list.textContent = `Could not load: ${error.message}`;
+    }
+  }));
+}
+function closeLearningPanel() {
+  panelClosed("learning");
+  learningPanel.classList.remove("is-open");
+  learningPanel.setAttribute("aria-hidden", "true");
+  learningPanel.inert = true;
+  learningToggle.classList.remove("is-active");
+  learningToggle.setAttribute("aria-expanded", "false");
+  ++learningTabRequest;
+  // Removing frames stops a playing clip when the panel closes.
+  document.getElementById("learning-reels").replaceChildren();
+}
+function openLearningPanel() {
+  panelOpened("learning");
+  closeAttentionPanel(); closeProgressPanel(); closeJobsPanel(); closeToolsPanel(); closeSearchPanel();
+  closeFocusPanel(); closeConsolePanel(); closeMapPanel(); closeRoomPanel();
+  learningPanel.inert = false;
+  learningPanel.classList.add("is-open");
+  learningPanel.setAttribute("aria-hidden", "false");
+  learningToggle.classList.add("is-active");
+  learningToggle.setAttribute("aria-expanded", "true");
+  document.getElementById("learning-close").focus();
+  loadLearningTab();
+}
+learningToggle.addEventListener("click", () => {
+  learningPanel.classList.contains("is-open") ? closeLearningPanel() : PANEL_OPENERS.learning();
+});
+document.getElementById("learning-close").addEventListener("click", () => {
+  closeLearningPanel(); learningToggle.focus();
+});
+document.getElementById("learning-tab-refresh").addEventListener("click", loadLearningTab);
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && learningPanel.classList.contains("is-open")) {
+    closeLearningPanel(); learningToggle.focus();
+  }
+});
+
+
+/* Local reflections: explicit feedback and unsent drafts only. */
+async function loadReflections() {
+  const request = ++reflectionRequest;
+  const status = document.getElementById("reflection-status");
+  const list = document.getElementById("reflection-cards");
+  try {
+    const data = await readJson(await fetch("/api/reflections"));
+    if (request !== reflectionRequest) return;
+    list.replaceChildren();
+    status.textContent = data.cards.length ? `${data.day} · suggestions to review` : "No reflections yet. The nightly run has not produced cards for today.";
+    for (const card of data.cards.slice(0, 3)) {
+      const node = consoleNode("article", "", "console-card reflection-card");
+      node.append(consoleNode("h4", `${card.kind}: ${card.observation}`));
+      node.append(consoleNode("p", card.suggestion));
+      node.append(consoleNode("p", `Evidence: ${card.evidence}`, "jobs-hint"));
+      node.append(consoleNode("p", `Check afterwards: ${card.outcome_check}`, "jobs-hint"));
+      const feedback = consoleNode("p", card.vote ? `Your vote: ${card.vote.replaceAll("_", " ")}` : "", "jobs-hint");
+      feedback.setAttribute("role", "status");
+      const actions = consoleNode("div", "", "reflection-actions");
+      for (const [value, label] of [["useful", "Useful"], ["not_useful", "Not useful"], ["do_it", "Do it: draft only"]]) {
+        const button = consoleButton(label, async () => {
+          const buttons = [...actions.querySelectorAll("button")];
+          buttons.forEach(b => { b.disabled = true; });
+          try {
+            const result = await readJson(await fetch(`/api/reflections/${encodeURIComponent(card.key)}/vote`, {
+              method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vote: value }),
+            }));
+            feedback.textContent = result.assignment_id ? `LOOP draft ${result.assignment_id} saved. Nothing sent.` : `Saved: ${label}`;
+          } catch (error) { feedback.textContent = `Could not save: ${error.message}`; }
+          finally { buttons.forEach(b => { b.disabled = false; }); }
+        });
+        actions.append(button);
+      }
+      node.append(actions, feedback);
+      list.append(node);
+    }
+  } catch (error) {
+    if (request !== reflectionRequest) return;
+    list.replaceChildren();
+    status.textContent = `Reflections unavailable: ${error.message}`;
+  }
+}
+
+
+/* Daily: existing sources only, fetched on opening or explicit refresh. */
+const dailyPanel = document.getElementById("daily-panel");
+const dailyToggle = document.getElementById("daily-toggle");
+let dailyRequest = 0;
+function dailyWhen(value, allDay = false) {
+  if (allDay) return `${String(value).slice(0, 10)} · All day`;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Time unavailable" : date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
+function dailyCard(row, kind) {
+  const card = consoleNode("article", "", "console-card daily-card");
+  if (kind === "prepare") {
+    card.append(consoleNode("h3", row.note), consoleNode("p", dailyWhen(row.when, row.all_day), "jobs-hint"));
+  } else if (kind === "reminder") {
+    card.append(consoleNode("h3", row.text), consoleNode("p", `Due ${dailyWhen(row.due_at)}`, "jobs-hint"));
+  } else if (kind === "mail") {
+    card.append(consoleNode("h3", row.subject), consoleNode("p", row.sender, "jobs-hint"));
+  } else if (kind === "news") {
+    let link;
+    try {
+      const url = new URL(row.link || row.url);
+      if (["https:", "http:"].includes(url.protocol)) {
+        link = consoleNode("a", row.title);
+        link.href = url.href; link.target = "_blank"; link.rel = "noopener noreferrer";
+      }
+    } catch { /* A malformed feed link stays plain text. */ }
+    card.append(link || consoleNode("h3", row.title));
+    if (row.source) card.append(consoleNode("p", row.source, "jobs-hint"));
+  } else {
+    card.append(consoleNode("h3", row.title));
+    card.append(consoleNode("p", dailyWhen(row.start, row.all_day), "jobs-hint"));
+    if (row.location) card.append(consoleNode("p", row.location));
+    if (row.calendar) card.append(consoleNode("p", row.calendar, "jobs-hint"));
+  }
+  return card;
+}
+async function loadDaily() {
+  const request = ++dailyRequest;
+  const status = document.getElementById("daily-status");
+  const sections = document.getElementById("daily-sections");
+  status.textContent = "Reading daily sources…";
+  sections.replaceChildren();
+  try {
+    const data = await readJson(await fetch("/api/daily"));
+    if (request !== dailyRequest) return;
+    status.textContent = `${data.date}` + (data.unavailable.length ? ` · Unavailable: ${data.unavailable.join(", ")}` : "");
+    for (const [key, title, kind, source] of [
+      ["prepare", "Prepare", "prepare", "calendar"],
+      ["today", "Today", "event", "calendar"],
+      ["tomorrow", "Tomorrow", "event", "calendar"],
+      ["later", "Later · next seven days", "event", "calendar"],
+      ["due_reminders", "Due reminders", "reminder", "reminders"],
+      ["mail", "Mail needing a reply", "mail", "mail"],
+    ]) {
+      const section = consoleNode("section", "", "daily-section");
+      section.append(consoleNode("h2", title));
+      section.append(...data[key].map(row => dailyCard(row, kind)));
+      if (!data[key].length) section.append(consoleNode("p", data.unavailable.includes(source) ? "Source unavailable." : "No items supplied by this source.", "jobs-hint"));
+      sections.append(section);
+    }
+    const digest = consoleNode("section", "", "daily-section");
+    digest.append(consoleNode("h2", "Latest digest"));
+    digest.append(consoleNode("p", data.digest_day ? `Digest: ${data.digest_day}` : "No digest available.", "jobs-hint"));
+    if (data.digest_path) digest.append(consoleNode("p", `Open locally: ${data.digest_path}`, "daily-path"));
+    sections.append(digest);
+    const headlines = consoleNode("section", "", "daily-section");
+    headlines.append(consoleNode("h2", "Headlines"));
+    headlines.append(...data.news.slice(0, 5).map(row => dailyCard(row, "news")));
+    if (!data.news.length) headlines.append(consoleNode("p", data.unavailable.includes("news") ? "News unavailable." : "No headlines supplied.", "jobs-hint"));
+    sections.append(headlines);
+  } catch (error) {
+    if (request !== dailyRequest) return;
+    sections.replaceChildren();
+    status.textContent = `Daily unavailable: ${error.message}`;
+  }
+}
+function closeDailyPanel() {
+  panelClosed("daily");
+  ++dailyRequest;
+  dailyPanel.classList.remove("is-open");
+  dailyPanel.setAttribute("aria-hidden", "true"); dailyPanel.inert = true;
+  dailyToggle.classList.remove("is-active"); dailyToggle.setAttribute("aria-expanded", "false");
+}
+function openDailyPanel() {
+  panelOpened("daily");
+  closeAttentionPanel(); closeProgressPanel(); closeLearningPanel(); closeJobsPanel(); closeToolsPanel();
+  closeSearchPanel(); closeFocusPanel(); closeConsolePanel(); closeMapPanel(); closeRoomPanel();
+  dailyPanel.inert = false; dailyPanel.classList.add("is-open"); dailyPanel.setAttribute("aria-hidden", "false");
+  dailyToggle.classList.add("is-active"); dailyToggle.setAttribute("aria-expanded", "true");
+  document.getElementById("daily-close").focus();
+  loadDaily();
+}
+dailyToggle.addEventListener("click", () => {
+  dailyPanel.classList.contains("is-open") ? closeDailyPanel() : PANEL_OPENERS.daily();
+});
+document.getElementById("daily-close").addEventListener("click", () => { closeDailyPanel(); dailyToggle.focus(); });
+document.getElementById("daily-refresh").addEventListener("click", loadDaily);
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && dailyPanel.classList.contains("is-open")) { closeDailyPanel(); dailyToggle.focus(); }
+});
+
+/* Health readings stay in this local panel, never the conversation. */
+const myselfPanel = document.getElementById("myself-panel");
+const myselfToggle = document.getElementById("myself-toggle");
+let myselfRequest = 0;
+function clearMyself() {
+  for (const id of ["myself-last", "myself-sleep", "myself-heart", "myself-sleep-caption", "myself-heart-caption"]) {
+    document.getElementById(id).replaceChildren();
+  }
+}
+async function loadMyself() {
+  const request = ++myselfRequest;
+  const status = document.getElementById("myself-status");
+  clearMyself(); status.textContent = "Reading local export…";
+  try {
+    const data = await readJson(await fetch("/api/myself", { cache: "no-store" }));
+    if (request !== myselfRequest) return;
+    status.textContent = data.note || `${data.export_day_source === "file_modified" ? "File modified" : "Exported"}: ${data.export_day} · Watch: ${data.watch || "not identified"}`;
+    const last = data.nights.at(-1);
+    document.getElementById("myself-last").textContent = last
+      ? `${last.date}: ${(last.asleep_minutes / 60).toFixed(1)} h asleep · ${last.in_bed_minutes ? `${(last.in_bed_minutes / 60).toFixed(1)} h in bed` : "No in-bed interval recorded"} · Bed ${last.bed} · Wake ${last.wake}`
+      : "No recorded nights in the last 30 days.";
+    myselfLine("myself-sleep", "myself-sleep-caption", data.nights.map(n => ({ date: n.date, value: n.asleep_minutes / 60 })), "hours asleep");
+    myselfLine("myself-heart", "myself-heart-caption", data.resting_hr.map(r => ({ date: r.date, value: r.bpm })), "bpm · daily median");
+  } catch {
+    if (request !== myselfRequest) return;
+    clearMyself(); status.textContent = "Health export unavailable. Check the local export and try again.";
+  }
+}
+function myselfLine(id, captionId, rows, unit) {
+  const svg = document.getElementById(id), caption = document.getElementById(captionId);
+  svg.replaceChildren();
+  const now = new Date(), end = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const day = 86400000, start = end - 29 * day;
+  const points = rows.map(row => ({ ...row, stamp: Date.parse(`${row.date}T00:00:00Z`) }))
+    .filter(row => Number.isFinite(row.stamp) && Number.isFinite(row.value) && row.stamp >= start && row.stamp <= end)
+    .sort((a, b) => a.stamp - b.stamp);
+  svg.toggleAttribute("hidden", !points.length);
+  if (!points.length) { caption.textContent = "No records in this 30-day window."; return; }
+  const values = points.map(p => p.value), low = Math.max(0, Math.min(...values) - 1), high = Math.max(...values) + 1;
+  const x = stamp => 36 + 310 * (stamp - start) / (end - start);
+  const y = value => 112 - 100 * (value - low) / (high - low);
+  function append(tag, attributes, text) {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
+    if (text !== undefined) node.textContent = text;
+    svg.append(node);
+    return node;
+  }
+  append("text", { x: 2, y: 16 }, high.toFixed(1));
+  append("text", { x: 2, y: 112 }, low.toFixed(1));
+  append("text", { x: 36, y: 136 }, new Date(start).toISOString().slice(5, 10));
+  append("text", { x: 346, y: 136, "text-anchor": "end" }, new Date(end).toISOString().slice(5, 10));
+  let path = "", previous = null;
+  for (const point of points) {
+    path += `${previous !== null && point.stamp - previous === day ? "L" : "M"}${x(point.stamp)},${y(point.value)} `;
+    const dot = append("circle", { cx: x(point.stamp), cy: y(point.value), r: 3 });
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = `${point.date}: ${point.value.toFixed(1)} ${unit}`; dot.append(title);
+    previous = point.stamp;
+  }
+  append("path", { d: path });
+  caption.textContent = `${points.length} recorded days · ${unit}. Breaks in the line mean missing records.`;
+}
+function closeMyselfPanel() {
+  panelClosed("myself");
+  ++myselfRequest;
+  clearMyself(); document.getElementById("myself-status").textContent = "";
+  myselfPanel.classList.remove("is-open"); myselfPanel.inert = true;
+  myselfPanel.setAttribute("aria-hidden", "true");
+  myselfToggle.classList.remove("is-active"); myselfToggle.setAttribute("aria-expanded", "false");
+}
+function openMyselfPanel() {
+  panelOpened("myself");
+  closeAttentionPanel(); closeProgressPanel(); closeLearningPanel(); closeDailyPanel(); closeJobsPanel(); closeToolsPanel();
+  closeSearchPanel(); closeFocusPanel(); closeConsolePanel(); closeMapPanel(); closeRoomPanel();
+  myselfPanel.inert = false; myselfPanel.classList.add("is-open"); myselfPanel.setAttribute("aria-hidden", "false");
+  myselfToggle.classList.add("is-active"); myselfToggle.setAttribute("aria-expanded", "true");
+  document.getElementById("myself-close").focus(); loadMyself();
+}
+myselfToggle.addEventListener("click", () => {
+  myselfPanel.classList.contains("is-open") ? closeMyselfPanel() : PANEL_OPENERS.myself();
+});
+document.getElementById("myself-close").addEventListener("click", () => { closeMyselfPanel(); myselfToggle.focus(); });
+document.getElementById("myself-refresh").addEventListener("click", loadMyself);
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && myselfPanel.classList.contains("is-open")) { closeMyselfPanel(); myselfToggle.focus(); }
+});
+
+/* Idea Lab renderers stay independent; this file owns navigation and HTTP errors. */
+const ideaDeskRoot = document.getElementById("idea-desk");
+const ideasPanel = document.getElementById("ideas-panel");
+const ideasToggle = document.getElementById("ideas-toggle");
+let ideasRenderer, lessonsRenderer, atlasRenderer;
+const labRequest = async (url, options) => {
+  const response = await fetch(url, options);
+  try { return await readJson(response); }
+  catch (error) { error.status = response.status; throw error; }
+};
+let prototypeIdea = null, prototypeReceipt = null;
+const prototypeFields = ["problem", "hypothesis", "experiment"];
+function showPrototype(seed) {
+  PANEL_OPENERS.ideas();
+  if (prototypeReceipt) {
+    document.getElementById("prototype-seed").textContent = "Resolve the previous save first; its outcome is unknown. Retry uses the same receipt.";
+  } else {
+    prototypeIdea = seed?.id ? seed : null;
+    prototypeFields.forEach(key => { document.getElementById(`prototype-${key}`).value = seed?.[key] || ""; });
+    document.getElementById("prototype-seed").textContent = "Edit the experiment below. The isolated picker receives no Kyra data; copy your candidate names into it.";
+  }
+  document.getElementById("prototype-sample").scrollIntoView({behavior: "auto", block: "start"});
+}
+document.getElementById("prototype-save").addEventListener("click", async () => {
+  const button = document.getElementById("prototype-save"), status = document.getElementById("prototype-seed");
+  const fields = Object.fromEntries(prototypeFields.map(key => [key, document.getElementById(`prototype-${key}`).value.trim()]));
+  if (!fields.hypothesis) { status.textContent = "Write a hypothesis first."; return; }
+  if (!prototypeReceipt) prototypeReceipt = prototypeIdea ? {url:`/api/ideas/${encodeURIComponent(prototypeIdea.id)}`, method:"PATCH", body:fields} : {
+    url:"/api/ideas", method:"POST", body:{...fields,title:"Experiment Picker idea",excerpt:"",concept_id:"weighted-decisions",request_id:crypto.randomUUID()}
+  };
+  button.disabled = true; prototypeFields.forEach(key => { document.getElementById(`prototype-${key}`).disabled=true; });
+  let confirmed = false;
+  try {
+    prototypeIdea = await labRequest(prototypeReceipt.url, {method:prototypeReceipt.method,headers:{"Content-Type":"application/json"},body:JSON.stringify(prototypeReceipt.body)});
+    prototypeReceipt = null; confirmed = true; status.textContent = "Saved locally. Try the picker, then update the saved idea with what happened."; ideasView().load();
+  } catch(error) {
+    if (error.status >=400 && error.status <500) prototypeReceipt=null;
+    status.textContent = `Save not confirmed: ${error.message}. ${prototypeReceipt ? "Retry keeps the same receipt and content." : "Correct the fields and try again."}`;
+  } finally {
+    button.disabled=false; button.textContent = confirmed ? "Update experiment idea" : prototypeReceipt ? "Retry experiment save" : "Save experiment idea";
+    prototypeFields.forEach(key => { document.getElementById(`prototype-${key}`).disabled=Boolean(prototypeReceipt); });
+  }
+});
+function lessonView() {
+  if (!lessonsRenderer) lessonsRenderer = window.KyraLessons.mount(document.getElementById("learning-lessons"), {
+    request: labRequest, api: {lessons: "/api/lessons", learning: "/api/learning"}, onPrototype: showPrototype
+  });
+  return lessonsRenderer;
+}
+function ideasView() {
+  if (!ideasRenderer) ideasRenderer = window.KyraIdeas.mount(ideaDeskRoot, {
+    request: labRequest, api: {desk: "/api/ideas/desk", ideas: "/api/ideas"},
+    onLearn: async (id) => { PANEL_OPENERS.learning(); await lessonView().open(id); document.querySelector("[data-lesson]")?.scrollIntoView({block:"start"}); },
+    onPrototype: showPrototype
+  });
+  return ideasRenderer;
+}
+function openIdeasPanel() {
+  closeOtherPanels("ideas"); panelOpened("ideas");
+  ideasPanel.inert = false; ideasPanel.classList.add("is-open");
+  ideasPanel.setAttribute("aria-hidden", "false"); ideasToggle.setAttribute("aria-expanded", "true");
+  ideasToggle.classList.add("is-active"); document.getElementById("ideas-close").focus();
+  ideasView().load();
+}
+function closeIdeasPanel() {
+  panelClosed("ideas"); ideasPanel.classList.remove("is-open"); ideasPanel.inert = true;
+  ideasPanel.setAttribute("aria-hidden", "true"); ideasToggle.setAttribute("aria-expanded", "false"); ideasToggle.classList.remove("is-active");
+}
+document.getElementById("idea-try").addEventListener("click", () => document.getElementById("prototype-sample").scrollIntoView({block:"start"}));
+ideasToggle.addEventListener("click", () => ideasPanel.classList.contains("is-open") ? closeIdeasPanel() : PANEL_OPENERS.ideas());
+document.getElementById("ideas-close").addEventListener("click", () => { closeIdeasPanel(); ideasToggle.focus(); });
+document.addEventListener("keydown", event => { if (event.key === "Escape" && ideasPanel.classList.contains("is-open")) { closeIdeasPanel(); ideasToggle.focus(); } });
+// Date labels belong to each data-desk-item. Live feeds without source dates remain undated.
+ideaDeskRoot.addEventListener("focusin", event => { const card = event.target.closest("[data-desk-item]"); if (card) card.classList.add("was-focused"); });
+function loadAtlasOverview() {
+  if (!atlasRenderer) atlasRenderer = window.KyraAtlas.mount(document.getElementById("map-overview"), {
+    request: labRequest, api: "/api/atlas", onOpen: node => { const name = node.panel.replace(/-panel$/, ""); if (PANEL_OPENERS[name]) PANEL_OPENERS[name](); }
+  });
+  atlasRenderer.load();
+}
+document.getElementById("map-overview").addEventListener("keydown", event => {
+  if (event.key === "Escape" && event.target.closest("[data-atlas-node]")) document.getElementById("map-tab-overview").focus();
+});
+
+/* One URL per panel; no other panel is opened or fetched by hash routing. */
+function closeOtherPanels(keep) {
+  const closers = {
+    ideas: closeIdeasPanel,
+    devices: closeDevicesPanel,
+    room: closeRoomPanel,
+    focus: closeFocusPanel,
+    daily: closeDailyPanel,
+    learning: closeLearningPanel,
+    jobs: closeJobsPanel,
+    search: closeSearchPanel,
+    progress: closeProgressPanel,
+    attention: closeAttentionPanel,
+    myself: closeMyselfPanel,
+    map: closeMapPanel,
+    console: closeConsolePanel,
+    tools: closeToolsPanel,
+  };
+  for (const [name, close] of Object.entries(closers)) {
+    if (name !== keep && document.getElementById(`${name}-panel`).classList.contains("is-open")) close();
+  }
+}
+let routingPanel = false;
+function panelOpened(name, route = name) {
+  if (route === "tools") route = "reminders";
+  if (!routingPanel && location.hash !== `#${route}`) history.pushState(null, "", `/workspace#${route}`);
+  routingPanel = true;
+  closeOtherPanels(name);
+  routingPanel = false;
+  const label = window.KyraNavigation.label(route);
+  document.title = `KYRA · ${label}`;
+  document.querySelector(".app-page").textContent = label;
+  window.KyraNavigation.update(route);
+}
+function panelClosed(name) {
+  if (routingPanel) return;
+  const current = location.hash.slice(1);
+  const panel = Object.hasOwn(toolRoutes, current) ? "tools" : current;
+  if (panel === name) {
+    // Defer until the close handler has finished changing visibility.
+    queueMicrotask(() => { if (!document.querySelector(".jobs-panel.is-open")) navigateWorkspace("daily"); });
+  }
+}
+function navigateWorkspace(name) {
+  document.querySelector("#companion-navigation details").open = false;
+  if (location.hash !== `#${name}`) history.pushState(null, "", `/workspace#${name}`);
+  routePanel();
+}
+function routePanel() {
+  let name = location.hash.slice(1);
+  if (name === "tools") name = "reminders";
+  if (!Object.hasOwn(PANEL_OPENERS, name) && !Object.hasOwn(toolRoutes, name)) name = "daily";
+  if (location.hash !== `#${name}`) history.replaceState(null, "", `/workspace#${name}`);
+  const panel = Object.hasOwn(toolRoutes, name) ? "tools" : name;
+  try {
+    routingPanel = true;
+    closeOtherPanels(panel);
+    routingPanel = false;
+    if ((panel === "tools" && toolSection !== toolRoutes[name]) || !document.getElementById(`${panel}-panel`).classList.contains("is-open")) PANEL_OPENERS[panel]();
+    else window.KyraNavigation.update(name);
+  } catch (error) { routingPanel = false; reportScriptError(error, `Panel: ${name}`); }
+}
+document.addEventListener("click", event => {
+  const link = event.target.closest('a[href^="/workspace#"]');
+  if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  navigateWorkspace(link.hash.slice(1));
+  if (link.hasAttribute("data-memory-map")) document.querySelector('[data-map-tab="memory"]').click();
+}, true);
+window.addEventListener("hashchange", routePanel);
+window.addEventListener("popstate", routePanel);
+routePanel();

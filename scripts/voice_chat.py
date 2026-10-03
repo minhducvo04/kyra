@@ -42,6 +42,7 @@ from companion.provider import AuditUnavailable
 from companion.router import TurnRouter, approval_reply, route_and_answer
 from companion.router_log import log_turn
 from companion.voice import FasterWhisperSTT, KokoroTTS
+from companion.voice_text import spoken_reply
 
 
 def speak_interruptibly(audio, sample_rate, keys: Keybindings) -> bool:
@@ -140,7 +141,8 @@ def main() -> None:
             reply = str(exc)
         print(f"{KYRA.name}: {reply}")
 
-        reply_audio, sample_rate = tts.speak(reply)
+        speech, _ = spoken_reply(reply)
+        reply_audio, sample_rate = tts.speak(speech)
         try:
             speak_interruptibly(reply_audio, sample_rate, keys)
         except KeyboardInterrupt:

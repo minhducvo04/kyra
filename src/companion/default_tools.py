@@ -6,6 +6,7 @@ was constructed three times with the same tool list typed out separately
 in each file.
 """
 from companion.approvals import ApprovalStore
+from companion.bulb import bulb_tools
 from companion.focus import focus_tools
 from companion.home import home_tools
 from companion.humidifier import humidifier_tools
@@ -20,9 +21,10 @@ from companion.memory_notes import MarkdownMemoryNotesStore, memory_note_tools
 from companion.news import TechNewsTool
 from companion.outreach import outreach_tools
 from companion.posting_signals import AnalyzePostingTool
+from companion.purifier import purifier_tools
 from companion.reminders import RemindersStore, reminder_tools
 from companion.science import ScienceFactsTool
-from companion.search import SearchKyraDataTool
+from companion.search import LookUpTool, SearchKyraDataTool
 from companion.settings import get_settings
 from companion.tool_runs import ToolRunStore
 from companion.tools import ToolRegistry
@@ -57,8 +59,10 @@ def default_tool_registry(draft_backend: AnthropicLLM | None = None) -> ToolRegi
         + [AnalyzePostingTool(), TargetPostingTool(applications)]
         + focus_tools()
         + humidifier_tools()
+        + purifier_tools()
+        + bulb_tools()
         + home_tools()
-        + [SearchKyraDataTool()]  # opens its index on first use, not here
+        + [SearchKyraDataTool(), LookUpTool()]  # opens indexes and outside search on first use, not here
         + [SuggestInitiativesTool(
             sources=[RemindersSource(reminders), ProjectNotesSource(), PatternsSource(), GitSource(), MemorySource()],
             llm=draft_backend,

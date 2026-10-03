@@ -80,7 +80,7 @@ class ApplyResult:
     application_id: int | None
     company: str
     role: str
-    status: str  # ready_to_submit | needs_attention | (an untouched earlier status)
+    status: str  # prepared | ready_to_submit | needs_attention | (an untouched earlier status)
     steps: list[str] = field(default_factory=list)  # what happened, in order
     attention: list[str] = field(default_factory=list)  # why Duc has to look; empty when ready_to_submit
     resume_tex_path: str | None = None
@@ -288,6 +288,7 @@ def run_apply_pipeline(
     source_url: str = "",
     cover_letter: str = "auto",
     retailor: bool = False,
+    prepare_only: bool = False,
     fetch: Callable = fetch_posting,
     resolve: Callable = find_posting,
     resumes_dir: Path = RESUMES_DIR,
@@ -374,49 +375,50 @@ def run_apply_pipeline(
         except Exception as e:  # noqa: BLE001 - a letter failure must not cost the resume or the fill
             result.attention.append(f"cover letter draft failed: {type(e).__name__}: {e}")
 
-    # 5. Autofill, when an engine exists for this ATS and there is a PDF to attach.
-    engine, ats = engine_for_url(url, engines)
-    resume_name = Path(result.resume_pdf_path).name if result.resume_pdf_path else "the resume"
-    if ats in CANNOT_FILL:
-        result.attention.append(CANNOT_FILL[ats].format(url=url, resume=resume_name))
-    elif engine is None:
-        result.attention.append(f"no autofill engine for {ats} postings yet - fill the form by hand with {resume_name}")
-    elif not result.resume_pdf_path:
-        result.attention.append("autofill skipped: no compiled resume to attach")
-    else:
-        missing = replace(profile, resume_path=result.resume_pdf_path).is_ready_for_autofill()
-        if missing:
-            result.attention.append(f"autofill skipped: profile is missing {', '.join(missing)}")
+    if not prepare_only:
+        # 5. Autofill, when an engine exists for this ATS and there is a PDF to attach.
+        engine, ats = engine_for_url(url, engines)
+        resume_name = Path(result.resume_pdf_path).name if result.resume_pdf_path else "the resume"
+        if ats in CANNOT_FILL:
+            result.attention.append(CANNOT_FILL[ats].format(url=url, resume=resume_name))
+        elif engine is None:
+            result.attention.append(f"no autofill engine for {ats} postings yet - fill the form by hand with {resume_name}")
+        elif not result.resume_pdf_path:
+            result.attention.append("autofill skipped: no compiled resume to attach")
         else:
-            note(f"filling the {ats} form in a browser window (nothing gets submitted)")
-            try:
-                report = fill_with_receipt(
-                    engine, url, replace(profile, resume_path=result.resume_pdf_path),
-                    via="apply_pipeline", record_fill=record_fill,
-                )
-                result.autofill_summary_path = report.summary_path
-                result.autofill_filled = len(report.filled)
-                result.autofill_skipped = [s.label for s in report.skipped]
-                # What stops an application is what the FORM marks required, not what kind of
-                # field it is: an unanswered optional custom question is normal on nearly every
-                # posting, and a blank required one is not. Each ATS marks it differently, so
-                # job_autofill reads the marking and SkippedField.required carries it here.
-                hard = [s for s in report.skipped if s.required]
-                for s in hard:
-                    result.attention.append(f"autofill could not fill '{s.label}': {s.reason}")
-                note(f"filled {len(report.filled)} field(s), {len(report.skipped)} left for you")
-            except Exception as e:  # noqa: BLE001 - report it, keep the resume and the tracker entry
-                result.attention.append(f"autofill failed: {type(e).__name__}: {e}")
+            missing = replace(profile, resume_path=result.resume_pdf_path).is_ready_for_autofill()
+            if missing:
+                result.attention.append(f"autofill skipped: profile is missing {', '.join(missing)}")
+            else:
+                note(f"filling the {ats} form in a browser window (nothing gets submitted)")
+                try:
+                    report = fill_with_receipt(
+                        engine, url, replace(profile, resume_path=result.resume_pdf_path),
+                        via="apply_pipeline", record_fill=record_fill,
+                    )
+                    result.autofill_summary_path = report.summary_path
+                    result.autofill_filled = len(report.filled)
+                    result.autofill_skipped = [s.label for s in report.skipped]
+                    # What stops an application is what the FORM marks required, not what kind of
+                    # field it is: an unanswered optional custom question is normal on nearly every
+                    # posting, and a blank required one is not. Each ATS marks it differently, so
+                    # job_autofill reads the marking and SkippedField.required carries it here.
+                    hard = [s for s in report.skipped if s.required]
+                    for s in hard:
+                        result.attention.append(f"autofill could not fill '{s.label}': {s.reason}")
+                    note(f"filled {len(report.filled)} field(s), {len(report.skipped)} left for you")
+                except Exception as e:  # noqa: BLE001 - report it, keep the resume and the tracker entry
+                    result.attention.append(f"autofill failed: {type(e).__name__}: {e}")
 
     # 6. Status. Never `applied` - that is Duc's click.
-    result.status = "needs_attention" if result.attention else "ready_to_submit"
+    result.status = "needs_attention" if result.attention else "prepared" if prepare_only else "ready_to_submit"
     stamp = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
     summary = f"[apply {stamp}] {result.status}"
     if result.autofill_summary_path:
         summary += f"; autofill report {result.autofill_summary_path}"
     if result.attention:
         summary += "; attention: " + " | ".join(result.attention)
-    store.update_status(app.id, result.status, notes=f"{app.notes}\n{summary}" if app.notes else summary)
+    store.update_status(app.id, result.status, notes=summary)
     note(f"tracker #{app.id} -> {result.status}")
     logger.info("apply pipeline %s -> %s (%d attention)", url, result.status, len(result.attention))
     return result

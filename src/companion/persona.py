@@ -11,12 +11,14 @@ class Persona:
     tone_examples: list[str] = field(default_factory=list)
 
     def system_prompt(self) -> str:
+        from companion.session_state import get_mode
+
         traits_str = ", ".join(self.traits)
         examples = "\n".join(f"- {ex}" for ex in self.tone_examples)
         return (
             f"You are {self.name}, an AI companion. "
             f"Your personality: {traits_str}.\n"
-            f"Example of your tone:\n{examples}\n\n{BRIEF_RULES}"
+            f"Example of your tone:\n{examples}\n\n{BRIEF_RULES}\nCurrent session mode: {get_mode()}."
         )
 
 

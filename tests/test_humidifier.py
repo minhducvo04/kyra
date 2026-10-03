@@ -46,7 +46,7 @@ class FakeHumidifier(Humidifier):
         self.state = {
             "name": "Bedroom", "power": "on", "online": True, "mode": "auto", "humidity": 59,
             "target_humidity": 45, "mist_level": 1, "display": True, "water_lacks": False,
-            "night_light": {"on": False, "brightness": 40},
+            "night_light": {"on": False, "brightness": 40}, "device_id": "cid-humidifier-fixture",
         }
 
     def status(self) -> dict:
@@ -182,6 +182,7 @@ class _FakeDevice:
 
     def __init__(self, refuse: str = "", ignore: str = "", no_light: bool = False):
         self.device_name, self.device_type, self.state = "Bedroom", "LUH-D301S-WUSR", _FakeState()
+        self.cid = "cid-humidifier-fixture"  # a fictional stable id, as pyvesync devices carry
         self.refuse, self.ignore, self._cloud = refuse, ignore, dict(vars(self.state))
         self.light_payloads: list[dict] = []
         self.light: dict | None = None if no_light else {
@@ -268,7 +269,7 @@ def test_vesync_status_maps_the_device_state(monkeypatch):
     assert status == {
         "name": "Bedroom", "power": "on", "online": True, "mode": "auto", "humidity": 59,
         "target_humidity": 45, "mist_level": 1, "display": True, "water_lacks": False,
-        "night_light": {"on": False, "brightness": 40},
+        "night_light": {"on": False, "brightness": 40}, "device_id": "cid-humidifier-fixture",
     }
     assert (seen["username"], seen["password"]) == (USERNAME, PASSWORD)
 

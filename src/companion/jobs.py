@@ -180,6 +180,12 @@ class DbJobQueue(JobQueue):
             rows = conn.execute(select(J).order_by(J.c.id.desc()).limit(max(0, limit)))
             return [self._row_to_job(row) for row in rows]
 
+    def active(self, kind: str) -> "list[Job]":
+        """Queued and running jobs of one kind, oldest first."""
+        with self._engine.connect() as conn:
+            rows = conn.execute(select(J).where(J.c.kind == kind, J.c.status.in_(("queued", "running"))).order_by(J.c.id))
+            return [self._row_to_job(row) for row in rows]
+
 
 def run_one(queue: JobQueue, handlers: dict[str, Handler]) -> bool:
     """Claim and run a single job. Returns False when the queue was empty.

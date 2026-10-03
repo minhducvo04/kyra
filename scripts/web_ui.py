@@ -27,13 +27,23 @@ def main() -> None:
     settings = get_settings()
     parser.add_argument("--port", type=int, default=settings.port)
     parser.add_argument("--host", default=settings.host)
+    parser.add_argument("--tls-cert", default=settings.tls_cert, help="TLS certificate file (requires --tls-key)")
+    parser.add_argument("--tls-key", default=settings.tls_key, help="TLS private key file (requires --tls-cert)")
     args = parser.parse_args()
 
+    from companion.webapp import serve_args
+
+    try:
+        options = serve_args(args.host, args.port, args.tls_cert, args.tls_key, settings=settings)
+    except ValueError as exc:
+        parser.error(str(exc))
     configure_logging()
-    print(f"Kyra web UI: http://{args.host}:{args.port}")
+    scheme = "https" if args.tls_cert else "http"
+    host = f"[{args.host}]" if ":" in args.host else args.host
+    print(f"Kyra web UI: {scheme}://{host}:{args.port}")
     # uvicorn's own level follows KYRA_LOG_LEVEL: at INFO the access log reaches CloudWatch in the
     # container; on the laptop the default INFO is fine too. Below INFO uvicorn goes quiet.
-    uvicorn.run("companion.webapp:app", host=args.host, port=args.port, log_level=settings.log_level.lower())
+    uvicorn.run("companion.webapp:app", **options)
 
 
 if __name__ == "__main__":

@@ -155,3 +155,14 @@ body[data-focus-evening="true"] {
   .app-header nav { order: 1; margin-left: 0; flex-basis: 100%; }
   .app-status { margin-left: auto; }
 }
+
+/* Shared companions: navigation only; never a model or permission control. */
+.companion-nav { display:flex; flex:0 0 auto; gap:12px; padding:10px 24px; border-bottom:1px solid var(--grid); background:var(--void); color:var(--text); font:14px/1.35 var(--font-sans); position:relative; z-index:9; }
+.companion-link { display:flex; align-items:center; gap:10px; min-height:48px; color:var(--text); text-decoration:none; border:1px solid transparent; padding:2px 12px 2px 2px; border-radius:var(--radius); }
+.companion-link:hover { background:var(--panel-2); border-color:var(--grid); }
+.companion-link svg { width:52px; height:52px; flex:none; overflow:visible; }
+.companion-link span { font-weight:650; }
+.companion-link small { display:block; color:var(--text-dim); font-size:12px; font-weight:400; margin-top:2px; }
+.welcome-companion { width:132px; height:132px; display:block; margin:0 auto 12px; }
+@media(max-width:560px) { .companion-nav { padding:8px 12px; gap:4px; justify-content:space-between; } .companion-link { gap:4px; padding-right:4px; font-size:13px; } .companion-link svg { width:40px; height:40px; } .companion-link small { font-size:10px; } }
+@media(prefers-reduced-motion:reduce) { .companion-nav *, .welcome-companion { animation:none !important; transition:none !important; } }

@@ -263,6 +263,7 @@ def default_gate() -> OutboundGate:
         ReleasePolicy(settings.release_grants), audit, settings.outbound_gate,
         secrets=tuple(value for value in (
             settings.anthropic_api_key, settings.api_token, settings.vesync_password.get_secret_value(),
+            settings.kasa_username.get_secret_value(), settings.kasa_password.get_secret_value(),
         ) if value),
     )
     return gate

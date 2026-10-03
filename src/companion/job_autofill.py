@@ -35,15 +35,20 @@ not an afterthought.
 """
 import re
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
+from uuid import uuid4
 
 from companion.paths import DATA_DIR
 from companion.privacy import PrivacyClass, Tier
 from companion.profile import ApplicantProfile, load_profile
 from companion.tools import Tool
+
+_BROWSER_THREAD = ThreadPoolExecutor(max_workers=1, thread_name_prefix="kyra-fill")
+_BROWSER_RUNTIME = None  # Accessed only on the owning thread; shared across engines/windows.
 
 RESULT_LABEL = (Tier.T2, frozenset({PrivacyClass.job_search}))
 
@@ -107,6 +112,7 @@ class FillReport:
     filled: list[FilledField] = field(default_factory=list)
     skipped: list[SkippedField] = field(default_factory=list)
     summary_path: str = ""
+    window: str | None = None
 
     def render_markdown(self) -> str:
         lines = [f"# Autofill report — {self.url}", "", f"Run at: {datetime.now().astimezone().isoformat()}", ""]
@@ -132,6 +138,9 @@ class AutofillEngine(ABC):
 
     @abstractmethod
     def fill(self, url: str, profile: ApplicantProfile) -> FillReport: ...
+
+    def is_live(self, window: str) -> bool:
+        return False
 
 
 class LabeledFormEngine(AutofillEngine):
@@ -161,11 +170,38 @@ class LabeledFormEngine(AutofillEngine):
         # headless=False by default - Duc should see the browser fill
         # live, not just trust a log file. This is the point of
         # "fill-only, you submit": the window stays open for him.
+        self._windows = {}
         self._headless = headless
         self._log_dir = Path(log_dir)
         self._log_dir.mkdir(parents=True, exist_ok=True)
 
     def fill(self, url: str, profile: ApplicantProfile) -> FillReport:
+        # Playwright sync objects must stay on their owning thread, including later liveness reads.
+        return _BROWSER_THREAD.submit(self._fill, url, profile).result()
+
+    def is_live(self, window: str) -> bool:
+        return _BROWSER_THREAD.submit(self._is_live, window).result()
+
+    def _is_live(self, window):
+        handles = self._windows.get(window)
+        if handles is None:
+            return False
+        _, browser, page = handles
+        try:
+            if browser.is_connected() and not page.is_closed():
+                page.title()  # Process browser events; a cached page flag alone can be stale.
+                return True
+        except Exception:
+            pass
+        self._windows.pop(window, None)
+        try:
+            browser.close()
+        except Exception:
+            pass
+        return False
+
+    def _fill(self, url: str, profile: ApplicantProfile) -> FillReport:
+        global _BROWSER_RUNTIME
         missing = profile.is_ready_for_autofill()
         if missing:
             raise ValueError(f"profile isn't ready for autofill, missing: {missing}")
@@ -173,11 +209,17 @@ class LabeledFormEngine(AutofillEngine):
         from playwright.sync_api import sync_playwright
 
         report = FillReport(url=url)
-        playwright = sync_playwright().start()
+        # A second sync session cannot start while this thread's first event loop runs.
+        started = _BROWSER_RUNTIME is None
+        if started:
+            _BROWSER_RUNTIME = sync_playwright().start()
+        playwright = _BROWSER_RUNTIME
         try:
             browser = playwright.chromium.launch(headless=self._headless)
         except Exception as exc:  # noqa: BLE001 - the message is the point, not the type
-            playwright.stop()
+            if started:
+                playwright.stop()
+                _BROWSER_RUNTIME = None
             # requirements-web.txt installs the playwright package but the image never
             # runs `playwright install`, so in a container this used to surface as an
             # opaque traceback. Chromium is deliberately not in the image: autofill opens
@@ -211,6 +253,9 @@ class LabeledFormEngine(AutofillEngine):
         self._attach_resume(page, profile, report)
 
         report.summary_path = self._save_summary(report)
+        if not self._headless:
+            report.window = uuid4().hex
+            self._windows[report.window] = (playwright, browser, page)
         # Deliberately don't close the browser or call playwright.stop()
         # here - the window needs to stay open for Duc to review and
         # submit. The process holding it open is the caller's script.
@@ -431,7 +476,7 @@ class AshbyAutofillEngine(LabeledFormEngine):
 
 
 class LeverAutofillEngine(LabeledFormEngine):
-    """Lever (jobs.lever.co). Built by reading a real live Palantir form
+    """Lever (jobs.lever.co). Built by reading a real live Lever form
     (2026-09-07).
 
     Lever is the reason `_form_fields` is a hook rather than a fixed label
@@ -439,7 +484,7 @@ class LeverAutofillEngine(LabeledFormEngine):
     by `name` attributes - `name`, `email`, `phone`, `org`, and the bracketed
     `urls[LinkedIn]` / `urls[GitHub]` / `urls[Portfolio]`. Everything else on
     the page is a `cards[<uuid>][fieldN]` custom question, very often a
-    checkbox group (the Palantir form has one listing every language), which
+    checkbox group (the form it was built from has one listing every language), which
     this must never tick.
     """
 
@@ -484,7 +529,7 @@ class LeverAutofillEngine(LabeledFormEngine):
         cards = page.locator('[name^="cards["]').count()
         if cards:
             # Lever's cards are a group and at least one is routinely required (the
-            # Palantir form has 60, including required ones), so the group is treated
+            # form it was built from has 60, including required ones), so the group is treated
             # as required rather than letting a whole form's questions go unflagged.
             report.skipped.append(SkippedField(
                 label=f"{cards} custom question field(s)", reason="Lever custom questions - answer these yourself",

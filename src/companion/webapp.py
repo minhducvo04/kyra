@@ -18,6 +18,7 @@ import time
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from functools import cache, cached_property
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Literal
 from urllib.parse import unquote
@@ -32,12 +33,13 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, field_validator, model_validator
 
 from companion import session_log, webauth
 from companion.apply_pipeline import ApplyError, engine_for_url, fill_with_receipt, run_apply_pipeline
 from companion.approvals import ApprovalError, ApprovalNotFound, ApprovalRequired
-from companion.brief import check, short_name
+from companion.atlas import load_atlas
+from companion.brief import Reply, TextStream, check, short_name
 from companion.checkpoints import CheckpointConflict, CheckpointDraft, CheckpointStore, DbCheckpointStore
 from companion.config import require_api_key
 from companion.conversation import ConversationManager
@@ -56,6 +58,7 @@ from companion.focus import (
 )
 from companion.github_profile import extract_username as extract_github_username
 from companion.github_profile import fetch_github_projects
+from companion.ideas import IdeaDraft, IdeaRequestConflict, IdeaStore, build_desk, load_desk, resolve_draft
 from companion.input_labels import default_input_labeller
 from companion.job_applications import (
     VALID_STATUSES,
@@ -71,7 +74,8 @@ from companion.job_autofill import GreenhouseAutofillEngine, default_engines, re
 from companion.job_documents import JobDocumentStore
 from companion.job_posting_fetch import fetch_posting as _fetch_posting
 from companion.jobs import DbJobQueue, Handler, start_inline_worker
-from companion.learning import LearningRequestConflict, LearningStore
+from companion.learning import LearningRequestConflict, LearningStore, StaleReview
+from companion.lessons import check_answer, list_lessons
 from companion.llm import AnthropicLLM, TurnCancelled, build_anthropic_client, build_llm, voice_backends
 from companion.memory import ChromaMemoryStore
 from companion.memory_map import build_map
@@ -79,17 +83,20 @@ from companion.memory_notes import SUGGESTED_CATEGORIES, MarkdownMemoryNotesStor
 from companion.news import TechNewsTool
 from companion.outbound import OutboundAudit, ReleaseRefused, default_gate
 from companion.outbound import report as outbound_report
-from companion.paths import DATA_DIR, WEB_DIR
+from companion.paths import DATA_DIR, WEB_DIR, write_json
 from companion.paths import GENERATED_RESUMES_DIR as RESUME_PDF_DIR
 from companion.persona import KYRA
 from companion.privacy import PrivacyClass, Tier
 from companion.profile import load_profile, save_profile
 from companion.provider import AuditUnavailable, current_release_label, release_label, run_in_scope
 from companion.reminders import RemindersStore
-from companion.router import TurnRouter, approval_reply, route_and_answer_verbose
+from companion.router import TurnRouter, approval_reply, handle_mode_command, route_and_answer_verbose
 from companion.science import ScienceFactsTool
+from companion.session_state import get_mode
 from companion.settings import get_settings
-from companion.voice_text import spoken_text, take_sentences
+from companion.space import DeviceReader, GestureLedger, GestureRefused, RoomRegistry, Thing, identity_of, map_gesture
+from companion.system_map import LANES, load_system_map
+from companion.voice_text import SpokenBudget, spoken_reply, spoken_text, take_sentences
 
 _input_labeller = default_input_labeller()
 
@@ -97,12 +104,39 @@ app = FastAPI(title="Kyra")
 install_error_handlers(app)
 
 _LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+
+
+def serve_args(host: str, port: int, tls_cert: str, tls_key: str, *, settings) -> dict:
+    """Validate the listener policy before uvicorn binds; never resolve names or read keys."""
+    from companion.working_loop import PolicyRefused
+
+    try:
+        loopback = ip_address(host).is_loopback
+    except ValueError:
+        loopback = host.lower() == "localhost"
+    if not loopback and not settings.api_token.strip():
+        raise PolicyRefused("token_required")
+    if bool(tls_cert) != bool(tls_key):
+        raise PolicyRefused("tls_pair_required")
+    if not loopback and not tls_cert and not settings.tls_terminated_upstream:
+        raise PolicyRefused("tls_required")
+    args = {"host": host, "port": port, "log_level": settings.log_level.lower(),
+            "proxy_headers": False}  # Authorization uses the socket peer, never forwarded headers.
+    if tls_cert:
+        args.update(ssl_certfile=tls_cert, ssl_keyfile=tls_key)
+    return args
+
+
 # Reachable without authenticating, and each for a reason: /healthz so an
 # orchestrator can tell a live task from a dead one (gating it makes every
 # deploy restart-loop the moment a token is set), /login and /api/login or
 # there is no way to obtain a session, /static because the login page needs
 # its stylesheet and neither asset is a secret.
 _OPEN_PATHS = {"/healthz", "/login", "/api/login"}
+# These endpoints authenticate their own device/bridge credentials, never the owner token.
+_CAST_CREDENTIAL_PATHS = {"/api/cast/session", "/api/cast/bridge/redeem", "/api/cast/bridge/ticket",
+                          "/api/cast/bridge/verify", "/api/cast/bridge/check", "/api/cast/bridge/close",
+                          "/api/cast/bridge/health", "/api/cast/bridge/release"}
 # A wrong token is cheap to retry over HTTP, so slow it down per caller.
 _LOGIN_MAX_FAILURES = 5
 _LOGIN_WINDOW_SECONDS = 300
@@ -154,10 +188,13 @@ async def _require_api_token(request: Request, call_next):
     token = settings.api_token
     path = request.url.path
     if (path.rstrip("/") == "/busy" or path == "/api/busy" or path.startswith("/api/busy/")
-            or path in {"/static/busy.html", "/static/busy.js", "/static/busy.css"}):
+            or path in {"/static/busy.html", "/static/busy.js", "/static/busy.css"}
+            or path.startswith("/busy/") or path.startswith("/static/busy-")):
         if settings.tenant != "busy":
             return JSONResponse(status_code=404, content={"error": {"code": "not_found", "message": "Not found"}})
-    if not token or path in _OPEN_PATHS or path.startswith("/static/"):
+    if (not token or path in _OPEN_PATHS or path.startswith("/static/")
+            or (request.method == "POST" and path in _CAST_CREDENTIAL_PATHS)
+            or (request.method == "GET" and (path == "/api/cast/bridge/opens" or path.startswith("/cast/artifacts/")))):
         return await call_next(request)
     if _authorized(request, token):
         return await call_next(request)
@@ -287,6 +324,7 @@ class ChatIn(BaseModel):
 
 class ChatOut(BaseModel):
     reply: str
+    rest: str = ""
     backend: str  # the mode ("claude"/"local"/"auto"); in auto mode, actual_backend says what the router picked
     actual_backend: str | None = None
     path: str | None = None  # "text" | "tool", auto mode only
@@ -340,6 +378,15 @@ def busy_page() -> FileResponse:
     if get_settings().tenant != "busy":
         raise ApiError(404, "not_found", "Not found")
     return FileResponse(WEB_DIR / "busy.html")
+
+
+@app.get("/busy/office")
+@app.get("/busy/assistant")
+def busy_office_page() -> FileResponse:
+    """One Busy shell with tabs; /busy/assistant opens it on the Trợ lý tab (busy-office.js reads the path)."""
+    if get_settings().tenant != "busy":
+        raise ApiError(404, "not_found", "Not found")
+    return FileResponse(WEB_DIR / "busy-office.html")
 
 
 @app.get("/api/busy/workflows")
@@ -410,8 +457,752 @@ def busy_page_image(task_id: int, page_number: int) -> FileResponse:
     return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
+_busy_assistant_instance = None
+
+
+def _busy_assistant():
+    """One Assistant per data dir (it holds the lazily built chat client); tests swap it out."""
+    global _busy_assistant_instance
+    from companion.busy_assistant import Assistant
+
+    settings = get_settings()
+    if settings.tenant != "busy":
+        raise ApiError(404, "not_found", "Not found")
+    root = settings.data_dir.resolve()
+    if _busy_assistant_instance is None or _busy_assistant_instance.data_dir != root:
+        _busy_assistant_instance = Assistant(root, office=_busy_office)
+    return _busy_assistant_instance
+
+
+def _assistant_call(fn, *args):
+    from companion.busy_assistant import AssistantRefused
+    from companion.llm import ProviderUnavailable
+
+    try:
+        return fn(*args)
+    except AssistantRefused as exc:
+        raise ApiError(400, "refused", str(exc)) from exc
+    except ProviderUnavailable as exc:
+        raise ApiError(503, "model_unavailable", "Trợ lý tạm thời không trả lời được, bác thử lại sau") from exc
+
+
+class BusyAssistantChatIn(BaseModel):
+    message: str
+    history: list[dict] = []
+    path: str | None = None
+
+
+class BusyAssistantApplyIn(BaseModel):
+    id: str
+
+
+class BusyAssistantFeedbackIn(BaseModel):
+    text: str
+
+
+@app.get("/api/busy/assistant/files")
+def busy_assistant_files(path: str = "") -> dict:
+    assistant = _busy_assistant()
+    return _assistant_call(assistant.folder.list, path)
+
+
+@app.get("/api/busy/assistant/file")
+def busy_assistant_file(path: str) -> dict:
+    assistant = _busy_assistant()
+    return _assistant_call(assistant.folder.preview, path, True)
+
+
+@app.get("/api/busy/assistant/sheet")
+def busy_assistant_sheet(path: str, sheet: str, start: int = 1) -> dict:
+    """More rows of one sheet for the grid (100 at a time)."""
+    from companion.busy_assistant import xlsx_grid
+
+    assistant = _busy_assistant()
+    return _assistant_call(lambda: xlsx_grid(assistant.folder.resolve(path), sheet, max(1, start))[0])
+
+
+class BusyCellsIn(BaseModel):
+    path: str
+    sheet: str
+    changes: list[dict]
+    overwrite_formulas: bool = False
+
+
+class BusySheetIn(BaseModel):
+    path: str
+    op: str
+    sheet: str | None = None
+    name: str | None = None
+    date: str | None = None
+    check: bool = False
+
+
+@app.post("/api/busy/assistant/cells")
+def busy_assistant_cells(body: BusyCellsIn) -> dict:
+    assistant = _busy_assistant()
+    return _assistant_call(assistant.edit_cells, body.path, body.sheet, body.changes, body.overwrite_formulas)
+
+
+@app.post("/api/busy/assistant/sheets")
+def busy_assistant_sheets(body: BusySheetIn) -> dict:
+    assistant = _busy_assistant()
+    return _assistant_call(lambda: assistant.sheet_action(None if body.check else _busy_office(), body.path, body.op,
+                                                          body.sheet, body.name, body.date, body.check))
+
+
+@app.post("/api/busy/assistant/chat")
+def busy_assistant_chat(body: BusyAssistantChatIn) -> dict:
+    assistant = _busy_assistant()
+    return _assistant_call(assistant.chat, body.message, body.history, body.path)
+
+
+@app.post("/api/busy/assistant/apply")
+def busy_assistant_apply(body: BusyAssistantApplyIn) -> dict:
+    assistant = _busy_assistant()
+    return _assistant_call(lambda: assistant.apply(body.id, office=_busy_office))
+
+
+@app.post("/api/busy/assistant/feedback")
+def busy_assistant_feedback(body: BusyAssistantFeedbackIn) -> dict:
+    return _assistant_call(_busy_assistant().feedback, body.text)
+
+
+@app.get("/api/busy/messages")
+def busy_messages() -> dict:
+    """What the Busy user sent to Duc (help requests and Góp ý) with chưa đọc / đã đọc."""
+    from companion import busy_inbox
+
+    return {"items": busy_inbox.messages(_busy_assistant().data_dir, 50)}
+
+
+@app.post("/api/busy/assistant/daily-draft")
+def busy_assistant_daily_draft() -> dict:
+    return _busy_assistant().daily_draft()
+
+
+def _daily_report():
+    from companion.busy_daily_report import DailyReport
+
+    settings = get_settings()
+    if settings.tenant != "busy":
+        raise ApiError(404, "not_found", "Not found")
+    return DailyReport(settings.data_dir.resolve())
+
+
+class DailyReportPrepareIn(BaseModel):
+    date: str | None = None
+
+
+class DailyReportSentIn(BaseModel):
+    date: str
+    sent: bool
+    template: str | None = None
+
+
+def _report_day(text: str | None):
+    from datetime import date
+
+    try:
+        return date.fromisoformat(text) if text else datetime.now().date()
+    except ValueError as exc:
+        raise ApiError(400, "invalid_date", "Ngày không hợp lệ") from exc
+
+
+@app.get("/api/busy/daily-report")
+def busy_daily_report_status() -> dict:
+    report = _daily_report()
+    try:
+        return {"configured": True, **report.status(datetime.now())}
+    except FileNotFoundError:
+        return {"configured": False, "config_path": str(report.config_path)}
+
+
+@app.post("/api/busy/daily-report/prepare")
+def busy_daily_report_prepare(body: DailyReportPrepareIn) -> dict:
+    from companion.busy_daily_report import DailyReportRefused
+
+    try:
+        return _daily_report().prepare(_report_day(body.date))
+    except DailyReportRefused as exc:
+        raise ApiError(409, "refused", str(exc)) from exc
+    except (FileNotFoundError, ValueError) as exc:
+        raise ApiError(400, "not_configured", f"Cấu hình chưa đúng: {exc}") from exc
+
+
+@app.post("/api/busy/daily-report/drafts")
+def busy_daily_report_drafts(body: DailyReportPrepareIn) -> dict:
+    from companion.busy_daily_report import DailyReportRefused
+
+    try:
+        return _daily_report().drafts(_report_day(body.date))
+    except DailyReportRefused as exc:
+        raise ApiError(409, "refused", str(exc)) from exc
+    except (FileNotFoundError, ValueError) as exc:
+        raise ApiError(400, "not_configured", f"Cấu hình chưa đúng: {exc}") from exc
+
+
+@app.post("/api/busy/daily-report/sent")
+def busy_daily_report_sent(body: DailyReportSentIn) -> dict:
+    try:
+        return _daily_report().mark_sent(_report_day(body.date), body.sent, body.template)
+    except (FileNotFoundError, ValueError) as exc:
+        raise ApiError(400, "not_configured", f"Cấu hình chưa đúng: {exc}") from exc
+
+
+_busy_office_instance = None
+_busy_scheduler = None
+
+
+def _busy_office():
+    """One Office per data dir (contract-v2); tests swap it out."""
+    global _busy_office_instance
+    from companion.busy_office import Office
+
+    settings = get_settings()
+    if settings.tenant != "busy":
+        raise ApiError(404, "not_found", "Not found")
+    root = settings.data_dir.resolve()
+    if _busy_office_instance is None or _busy_office_instance.data_dir != root:
+        _busy_office_instance = Office(root)
+    return _busy_office_instance
+
+
+def _office_call(fn, *args, **kwargs):
+    from companion.busy_office import OfficeRefused
+    from companion.llm import ProviderUnavailable
+
+    try:
+        return fn(*args, **kwargs)
+    except OfficeRefused as exc:
+        raise ApiError(409, "refused", str(exc)) from exc
+    except ProviderUnavailable as exc:
+        raise ApiError(503, "model_unavailable", "Trợ lý tạm thời không trả lời được, bác thử lại sau") from exc
+
+
+def _office_now(text: str | None) -> datetime | None:
+    """A test/demo override of "today" (YYYY-MM-DD, noon); None means now."""
+    if not text:
+        return None
+    return datetime.combine(_report_day(text), datetime.min.time()).replace(hour=12)
+
+
+@app.on_event("startup")
+def _start_busy_scheduler() -> None:
+    """Busy tenant only, and only where background workers run (tests set KYRA_INLINE_WORKER=false)."""
+    global _busy_scheduler
+    settings = get_settings()
+    if settings.tenant != "busy" or not settings.inline_worker or _busy_scheduler is not None:
+        return
+    from companion.busy_office import Scheduler
+
+    _busy_scheduler = Scheduler(_busy_office()).start()
+    logger.info("busy office scheduler started")
+
+
+class BusyDailyIn(BaseModel):
+    date: str | None = None
+
+
+class BusyDraftIn(BaseModel):
+    refresh_attachment: bool = False
+
+
+class BusyAutoIn(BaseModel):
+    enabled: bool
+    time: str
+
+
+class BusyLogIn(BaseModel):
+    text: str
+    at: str | None = None
+
+
+class BusyUndoIn(BaseModel):
+    entry_id: str
+
+
+class BusyQuickIn(BaseModel):
+    message: str
+    history: list[dict] = []
+
+
+@app.get("/api/busy/daily/status")
+def busy_daily_status(date: str | None = None) -> dict:
+    return _office_call(_busy_office().status, _office_now(date))
+
+
+@app.post("/api/busy/daily/prepare")
+def busy_daily_prepare(body: BusyDailyIn | None = None) -> dict:
+    return _office_call(_busy_office().prepare, _office_now(body.date if body else None))
+
+
+@app.post("/api/busy/daily/draft")
+def busy_daily_draft(body: BusyDraftIn | None = None) -> dict:
+    return _office_call(_busy_office().draft, bool(body and body.refresh_attachment))
+
+
+@app.post("/api/busy/daily/sent")
+def busy_daily_sent() -> dict:
+    return _office_call(_busy_office().mark_sent)
+
+
+@app.put("/api/busy/daily/auto")
+def busy_daily_auto(body: BusyAutoIn) -> dict:
+    return _office_call(_busy_office().set_auto, body.enabled, body.time)
+
+
+@app.get("/api/busy/log")
+def busy_log(limit: int = 100) -> dict:
+    return _busy_office().log(limit)
+
+
+@app.post("/api/busy/log")
+def busy_log_add(body: BusyLogIn) -> dict:
+    return _office_call(_busy_office().add_note, body.text, body.at)
+
+
+@app.get("/api/busy/reminders")
+def busy_reminders() -> list[dict]:
+    return _busy_office().reminders()
+
+
+@app.get("/api/busy/reminders/due")
+def busy_reminders_due() -> list[dict]:
+    return _busy_office().due()
+
+
+@app.post("/api/busy/reminders")
+def busy_reminder_save(body: dict) -> dict:
+    return _office_call(_busy_office().save_reminder, body)
+
+
+@app.delete("/api/busy/reminders/{rid}")
+def busy_reminder_delete(rid: str) -> dict:
+    return _office_call(_busy_office().delete_reminder, rid)
+
+
+@app.delete("/api/busy/reminders")
+def busy_reminder_delete_query(id: str) -> dict:
+    return _office_call(_busy_office().delete_reminder, id)
+
+
+@app.post("/api/busy/undo")
+def busy_undo(body: BusyUndoIn) -> dict:
+    return _office_call(_busy_office().undo, body.entry_id)
+
+
+@app.post("/api/busy/quick")
+def busy_quick(body: BusyQuickIn) -> dict:
+    return _office_call(_busy_office().quick, body.message, body.history)
+
+
+# --- Duc's read-only inbox of Busy messages (personal tenant) ----------------------------------------------------------
+
+_busy_inbox_poller = None
+
+
+def _personal_dir() -> Path:
+    settings = get_settings()
+    if settings.tenant != "personal":
+        raise ApiError(404, "not_found", "Not found")
+    return settings.data_dir.resolve()
+
+
+class BusyInboxReadIn(BaseModel):
+    ids: list[str] = []
+    all: bool = False
+
+
+class BusyInboxDoneIn(BaseModel):
+    uid: str
+
+
+@app.get("/api/busy-inbox")
+def busy_inbox_list() -> dict:
+    from companion import busy_inbox
+
+    return busy_inbox.inbox(_personal_dir())
+
+
+@app.post("/api/busy-inbox/read")
+def busy_inbox_read(body: BusyInboxReadIn) -> dict:
+    from companion import busy_inbox
+
+    return busy_inbox.mark_inbox(_personal_dir(), None if body.all else body.ids)
+
+
+@app.post("/api/busy-inbox/done")
+def busy_inbox_done(body: BusyInboxDoneIn) -> dict:
+    """"Đã xử lý": marks the Busy item read and done (stops the daily nudge) and its bell notification read."""
+    from companion import busy_inbox
+
+    personal = _personal_dir()
+    out = busy_inbox.mark_inbox(personal, [body.uid], done=True)
+    notification = busy_inbox.notification_of(personal, body.uid)
+    if notification:
+        from companion.team_chat import TeamStore
+        from companion.team_threads import Store
+
+        Store(TeamStore().root).mark_read([notification])
+    return out
+
+
+@app.on_event("startup")
+def _start_busy_inbox_poller() -> None:
+    """Personal tenant only, where background workers run; it reads Busy data dirs named in busy_inbox.json."""
+    global _busy_inbox_poller
+    settings = get_settings()
+    if settings.tenant != "personal" or not settings.inline_worker or _busy_inbox_poller is not None:
+        return
+    from companion.busy_inbox import Poller
+
+    _busy_inbox_poller = Poller(settings.data_dir.resolve()).start()
+
+
+_phone_link = None
+
+
+@app.on_event("startup")
+def _start_phone_link() -> None:
+    """Busy and personal tenants, only where background workers run and only when <data_dir>/phone_link.json is
+    complete (scripts/phone_link.py pair); otherwise the phone link stays off."""
+    global _phone_link
+    settings = get_settings()
+    if not settings.inline_worker or _phone_link is not None:
+        return
+    from companion import phone_link
+
+    office = _busy_office() if settings.tenant == "busy" else None
+    _phone_link = phone_link.start_if_configured(settings.tenant, settings.data_dir.resolve(), office)
+    if _phone_link is not None:
+        logger.info("phone link started")
+
+
+# ---- Kyra Văn phòng: first-run setup (busy_setup) and the Windows updater (busy_update) ----
+
+@app.get("/busy/setup")
+def busy_setup_page() -> HTMLResponse:
+    if get_settings().tenant != "busy":
+        raise ApiError(404, "not_found", "Not found")
+    html = (WEB_DIR / "busy-setup.html").read_text(encoding="utf-8")
+    return HTMLResponse(html.replace('</main>', '<p><a href="/busy/report">Gửi báo lỗi cho Duc</a></p></main>'))
+
+
+# Diagnostics stays local until the user opens and sends the mail draft.
+@app.get("/busy/report")
+def busy_report_page() -> FileResponse:
+    if get_settings().tenant != "busy":
+        raise ApiError(404, "not_found", "Not found")
+    return FileResponse(WEB_DIR / "busy-report.html")
+
+
+def _busy_report_request(request: Request) -> None:
+    origin = request.headers.get("origin")
+    if ((origin and origin != str(request.base_url).rstrip("/"))
+            or request.headers.get("content-type", "").split(";")[0] != "application/json"):
+        raise ApiError(403, "report_origin", "Anh mở trang báo lỗi trong Kyra nhé.")
+
+
+def _busy_report_context():
+    office = _busy_office()
+    from companion import busy_report
+
+    try:
+        cfg = office.config()
+    except (OSError, ValueError, TypeError, AttributeError):
+        cfg = {}
+    folder = cfg.get("workbook_folder")
+    reports = Path(folder).expanduser() if isinstance(folder, str) and folder else None
+    return office.data_dir, busy_report.desktop_folder(), reports, cfg
+
+
+@app.post("/api/busy/report/preview")
+def busy_report_preview(request: Request) -> dict:
+    from companion import busy_report
+
+    _busy_report_request(request)
+    root, desktop, reports, _ = _busy_report_context()
+    try:
+        return busy_report.prepare(root, desktop, reports)
+    except (OSError, busy_report.ReportRefused):
+        raise ApiError(409, "report_unavailable", "Em chưa tạo được gói an toàn. Anh kiểm tra Cài đặt nhé.") from None
+
+
+class BusyReportDraftIn(BaseModel):
+    name: str
+    sha256: str
+    receipt: str
+
+
+@app.post("/api/busy/report/draft")
+def busy_report_draft(body: BusyReportDraftIn, request: Request) -> dict:
+    from companion import busy_mail, busy_report
+
+    _busy_report_request(request)
+    _, desktop, reports, cfg = _busy_report_context()
+    try:
+        if not busy_report._allowed(desktop, reports):
+            raise busy_report.ReportRefused()
+        return busy_report.draft(desktop, body.name, body.sha256, str(cfg.get("support_address") or ""),
+                                 receipt=body.receipt)
+    except (OSError, busy_report.ReportRefused, busy_mail.MailRefused):
+        raise ApiError(409, "draft_unavailable", "Em chưa mở được thư nháp. Anh xem trước lại nhé.") from None
+
+
+@app.middleware("http")
+async def _busy_report_exceptions(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        if get_settings().tenant == "busy":
+            from companion import busy_report
+
+            try:
+                # Fall back even when setup or Desktop resolution is the original failure.
+                root, reports = get_settings().data_dir, None
+                try:
+                    root, _, reports, _ = _busy_report_context()
+                except Exception:
+                    pass
+                if busy_report._allowed(root / "busy" / "incidents.jsonl", reports):
+                    busy_report.record_exception(root, exc)
+            except Exception:
+                pass  # Reporting must not replace the original server failure.
+        raise
+
+
+class BusySetupIn(BaseModel):
+    folder: str = ""
+    subject: str | None = None
+    to: list[str] | None = None
+    cc: list[str] | None = None
+    body: str | None = None
+    date_format: str | None = None
+    times: dict[str, str] = {}
+
+
+class BusySampleIn(BaseModel):
+    text: str = Field(max_length=50_000)
+
+
+class BusyFolderIn(BaseModel):
+    path: str
+
+
+class BusyPhoneIn(BaseModel):
+    relay: str = ""
+
+
+def _setup_call(fn, *args):
+    from companion.busy_setup import SetupRefused
+
+    try:
+        return fn(*args)
+    except SetupRefused as exc:
+        raise ApiError(400, "refused", str(exc)) from exc
+
+
+def _app_defaults() -> dict:
+    try:
+        return json.loads((Path(__file__).resolve().parent.parent.parent / "defaults.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+@app.get("/api/busy/setup")
+def busy_setup_status() -> dict:
+    from companion import busy_setup, phone_link
+
+    office = _busy_office()
+    out = busy_setup.status(office.data_dir, office)
+    cfg = phone_link.load_config(office.data_dir)
+    out["phone"] = {"paired": bool(cfg and cfg.get("phone_pub")), "pending": bool(cfg and not cfg.get("phone_pub")),
+                    "repair": bool(cfg) and phone_link.needs_repair(office.data_dir),
+                    "relay":(cfg or {}).get("relay") or _app_defaults().get("phone_relay", "")}
+    return out
+
+
+@app.post("/api/busy/setup/parse")
+def busy_setup_parse(body: BusySampleIn) -> dict:
+    from companion.busy_setup import parse_sample
+
+    _busy_office()  # tenant gate
+    return parse_sample(body.text)
+
+
+@app.post("/api/busy/setup")
+def busy_setup_save(body: BusySetupIn) -> dict:
+    from companion import busy_setup
+
+    office = _busy_office()
+    return _setup_call(busy_setup.save, office.data_dir, office, body.model_dump(exclude_none=True))
+
+
+@app.post("/api/busy/setup/pick-folder")
+def busy_setup_pick_folder() -> dict:
+    from companion.busy_setup import pick_folder
+
+    _busy_office()
+    return {"path": pick_folder()}
+
+
+@app.post("/api/busy/setup/open-folder")
+def busy_setup_open_folder(body: BusyFolderIn) -> dict:
+    from companion.busy_setup import open_folder
+
+    _busy_office()
+    _setup_call(open_folder, body.path)
+    return {"ok": True}
+
+
+@app.post("/api/busy/setup/phone")
+def busy_setup_phone(body: BusyPhoneIn) -> dict:
+    from companion import phone_link
+
+    office = _busy_office()
+    relay = body.relay.strip() or _app_defaults().get("phone_relay", "")
+    if not relay:
+        raise ApiError(400, "refused", "Chưa có địa chỉ máy chủ điện thoại (relay)")
+    try:
+        info = phone_link.pair_start(office.data_dir, relay, "office")
+    except phone_link.LinkRefused as exc:
+        raise ApiError(400, "refused", str(exc)) from exc
+    except OSError as exc:
+        raise ApiError(503, "relay_unavailable", "Chưa kết nối được máy chủ điện thoại") from exc
+    _start_phone_link()  # the link confirms the phone's key once it scans the code
+    return info
+
+
+def _busy_updater():
+    from companion import busy_update
+
+    office = _busy_office()
+    return busy_update.from_env(office.data_dir)
+
+
+def _update_call(fn):
+    from companion.busy_update import UpdateRefused
+
+    try:
+        return fn()
+    except UpdateRefused as exc:
+        raise ApiError(409, "refused", str(exc)) from exc
+
+
+@app.get("/api/busy/update/status")
+def busy_update_status() -> dict:
+    updater = _busy_updater()
+    return updater.status() if updater else {"installed": False, "available": None}
+
+
+@app.post("/api/busy/update/check")
+def busy_update_check() -> dict:
+    updater = _busy_updater()
+    if updater is None:
+        raise ApiError(409, "refused", "Bản chạy thử này không tự cập nhật")
+    return _update_call(updater.check)
+
+
+@app.post("/api/busy/update/apply")
+def busy_update_apply() -> dict:
+    updater = _busy_updater()
+    if updater is None:
+        raise ApiError(409, "refused", "Bản chạy thử này không tự cập nhật")
+    return _update_call(updater.apply)
+
+
+class BusyRollbackIn(BaseModel):
+    reason: str = Field("", max_length=1000)
+
+
+@app.post("/api/busy/update/rollback")
+def busy_update_rollback(body: BusyRollbackIn) -> dict:
+    updater = _busy_updater()
+    if updater is None:
+        raise ApiError(409, "refused", "Bản chạy thử này không có phiên bản cũ để quay lại")
+    return _update_call(lambda: updater.roll_back(body.reason))
+
+
+# ---- Kyra Văn phòng: known-good data snapshots and restore (busy_snapshot) ----
+
+@app.get("/busy/restore")
+def busy_restore_page() -> FileResponse:
+    if get_settings().tenant != "busy":
+        raise ApiError(404, "not_found", "Not found")
+    return FileResponse(WEB_DIR / "busy-restore.html")
+
+
+def _snapshot_call(fn, *args) -> dict:
+    from companion import busy_snapshot
+
+    office = _busy_office()
+    try:
+        pending = fn(office.data_dir, *args)
+    except busy_snapshot.SnapshotMissing as exc:
+        raise ApiError(404, "not_found", str(exc)) from exc
+    except busy_snapshot.SnapshotRefused as exc:
+        raise ApiError(409, "refused", str(exc)) from exc
+    return {"pending": pending, "restarting": busy_snapshot.restart_server()}
+
+
+@app.get("/api/busy/snapshots")
+def busy_snapshots() -> dict:
+    from companion import busy_snapshot
+
+    try:
+        return busy_snapshot.status(_busy_office().data_dir)
+    except busy_snapshot.SnapshotRefused as exc:
+        raise ApiError(409, "refused", str(exc)) from exc
+
+
+@app.post("/api/busy/snapshots/undo")
+def busy_snapshot_undo() -> dict:
+    from companion import busy_snapshot
+
+    return _snapshot_call(busy_snapshot.request_undo)
+
+
+@app.post("/api/busy/snapshots/{snapshot_id}/restore")
+def busy_snapshot_restore(snapshot_id: str) -> dict:
+    from companion import busy_snapshot
+
+    return _snapshot_call(busy_snapshot.request_restore, snapshot_id)
+
+
+@app.get("/api/busy/daily-report/files/{day}/{kind}")
+def busy_daily_report_file(day: str, kind: str, template: str | None = None) -> FileResponse:
+    report = _daily_report()
+    try:
+        path = report.prepared_file(_report_day(day), kind, template).resolve()
+    except KeyError as exc:
+        raise ApiError(404, "not_found", "File not found") from exc
+    if not path.is_file():
+        raise ApiError(404, "not_found", "File not found")
+    media = "message/rfc822" if kind == "eml" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    return FileResponse(path, media_type=media, filename=path.name, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/")
 def index() -> HTMLResponse:
+    settings = get_settings()
+    if settings.tenant == "busy":  # the busy tenant never lands on personal Kyra pages
+        target = "/busy/office" if (WEB_DIR / "busy-office.html").is_file() else "/busy/assistant"
+        return RedirectResponse(target, status_code=307)
+    if settings.team_primary and settings.owner_machine and settings.tenant == 'personal':
+        from companion.team_http import page
+        return page()
+    return workspace()
+
+
+@app.get("/start")
+def start_guide() -> HTMLResponse:
+    """Static, generic usage guidance; no file lookup, model or state access."""
+    return HTMLResponse((WEB_DIR / "start.html").read_text(encoding="utf-8"),
+                        headers={"Cache-Control": "no-store"})
+
+
+@app.get("/workspace")
+def workspace() -> HTMLResponse:
     """Serves index.html with each static asset's real file mtime
     appended as a cache-busting query string (e.g. app.js?v=1725...) -
     a real bug caught 2026-09-04 while building the resume "Detailed"
@@ -424,10 +1215,10 @@ def index() -> HTMLResponse:
     real mtime here means it can't go stale, no discipline required.
     """
     html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
-    for asset in ("app.js", "style.css"):
-        mtime = int((WEB_DIR / asset).stat().st_mtime)
+    for asset in ("app.js", "style.css", "atlas.js", "atlas.css", "ideas.js", "lessons.js"):
+        mtime = (WEB_DIR / asset).stat().st_mtime_ns
         html = html.replace(f'/static/{asset}"', f'/static/{asset}?v={mtime}"')
-    return HTMLResponse(html)
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/features")
@@ -435,9 +1226,117 @@ def features() -> dict:
     return feature_map(load_features())
 
 
+@app.get("/api/system-map")
+def system_map() -> dict:
+    try:
+        return {**load_system_map(), "lanes": LANES}
+    except FileNotFoundError as exc:
+        raise ApiError(404, "system_map_missing", "System map is unavailable.") from exc
+
+
+@app.get("/atlas")
+def atlas_page() -> HTMLResponse:
+    html = (WEB_DIR / "atlas.html").read_text(encoding="utf-8")
+    for asset in ("atlas.js", "atlas.css", "atlas-page.js"):
+        html = html.replace(f'/static/{asset}"', f'/static/{asset}?v={(WEB_DIR / asset).stat().st_mtime_ns}"')
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/atlas")
+def atlas_data() -> dict:
+    try:
+        return load_atlas()
+    except (FileNotFoundError, ValueError) as exc:
+        raise ApiError(404, "atlas_missing", "The project map is unavailable.") from exc
+
+
+# Constructors remain cheap; no file, model or network access at startup.
+_idea_store = IdeaStore()
+
+
+class SaveIdeaRequest(IdeaDraft):
+    request_id: UUID
+
+
+class EditIdeaRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hypothesis: str | None = Field(default=None, min_length=1, max_length=500)
+    problem: str | None = None
+    experiment: str | None = None
+    status: Literal["open", "trying", "kept", "dropped"] | None = None
+
+
+@app.get("/api/ideas/desk")
+def idea_desk(live: int = Query(default=0, ge=0, le=1)) -> dict:
+    return build_desk(load_desk(), headlines=(lambda: TechNewsTool().run(per_source=2)) if live else None)
+
+
+@app.get("/api/ideas")
+def saved_ideas() -> dict:
+    return {"ideas": [idea.model_dump(mode="json") for idea in _idea_store.list()]}
+
+
+@app.post("/api/ideas")
+def save_idea(body: SaveIdeaRequest) -> dict:
+    try:
+        draft = resolve_draft(IdeaDraft(**body.model_dump(exclude={"request_id"})))
+    except ValueError as exc:
+        raise ApiError(422, "invalid_idea", "The curated source is not in the catalogue.") from exc
+    try:
+        return _idea_store.save(draft, request_id=body.request_id).model_dump(mode="json")
+    except IdeaRequestConflict as exc:
+        raise ApiError(409, "request_id_conflict", "This save receipt was already used for a different idea.") from exc
+
+
+
+@app.patch("/api/ideas/{idea_id}")
+def edit_idea(idea_id: str, body: EditIdeaRequest) -> dict:
+    try:
+        idea = _idea_store.update(idea_id, **body.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise ApiError(422, "invalid_idea", "The idea changes are invalid.") from exc
+    if idea is None:
+        raise ApiError(404, "not_found", "Idea not found.")
+    return idea.model_dump(mode="json")
+
+
+def _lesson_by_id(lesson_id: str):
+    lesson = next((lesson for lesson in list_lessons() if lesson.id == lesson_id), None)
+    if lesson is None:
+        raise ApiError(404, "not_found", "Lesson not found.")
+    return lesson
+
+
+@app.get("/api/lessons")
+def lessons_index() -> dict:
+    return {"lessons": [{"id": lesson.id, "title": lesson.title, "goal": lesson.goal} for lesson in list_lessons()]}
+
+
+@app.get("/api/lessons/{lesson_id}")
+def lesson_detail(lesson_id: str) -> dict:
+    return _lesson_by_id(lesson_id).model_dump(mode="json")
+
+
+class LessonAnswerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    question_id: str
+    option: StrictInt
+
+
+@app.post("/api/lessons/{lesson_id}/answer")
+def lesson_answer(lesson_id: str, body: LessonAnswerRequest) -> dict:
+    lesson = _lesson_by_id(lesson_id)
+    if not any(question.id == body.question_id for question in lesson.questions):
+        raise ApiError(404, "not_found", "Question not found.")
+    try:
+        return check_answer(lesson, body.question_id, body.option)
+    except ValueError as exc:
+        raise ApiError(422, "invalid_answer", "Choose one of this question's answers.") from exc
+
+
 @app.get("/healthz")
 def healthz() -> dict:
-    """Liveness for a container or load balancer, deliberately touching nothing.
+    """Liveness plus local asset stamps, independent of runtime subsystems.
 
     It must answer while Postgres, Chroma and the model are all unavailable,
     otherwise a slow dependency reads as a dead process and the orchestrator
@@ -445,7 +1344,9 @@ def healthz() -> dict:
     healthcheck fails closed the moment a token is set, and the deploy
     restart-loops with no obvious cause.
     """
-    return {"status": "ok"}
+    return {"status": "ok", "ok": True,
+            "assets": {asset: (WEB_DIR / asset).stat().st_mtime_ns
+                       for asset in ("app.js", "style.css")}}
 
 
 @app.get("/login")
@@ -522,21 +1423,32 @@ def _answer(message: str, on_token=None, register: str | None = None) -> ChatOut
     text turns) and nothing otherwise (tool turns, the local model).
     """
     input_label = _input_labeller.label(message)
+    if on_token is not None and register != "voice":
+        on_token = TextStream(on_token, mode=get_mode())
+
+    def finish(reply, **metadata):
+        if register == "voice":
+            return ChatOut(reply=reply, **metadata)
+        rendered = Reply(reply, mode=get_mode())
+        return ChatOut(reply=str(rendered), rest=rendered.rest, **metadata)
+
     if _current_backend != "auto":
-        reply = approval_reply(message, _rt.conversation, _registry, input_label=input_label)
+        reply = handle_mode_command(message)
+        if reply is None:
+            reply = approval_reply(message, _rt.conversation, _registry, input_label=input_label)
         if reply is None:
             reply = _rt.conversation.handle_turn(
                 message, on_token=on_token, register=register, input_label=input_label,
             )
-        return ChatOut(reply=reply, backend=_current_backend)
+        return finish(reply, backend=_current_backend)
 
     reply, decision = route_and_answer_verbose(
         message, _rt.conversation, _router, _backends, _registry, on_token=on_token, register=register,
         input_label=input_label,
     )
     if decision is None:  # a mode-switch command ("focus mode" etc.), not a routed turn
-        return ChatOut(reply=reply, backend="auto")
-    return ChatOut(
+        return finish(reply, backend="auto")
+    return finish(
         reply=reply, backend="auto",
         actual_backend=("local (kept on this Mac)" if decision.error == "ReleaseRefused" else "local (Claude unreachable)")
         if decision.fallback_from else decision.backend,
@@ -579,13 +1491,14 @@ def chat_stream(body: ChatIn) -> StreamingResponse:
     def on_token(delta: str) -> None:
         if cancel.is_set():
             raise TurnCancelled()
-        q.put(("token", delta))
+        if delta:
+            q.put(("token", delta))
 
     def run() -> None:
         global _cancel_current
         try:
             out = _answer(body.message, on_token=on_token)
-            q.put(("done", out.model_dump()))
+            q.put(("done", out.model_dump(exclude={"rest"} if not out.rest else None)))
         except (ReleaseRefused, AuditUnavailable) as exc:
             code = "audit_unavailable" if isinstance(exc, AuditUnavailable) else "release_refused"
             q.put(("refused", {"code": code, "message": str(exc), "retry": False}))
@@ -684,6 +1597,319 @@ def memory_map() -> dict:
     return result
 
 
+@app.get("/api/handwriting")
+def handwriting_summary() -> dict:
+    from companion.handwriting import summary
+
+    return summary()
+
+
+def _needs_input_path() -> Path:
+    return DATA_DIR / "private_docs" / "needs-your-input.md"
+
+
+def _job_heartbeats() -> dict:
+    from companion.attention import job_heartbeats
+    return job_heartbeats()
+
+
+def _snoozes_store() -> Path:
+    from companion.attention import SNOOZES
+    return SNOOZES
+
+
+@app.get("/api/calendar/upcoming")
+def calendar_upcoming(days: int = Query(default=7, ge=1, le=365)) -> dict:
+    from companion.calendar_events import CalendarAccessDenied, upcoming
+
+    if not get_settings().calendar_enabled:
+        raise ApiError(409, "calendar_disabled", "Calendar access is disabled in Kyra settings.")
+    try:
+        return {"events": [asdict(event) for event in upcoming(days)]}
+    except CalendarAccessDenied as exc:
+        raise ApiError(409, "calendar_access_denied",
+                       "Allow calendar access in System Settings > Privacy & Security > Calendars.") from exc
+    except Exception as exc:
+        raise ApiError(503, "calendar_unavailable", "Could not read the local calendar.") from exc
+
+
+@app.get("/api/mail/needs-reply")
+def mail_needs_reply() -> dict:
+    from companion.mail import GmailReader, MailNotAuthorised, needs_reply
+
+    settings = get_settings()
+    if not settings.gmail_credentials:
+        raise ApiError(409, "mail_disabled", "Mail is disabled until KYRA_GMAIL_CREDENTIALS is configured.")
+    message = "Run scripts/mail_authorise.py with the owner to authorise Gmail read-only access."
+    if not settings.gmail_token.expanduser().is_file():
+        raise ApiError(409, "mail_not_authorised", message)
+    try:
+        threads = GmailReader(settings.gmail_credentials, settings.gmail_token).list_threads()
+        return {"threads": [asdict(thread) for thread in needs_reply(threads, now=datetime.now(UTC))]}
+    except MailNotAuthorised as exc:
+        raise ApiError(409, "mail_not_authorised", message) from exc
+    except Exception as exc:
+        raise ApiError(503, "mail_unavailable", "Could not read Gmail metadata.") from exc
+
+
+def _health_dir() -> Path:
+    return DATA_DIR / "health"
+
+
+@app.get("/api/myself")
+def myself_summary():
+    from companion import health_auto
+    from companion.health_export import MissingExport, export_info, find_export, nights, resting_heart_rate
+
+    source = None
+    try:
+        folder = get_settings().health_auto_dir.strip()
+        files = health_auto.find_files(folder) if folder else []
+        now = datetime.now().astimezone()
+        if files:
+            source = "auto"
+            body = health_auto.merge(files)
+            first = (now.date() - timedelta(days=29)).isoformat()
+            for kind in ("nights", "resting_hr"):
+                body[kind] = [row for row in body[kind] if first <= row["date"] <= now.date().isoformat()]
+            body.update(source=source, watch=None,
+                        export_day=datetime.fromtimestamp(files[-1].stat().st_mtime).date().isoformat(),
+                        export_day_source="file_modified", resting_hr_method="last_row",
+                        note="Health Auto Export: latest row per date. Resting-rate format awaits a real-file check.")
+        else:
+            path = find_export(_health_dir())
+            source = "export"
+            body = {"nights": nights(path, now=now), "resting_hr": resting_heart_rate(path, now=now),
+                    **export_info(path), "source": source, "resting_hr_method": "median"}
+    except health_auto.Unaggregated:
+        body = {"nights": [], "resting_hr": [], "export_day": None, "watch": None, "source": "auto",
+                "note": "Turn on Summarize Data in Health Auto Export"}
+    except MissingExport:
+        body = {"nights": [], "resting_hr": [], "export_day": None, "watch": None, "source": None,
+                "note": "No Health export yet; export from the Health app to data/health/export.zip"}
+    except Exception:
+        # No exception text, record values, audit entry or provider scope crosses this boundary.
+        return JSONResponse(status_code=422, content={"source": source, "error": {"code": "health_export_unreadable",
+                            "message": "Could not read the Health export. Check the selected export format.",
+                            "details": {}}}, headers={"Cache-Control": "no-store"})
+    return JSONResponse(body, headers={"Cache-Control": "no-store"})
+
+
+def _daily_news() -> list[dict]:
+    result = _news_tool.run(per_source=1)
+    if result.get("errors"):
+        raise RuntimeError("News feeds unavailable")
+    return result["headlines"][:5]
+
+
+def _latest_digest_day() -> str | None:
+    days = []
+    for path in (DATA_DIR / "digests").glob("*"):
+        if not path.is_file() or path.suffix not in {".html", ".md", ".json"}:
+            continue
+        try:
+            day = datetime.strptime(path.stem, "%Y-%m-%d").date().isoformat()
+        except ValueError:
+            continue
+        if day == path.stem:
+            days.append(day)
+    return max(days, default=None)
+
+
+@app.get("/api/daily")
+def daily_summary() -> dict:
+    from companion.daily import timeline
+
+    now = datetime.now().astimezone()
+    inputs = dict(events=[], reminders=[], mail=[], news=[], digest_day=None)
+    unavailable = []
+
+    def read(name, field, loader):
+        try:
+            value = loader()
+            # A malformed source must not prevent the other sources from displaying.
+            timeline(now=now, **(inputs | {field: value}))
+            inputs[field] = value
+        except Exception:
+            unavailable.append(name)
+
+    settings = get_settings()
+    if settings.calendar_enabled:
+        read("calendar", "events", lambda: calendar_upcoming(7)["events"])
+    read("reminders", "reminders", lambda: [asdict(r) for r in _reminders_store.list()])
+    if settings.gmail_credentials:
+        read("mail", "mail", lambda: mail_needs_reply()["threads"])
+    read("news", "news", _daily_news)
+    read("digest", "digest_day", _latest_digest_day)
+    out = timeline(now=now, **inputs)
+    out["unavailable"] = unavailable
+    out["digest_path"] = None
+    if out["digest_day"]:
+        try:
+            for suffix in (".html", ".md", ".json"):
+                path = DATA_DIR / "digests" / (out["digest_day"] + suffix)
+                if path.is_file():
+                    out["digest_path"] = str(path)
+                    break
+        except OSError:
+            unavailable.append("digest")
+            out["digest_day"] = None
+    return out
+
+
+def _team_status_snapshot(now):
+    from companion.team_chat import TeamStore, empty_status_snapshot
+
+    settings = get_settings()
+    if settings.tenant != 'personal' or not settings.owner_machine:
+        return empty_status_snapshot(now=now.timestamp())
+    return TeamStore().status_snapshot(now=now.timestamp())
+
+
+@app.get("/api/attention")
+def attention_summary() -> dict:
+    from companion import app_dispatch, attention, reflections
+
+    unavailable = []
+
+    def read(source, loader, fallback):
+        try:
+            return loader()
+        except Exception:
+            unavailable.append(attention.Card(
+                "warning", f"source:{source}", "Attention source unavailable",
+                "Could not read this source; its status is unknown.", source, None,
+                "Check the source with your agent", severity=2,
+            ))
+            return fallback
+
+    def runs():
+        controller = _loop_controller()
+        return [asdict(row) for row in controller.store.list_runs(owner=controller.owner)]
+
+    path = _needs_input_path()
+    now = datetime.now(UTC)
+    team = _team_status_snapshot(now)
+    cards = attention.collect(
+        now=now, team_runs=team["runs"],
+        outbound=read("/api/outbound/report", lambda: outbound_report(OutboundAudit()), {}),
+        tool_runs=read("/api/tools/runs", lambda: [asdict(r) for r in _registry.audit.list(limit=500)], []),
+        jobs=read("/api/jobs", lambda: [asdict(j) for j in _queue.list(limit=500)], []),
+        deliveries=read("/api/loop/deliveries", lambda: app_dispatch.load(_deliveries_store()), []),
+        loop_runs=read("/api/loop/runs", runs, []),
+        reminders=read("/api/reminders", lambda: [asdict(r) for r in _reminders_store.list()], []),
+        approvals=read("/api/actions", lambda: pending_actions()["actions"], []),
+        heartbeats=read("launchd", _job_heartbeats, {}),
+        reflections=read("/api/reflections", lambda: [asdict(c) for c in reflections.load_cards(_today())], []),
+        needs_input=read("needs-your-input.md", lambda: path.read_text() if path.exists() else "", ""),
+        events=read("/api/calendar/upcoming", lambda: calendar_upcoming(1)["events"], [])
+        if get_settings().calendar_enabled else [],
+        mail=read("/api/mail/needs-reply", lambda: mail_needs_reply()["threads"], [])
+        if get_settings().gmail_credentials else [],
+    )
+    result = attention.present(cards + unavailable, now=now, snoozes=attention.load_snoozes(_snoozes_store()))
+    return {**result, "team": team}
+
+
+def _today():
+    return datetime.now(UTC).date().isoformat()
+
+
+@app.get("/api/reflections")
+def reflections_summary() -> dict:
+    from companion import reflections as rf
+    day = _today()
+    votes = rf.load_votes()
+    return {"day": day, "cards": [dict(asdict(c), vote=votes.get(c.key, {}).get("vote"))
+                                   for c in rf.load_cards(day)], "votes": len(votes)}
+
+
+class ReflectionVoteIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    vote: Literal["useful", "not_useful", "do_it"]
+
+
+@app.post("/api/reflections/{key}/vote")
+def reflection_vote(key: str, body: ReflectionVoteIn) -> dict:
+    from companion import reflections as rf
+    card = next((c for c in rf.load_cards(_today()) if c.key == key), None)
+    if card is None:
+        raise ApiError(404, "reflection_not_found", "This reflection is no longer in today's feed.")
+    result = {"ok": True}
+    if body.vote == "do_it":
+        if get_settings().database_url:
+            raise ApiError(409, "local_store_required", "Reflection drafts require the local LOOP store.")
+        controller = _loop_controller()
+        # Same lock across processes. A retry finds the existing unsent assignment.
+        with rf.writing():
+            code = f"reflection-{card.key}"
+            assignment = next((a for a in controller.store.list_assignments(owner=controller.owner)
+                               if a.code == code), None)
+            if assignment is None:
+                assignment = controller.store.create_assignment(
+                    owner=controller.owner, code=code, title=card.observation,
+                    goal=f"Review this unverified reflection before planning work.\n{card.suggestion}\nEvidence: {card.evidence}",
+                    allowed_files=[], acceptance=[card.outcome_check])
+            result["assignment_id"] = assignment.id
+    rf.vote(key, body.vote, datetime.now(UTC))
+    return result
+
+
+@app.get("/api/progress")
+def progress_summary() -> dict:
+    from sqlalchemy import select
+
+    from companion import progress
+    from companion.initiative_digest import existing_store
+    from companion.schema import initiatives as initiative_table
+
+    now = _utcnow().astimezone()
+    team = _team_status_snapshot(now)
+    controller = _loop_controller()
+    assignments = [asdict(row) for row in controller.store.list_assignments(owner=controller.owner)]
+    applications = [asdict(row) for row in _job_store.list()]
+    active = _focus_store.active()
+    store = existing_store()
+    initiatives = []
+    if store is not None:
+        # list() is the proposal inbox and intentionally excludes accepted items.
+        with store._engine.connect() as conn:
+            rows = conn.execute(select(initiative_table).where(
+                initiative_table.c.status.in_(['proposed', 'accepting', 'accepted']))).all()
+        initiatives = [store._decode(row) for row in rows]
+    return {
+        "team": team,
+        "leads": [asdict(lead) for lead in progress.leads(
+            now=now, assignments=assignments, focus_active=asdict(active) if active else None,
+            applications=applications, initiatives=initiatives, team_runs=team["runs"],
+        )],
+        "today": progress.today(
+            now=now, focus_sessions=[asdict(row) for row in _focus_store.list(limit=None)],
+            assignment_events=[row['updated_at'] for row in assignments],
+            application_events=[event.at for row in applications for event in _job_store.history(row['id'])],
+            learning_reviews=len(_learning_store.due()),
+        ),
+    }
+
+
+class AttentionSnoozeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    key: str = Field(min_length=1, max_length=200)
+    until: str
+
+    @field_validator("until")
+    @classmethod
+    def iso_time(cls, value: str) -> str:
+        datetime.fromisoformat(value)
+        return value
+
+
+@app.post("/api/attention/snooze")
+def attention_snooze(body: AttentionSnoozeIn) -> dict:
+    from companion.attention import snooze
+    return {"snoozed": snooze(body.key, body.until, _snoozes_store())}
+
+
 def _notes_store() -> MarkdownMemoryNotesStore:
     return _memory_notes
 
@@ -693,6 +1919,31 @@ class NotesLabelIn(BaseModel):
     tier: StrictInt
     classes: list[PrivacyClass]
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+@app.get("/api/notes/shadow")
+def notes_shadow() -> dict:
+    from companion.shadow_labels import SUGGESTIONS_FILE, diff
+
+    store = _notes_store()
+    path = store._dir / SUGGESTIONS_FILE
+    suggestions = json.loads(path.read_text()) if path.exists() else {}
+    return {"rows": diff(store, suggestions)}
+
+
+@app.post("/api/notes/shadow/run")
+def run_notes_shadow() -> dict:
+    return {"job_id": _queue.enqueue("shadow_labels", {})}
+
+
+def _run_shadow_labels_job(payload: dict, on_progress) -> dict:
+    from companion.shadow_labels import sandboxed_labeller, suggest
+
+    on_progress("Suggesting labels locally; current labels remain unchanged.")
+    result = suggest(_notes_store()._dir, labeller=sandboxed_labeller(
+        get_settings().shadow_label_model_dir, DATA_DIR / "shadow_labels",
+    ))
+    return {"files": len(result), "errors": sum("error" in item for item in result.values())}
 
 
 @app.get("/api/notes/labels")
@@ -815,7 +2066,8 @@ def speak(body: SpeakIn) -> StreamingResponse:
         raise ApiError(400, "empty_text", "there is nothing to say")
 
     def events():
-        sentences, _ = take_sentences(text, final=True)
+        speech, _ = spoken_reply(text)
+        sentences, _ = take_sentences(speech, final=True)
         for sentence in sentences:
             event = _audio_event(sentence, encode_wav_bytes)
             if event:
@@ -825,6 +2077,11 @@ def speak(body: SpeakIn) -> StreamingResponse:
     return StreamingResponse(
         events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     )
+
+
+def _transcribe_team_upload(audio: UploadFile) -> str:
+    from companion.team_audio import decode_recording
+    return _rt.stt.transcribe(decode_recording(audio.file)).strip()
 
 
 def _transcribe_upload(audio: UploadFile) -> str:
@@ -867,23 +2124,32 @@ def voice_stream(audio: UploadFile) -> StreamingResponse:
         try:
             buffer = ""
             spoken_any = False
+            budget = SpokenBudget()
+
+            def admit(sentence: str) -> None:
+                if speech := budget.admit(sentence):
+                    say(speech)
 
             def on_token(delta: str) -> None:
                 nonlocal buffer, spoken_any
                 buffer += delta
                 sentences, buffer = take_sentences(buffer)
                 for sentence in sentences:
-                    say(sentence)
+                    admit(sentence)
                     spoken_any = True
 
             out = _answer(transcript, on_token=on_token, register="voice")
             tail, _ = take_sentences(buffer, final=True)
             for sentence in tail:
-                say(sentence)
+                admit(sentence)
                 spoken_any = True
             if not spoken_any:
-                # Nothing streamed (a tool turn, or the local model): say it all now.
-                say(out.reply)
+                # Nothing streamed (a tool turn, or the local model).
+                sentences, _ = take_sentences(spoken_text(out.reply), final=True)
+                for sentence in sentences:
+                    admit(sentence)
+            if cue := budget.closing():
+                say(cue)
             q.put(("done", out.model_dump()))
         except (ReleaseRefused, AuditUnavailable) as exc:
             code = "audit_unavailable" if isinstance(exc, AuditUnavailable) else "release_refused"
@@ -927,15 +2193,15 @@ def voice(audio: UploadFile) -> VoiceOut:
             reply="", backend=_current_backend, transcript="", reply_audio_b64="", reply_audio_rate=0
         )
 
-    # Spoken register: the prompt asks for a spoken shape, spoken_text() guarantees no
-    # markdown reaches the synthesiser. The transcript still shows the reply as written.
+    # Bound only the audio; the transcript keeps the full written reply.
     try:
         chat_out = _answer(transcript, register="voice")
     except ReleaseRefused as exc:
         raise ApiError(403, "release_refused", str(exc)) from exc
     except AuditUnavailable as exc:
         raise ApiError(503, "audit_unavailable", str(exc)) from exc
-    reply_audio, rate = _rt.tts.speak(spoken_text(chat_out.reply))
+    speech, _ = spoken_reply(chat_out.reply)
+    reply_audio, rate = _rt.tts.speak(speech)
     wav_bytes = encode_wav_bytes(reply_audio, rate)
 
     return VoiceOut(
@@ -973,6 +2239,8 @@ def _hit_out(hit) -> dict:
 
 @app.post("/api/search")
 def search_endpoint(body: SearchIn) -> dict:
+    from companion.search import matches_lookup_query
+
     query = body.query.strip()
     if not query:
         raise ApiError(400, "empty_query", "give me something to search for")
@@ -987,8 +2255,35 @@ def search_endpoint(body: SearchIn) -> dict:
     # this morning's edits - the panel says so rather than letting an old answer
     # look current. The chat tool carries the same date for the same reason.
     return {"query": query, "count": len(hits), "include_sensitive": body.include_sensitive,
+            "found_inside": any(matches_lookup_query(hit, query) for hit in hits),
             "indexed_at": _rt.search_index.last_indexed(),
             "hits": [_hit_out(h) for h in hits]}
+
+
+def _outside_search():
+    from companion.web_search import DdgsSearch
+
+    return DdgsSearch()
+
+
+class OutsideSearchIn(BaseModel):
+    query: str
+    k: int = Field(default=5, ge=1, le=10)
+
+
+@app.post("/api/search/outside")
+def search_outside(body: OutsideSearchIn) -> dict:
+    from companion.web_search import OutsideRefused
+
+    query = body.query.strip()
+    if not query:
+        raise ApiError(400, "empty_query", "give me something to search for")
+    try:
+        with release_label(*_input_labeller.label(query)):
+            hits = _outside_search().search(query, body.k)
+    except OutsideRefused as exc:
+        raise ApiError(409, "outside_refused", str(exc)) from None
+    return {"results": [asdict(hit) for hit in hits]}
 
 
 @app.post("/api/search/answer")
@@ -1421,7 +2716,8 @@ def _run_apply_job(payload: dict, on_progress) -> dict:
             base_latex=_apply_base_latex(), profile=load_profile(), engines=_autofill_engines, extra_facts=extra_facts,
             posting_text=payload.get("posting_text", ""), company=payload.get("company", ""), role=payload.get("role", ""),
             source_url=payload.get("source_url", ""), cover_letter=payload.get("cover_letter", "auto"),
-            retailor=payload.get("retailor", False), fetch=_fetch_posting, on_progress=on_progress,
+            retailor=payload.get("retailor", False), prepare_only=payload.get("prepare_only", False),
+            fetch=_fetch_posting, on_progress=on_progress,
             record_fill=_record_fill,
         )
     except ApplyError as e:
@@ -1432,7 +2728,35 @@ def _run_apply_job(payload: dict, on_progress) -> dict:
     return out
 
 
-HANDLERS: dict[str, Handler] = {"latex_resume": _run_latex_resume_job, "apply": _run_apply_job}
+def _run_prepare_job(payload: dict, on_progress) -> dict:
+    store = _ready_store()
+    item = store.get(payload["ready_id"])
+    if item["state"] in {"skipped", "applied"} or item["deep"]:
+        return {"skipped": True}
+    try:
+        result = _run_apply_job({**payload, "prepare_only": True}, on_progress)
+        current = store.get(item["id"])
+        if current["state"] not in {"skipped", "applied"}:
+            state = "prepared" if result["status"] == "prepared" and result.get("resume_pdf_path") else "needs_input"
+            store.mark(item["id"], state, resume_path=result.get("resume_pdf_path"),
+                       cover_letter_path=result.get("cover_letter_path"), questions=result.get("attention") or [])
+        return result
+    except Exception:
+        if store.get(item["id"])["state"] not in {"skipped", "applied"}:
+            store.mark(item["id"], "needs_input", questions=["Preparation failed. Review the preparation job before retrying."])
+        raise
+
+
+HANDLERS: dict[str, Handler] = {"latex_resume": _run_latex_resume_job, "apply": _run_apply_job,
+                                "shadow_labels": _run_shadow_labels_job, "prepare": _run_prepare_job}
+
+
+def _run_team_honesty_job(payload: dict, on_progress) -> dict:
+    from companion import team_honesty  # lazy: startup stays cheap
+    return team_honesty.job(payload, on_progress)
+
+
+HANDLERS["team_honesty"] = _run_team_honesty_job
 
 
 @app.on_event("startup")
@@ -1647,12 +2971,189 @@ def humidifier_status() -> dict:
 
 
 @app.post("/api/humidifier")
+@app.post("/api/devices/humidifier")
 def humidifier_control(body: HumidifierIn) -> dict:
     if "humidifier_control" not in _registry:
         raise ApiError(404, "humidifier_not_configured", "Humidifier is not configured on this server.")
     result, run_id = _run_tap("humidifier_control", body.model_dump(exclude_none=True))
     if "error" in result:
         raise ApiError(400, "humidifier_error", str(result["error"]))
+    return {**result, "run_id": run_id}
+
+
+DEVICES_STALE_S = 30.0
+
+
+@app.get("/api/devices")
+def devices_status() -> dict:
+    """Read every configured device at once within the reader's budget (a cold VeSync login or an unreachable
+    bulb used to stall the whole call). A slow device keeps its last card for DEVICES_STALE_S, marked
+    fresh False, then shows as timed out until a read lands."""
+    cards = []
+    for card in _space_reader.read_many(("humidifier", "purifier", "bulb")):
+        if not card["fresh"] and card["age_s"] is not None and card["age_s"] > DEVICES_STALE_S:
+            card = {**card, "available": False, "state": None,
+                    "error": f"Device read timed out; the last status is {card['age_s']:.0f} s old."}
+        cards.append(card)
+    return {"devices": cards}
+
+
+_space_registry = RoomRegistry()
+_space_ledger = GestureLedger()
+_space_reader = DeviceReader(_registry)
+SPACE_EVENT_INTERVAL_S = 3.0
+
+
+@app.get("/api/space/things")
+def space_things() -> dict:
+    return {"things": [thing.model_dump() for thing in _space_registry.things()]}
+
+
+class SpaceThingIn(Thing):
+    @model_validator(mode="before")
+    @classmethod
+    def server_identity(cls, value):
+        if isinstance(value, dict) and "identity" in value:
+            raise ValueError("identity is set by the server")
+        return value
+
+
+@app.put("/api/space/things/{thing_id}")
+def space_place(thing_id: str, body: SpaceThingIn) -> dict:
+    if thing_id != body.id:
+        raise ApiError(400, "thing_id_mismatch", "Path and thing id must match.")
+    if body.kind == "device":
+        card = _space_reader.read(body.device)
+        body.identity = identity_of(card["state"]) if card["fresh"] else None
+    return {"thing": _space_registry.place(body).model_dump(), "bound": body.identity is not None}
+
+
+@app.get("/api/space/things/{thing_id}/state")
+def space_state(thing_id: str) -> dict:
+    thing = _space_registry.get(thing_id)
+    if thing is None:
+        raise ApiError(404, "thing_not_found", "Thing was not found.")
+    if thing.kind != "device":
+        raise ApiError(400, "not_a_device", "This thing is not a device.")
+    return {"thing": thing.id, "identity": thing.identity, "card": _space_reader.read(thing.device)}
+
+
+@app.delete("/api/space/things/{thing_id}")
+def space_remove(thing_id: str) -> dict:
+    if not _space_registry.remove(thing_id):
+        raise ApiError(404, "thing_not_found", "Thing was not found.")
+    return {"removed": True}
+
+
+class GestureIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    thing: str
+    gesture: str
+    gesture_id: str
+    at: float
+    value: float | dict | None = None
+    revision: str
+    expect: dict | None = None
+
+    @field_validator("gesture_id")
+    @classmethod
+    def valid_id(cls, value):
+        return str(UUID(value))
+
+
+@app.post("/api/space/gesture")
+def space_gesture(body: GestureIn) -> dict:
+    try:
+        _space_ledger.admit(body.gesture_id, body.at, time.time())
+    except GestureRefused as exc:
+        raise ApiError(400, "gesture_refused", str(exc)) from exc
+    thing = _space_registry.get(body.thing)
+    if thing is None:
+        raise ApiError(404, "thing_not_found", "Thing was not found.")
+    if body.revision != thing.anchor.placed_at:
+        raise ApiError(409, "binding_changed", "The thing was placed again; refresh before acting.")
+    try:
+        tool, arguments = map_gesture(thing, body.gesture, body.value)
+    except GestureRefused as exc:
+        raise ApiError(400, "gesture_refused", str(exc)) from exc
+    if body.expect is not None and body.expect != arguments:
+        raise ApiError(400, "gesture_mismatch", "The gesture differs from its displayed action.")
+    if tool not in _registry:
+        raise ApiError(404, "device_not_configured", "Device is not configured on this server.")
+    if thing.identity is None:
+        raise ApiError(409, "binding_unconfirmed", "Place the thing again to bind its device.")
+    card = _space_reader.read(thing.device)
+    if not card["fresh"] or card["state"] is None:
+        raise ApiError(503, "device_unreachable", "A fresh device status is unavailable.")
+    if identity_of(card["state"]) != thing.identity:
+        raise ApiError(409, "identity_mismatch", "The live device differs from the placed device.")
+    try:
+        _space_ledger.check_freshness(body.at, time.time())
+    except GestureRefused as exc:
+        raise ApiError(400, "gesture_refused", str(exc)) from exc
+    result, run_id = _run_tap(tool, arguments)
+    if "error" in result:
+        raise ApiError(400, "gesture_failed", str(result["error"]), details=result)
+    return {**result, "thing": thing.id, "gesture": body.gesture, "tool": tool,
+            "arguments": arguments, "run_id": run_id}
+
+
+@app.get("/api/space/events")
+def space_events(limit: int = Query(default=0, ge=0)) -> StreamingResponse:
+    def cards():
+        return {"devices": _space_reader.read_many(("humidifier", "purifier", "bulb"))}
+
+    snapshot = {**space_things(), **cards()}
+
+    def stream():
+        yield f"event: snapshot\ndata: {json.dumps(snapshot)}\n\n"
+        count = 1
+        while not limit or count < limit:
+            time.sleep(SPACE_EVENT_INTERVAL_S)
+            yield f"event: devices\ndata: {json.dumps(cards())}\n\n"
+            count += 1
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+class PurifierIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    power: Literal["on", "off"] | None = None
+    mode: Literal["manual", "sleep"] | None = None
+    fan_level: StrictInt | None = Field(default=None, ge=1, le=3)
+    display: StrictBool | None = None
+    night_light: Literal["on", "off"] | None = None
+    child_lock: StrictBool | None = None
+
+
+@app.post("/api/devices/purifier")
+def purifier_control(body: PurifierIn) -> dict:
+    if "purifier_control" not in _registry:
+        raise ApiError(404, "purifier_not_configured", "Purifier is not configured on this server.")
+    result, run_id = _run_tap("purifier_control", body.model_dump(exclude_none=True))
+    if "error" in result:
+        raise ApiError(400, "purifier_error", str(result["error"]), details=result)
+    return {**result, "run_id": run_id}
+
+
+class BulbIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    power: Literal["on", "off"] | None = None
+    brightness: StrictInt | None = Field(default=None, ge=1, le=100)
+    color_temp: StrictInt | None = Field(default=None, ge=2500, le=6500)
+    hue: StrictInt | None = Field(default=None, ge=0, le=360)
+    saturation: StrictInt | None = Field(default=None, ge=0, le=100)
+
+
+@app.post("/api/devices/bulb")
+def bulb_control(body: BulbIn) -> dict:
+    if "bulb_control" not in _registry:
+        raise ApiError(404, "bulb_not_configured", "Bulb is not configured on this server.")
+    result, run_id = _run_tap("bulb_control", body.model_dump(exclude_none=True))
+    if "error" in result:
+        raise ApiError(400, "bulb_error", str(result["error"]), details=result)
     return {**result, "run_id": run_id}
 
 
@@ -2044,16 +3545,287 @@ def list_job_applications(status: str | None = None) -> dict:
     return {"applications": [asdict(a) for a in _job_store.list(status)]}
 
 
+@cache
+def _ready_store():
+    from companion.ready import ReadyStore
+    return ReadyStore()
+
+
+def _ready_engines():
+    return _autofill_engines
+
+
+_ready_action_lock = threading.RLock()
+
+
+def _starred_path():
+    return DATA_DIR / "job_boards" / "starred.json"
+
+
+def _read_starred():
+    path = _starred_path()
+    names = json.loads(path.read_text()) if path.exists() else []
+    if not isinstance(names, list) or not all(isinstance(name, str) for name in names):
+        raise ValueError("starred.json must be a list of company names")
+    return names
+
+
+class ReadyStarIn(BaseModel):
+    company: str = Field(min_length=1, max_length=200)
+    starred: StrictBool
+
+
+@app.post("/api/ready/star")
+def star_ready(body: ReadyStarIn) -> dict:
+    from companion.ready import ReadyStore
+    company = body.company.strip()
+    if not company:
+        raise ApiError(400, "invalid_company", "A company name is required")
+    with ReadyStore(_starred_path()).locked():
+        names = _read_starred()
+        if body.starred:
+            if company.casefold() not in {name.casefold() for name in names}:
+                names.append(company)
+        else:
+            names = [name for name in names if name.casefold() != company.casefold()]
+        write_json(_starred_path(), names)
+    return {"starred": names}
+
+
+def _enqueue_prepare(application_id, url):
+    store = _ready_store()
+    item = next(row for row in store.list() if row["application_id"] == application_id and row["url"] == url)
+    return store.enqueue_preparation(item["id"], _queue)[0]
+
+
+def _ready_item(item_id):
+    try:
+        return _ready_store().get(item_id)
+    except KeyError:
+        raise ApiError(404, "not_found", "Review item not found") from None
+
+
+def _ready_engine(item):
+    from companion.scout import board_url
+    if not board_url(item["url"]):
+        return None
+    return engine_for_url(item["url"], _ready_engines())[0]
+
+
+def _ready_is_live(item):
+    if not item.get("window"):
+        return False
+    # The owning engine's registry identifies a live window, independently of URL parsing.
+    for engine in _ready_engines().values():
+        try:
+            if engine.is_live(item["window"]):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+@app.get("/api/ready")
+def list_ready() -> dict:
+    from companion.ready import STATES
+    with _ready_action_lock:
+        starred = _read_starred()
+        star_keys = {name.casefold() for name in starred}
+        store = _ready_store()
+        items = []
+        for item in store.list():
+            live = item["state"] in {"ready", "needs_input"} and _ready_is_live(item)
+            if not live and item["window"]:
+                was_ready = item["state"] == "ready"
+                store.mark_window_closed(item["window"])
+                app_row = next((row for row in _job_store.list() if row.id == item["application_id"]), None)
+                if was_ready and app_row and app_row.status == "ready_to_submit":
+                    _job_store.update_status(app_row.id, "prepared")
+                item = store.get(item["id"])
+            items.append({**item, "window_live": bool(live), "starred": item["company"].casefold() in star_keys})
+    return {"items": items, "starred": starred,
+            "counts": {state: sum(i["state"] == state for i in items) for state in STATES}}
+
+
+@app.post("/api/ready/{item_id}/open")
+def open_ready(item_id: str) -> dict:
+    with _ready_action_lock:
+        try:
+            item = _open_ready(item_id)
+        except ApiError as exc:
+            # Preserve the standard error envelope/status and include this endpoint's liveness field.
+            item = next((row for row in _ready_store().list() if row["id"] == item_id), None)
+            error = {"code": exc.code, "message": exc.message}
+            if exc.details:
+                error["details"] = exc.details
+            return JSONResponse(status_code=exc.status_code, content={
+                "error": error, "window_live": _ready_is_live(item) if item else False})
+        return {**item, "window_live": _ready_is_live(item)}
+
+
+def _open_ready(item_id: str) -> dict:
+    with _ready_action_lock:
+        item = _ready_item(item_id)
+        store = _ready_store()
+        if item["state"] in {"applied", "skipped"} or item["deep"]:
+            raise ApiError(409, "not_in_fast_lane", "Review this item deliberately in APPLY")
+        if item["resume_path"] is None:
+            _enqueue_prepare(item["application_id"], item["url"])
+            raise ApiError(409, "not_prepared", "Documents are not prepared yet; preparing now.")
+        if item.get("job_id"):
+            job = _queue.get(item["job_id"])
+            if job and job.status in {"queued", "running"}:
+                raise ApiError(409, "preparing", "Documents are still being prepared")
+        if _ready_is_live(item):
+            return {**item, "window_live": True}
+        engine = _ready_engine(item)
+        if engine is None or not item["resume_path"]:
+            return store.mark(item_id, "needs_input", questions=["A supported form and prepared resume are required."])
+        try:
+            report = fill_with_receipt(engine, item["url"], replace(load_profile(), resume_path=item["resume_path"]),
+                                       via="ready_lane", record_fill=_record_fill)
+        except Exception:
+            return store.mark(item_id, "needs_input", questions=["Fill failed. Review the form and profile before retrying."])
+        questions = [f"{field.label}: {field.reason}" for field in report.skipped if field.required]
+        if not report.filled:
+            questions.append("No fields were filled; inspect the form manually.")
+        window = getattr(report, "window", None)
+        if questions:
+            _job_store.update_status(item["application_id"], "needs_attention")
+            return store.mark(item_id, "needs_input", questions=questions, window=window)
+        if not window or not _ready_is_live({**item, "window": window}):
+            _job_store.update_status(item["application_id"], "prepared")
+            return store.mark(item_id, "prepared", questions=["no live window"])
+        store.mark(item_id, "prepared", questions=[])
+        _job_store.update_status(item["application_id"], "ready_to_submit")
+        return store.mark_ready(item_id, window)
+
+
+@app.post("/api/ready/{item_id}/applied")
+def applied_ready(item_id: str) -> dict:
+    from companion.job_applications import FollowUpExists, schedule_follow_up
+    with _ready_action_lock:
+        item = _ready_item(item_id)
+        if item["state"] == "skipped":
+            raise ApiError(409, "skipped", "This item was skipped")
+        if not any(row.id == item["application_id"] for row in _job_store.list()):
+            raise ApiError(404, "not_found", "Application not found")
+        # His explicit confirmation remains valid after a submitted page closes.
+        if item["state"] != "applied":
+            _job_store.update_status(item["application_id"], "applied")
+            try:
+                schedule_follow_up(_job_store, _reminders_store, item["application_id"], 7)
+            except FollowUpExists:
+                pass
+        return _ready_store().mark(item_id, "applied")
+
+
+@app.post("/api/ready/{item_id}/skip")
+def skip_ready(item_id: str) -> dict:
+    with _ready_action_lock:
+        item = _ready_item(item_id)
+        if item["state"] == "applied":
+            raise ApiError(409, "applied", "This item was already applied")
+        return _ready_store().mark(item_id, "skipped")
+
+
+@app.get("/api/ready/{item_id}/document/{kind}")
+def ready_document(item_id: str, kind: str):
+    item = _ready_item(item_id)
+    field = {"resume": "resume_path", "letter": "cover_letter_path"}.get(kind)
+    if not field or not item.get(field):
+        raise ApiError(404, "not_found", "Document not available")
+    path = Path(item[field]).resolve()
+    if not path.is_relative_to(DATA_DIR.resolve()) or not path.is_file():
+        raise ApiError(404, "not_found", "Document not available in local data")
+    return FileResponse(path, filename=path.name, headers={"Cache-Control": "no-store"})
+
+
+def _scout_store():
+    from companion.scout import CandidateStore
+    return CandidateStore()
+
+
+def _scout_watchlist():
+    from companion.job_boards import WATCHLIST_PATH
+    return WATCHLIST_PATH
+
+
+@app.get("/api/scout")
+def list_scout_candidates() -> dict:
+    from companion.scout import STATES
+    store = _scout_store()
+    candidates = sorted(store.load(), key=lambda c: STATES.index(c.state))
+    return {"candidates": [asdict(c) for c in candidates],
+            "counts": {state: sum(c.state == state for c in candidates) for state in STATES}}
+
+
+@app.post("/api/scout/{key}/approve")
+def approve_scout_candidate(key: str) -> dict:
+    from companion.scout import watch
+    store = _scout_store()
+    candidate = next((c for c in store.load() if c.key == key), None)
+    if candidate is None:
+        raise ApiError(404, "not_found", "Candidate not found")
+    if candidate.board_url:
+        try:
+            # The authenticated click authorizes this one candidate; failures remain retryable.
+            watch(replace(candidate, state="approved"), _scout_watchlist())
+        except ValueError as exc:
+            raise ApiError(400, "invalid_board", str(exc)) from None
+    store.set_state(key, "approved")
+    return {"watching": bool(candidate.board_url),
+            "note": "Board added to watchlist" if candidate.board_url else "no board yet"}
+
+
+@app.post("/api/scout/{key}/reject")
+def reject_scout_candidate(key: str) -> dict:
+    try:
+        candidate = _scout_store().set_state(key, "rejected")
+    except KeyError:
+        raise ApiError(404, "not_found", "Candidate not found") from None
+    return {"candidate": asdict(candidate), "note": "Rejected; existing board watches are unchanged"}
+
+
 class AddJobApplicationIn(BaseModel):
     company: str
     role: str
     link: str | None = None
     notes: str | None = None
+    status: str = "applied"
 
 
 @app.post("/api/job/applications")
 def add_job_application(body: AddJobApplicationIn) -> dict:
-    return asdict(_job_store.add(body.company, body.role, body.link, body.notes))
+    if body.status not in VALID_STATUSES:
+        raise ApiError(400, "invalid_status", f"status must be one of {sorted(VALID_STATUSES)}")
+    return asdict(_job_store.add(body.company, body.role, body.link, body.notes, status=body.status))
+
+
+@app.get("/api/job/applications/{app_id}/history")
+def job_application_history(app_id: int) -> dict:
+    if not any(application.id == app_id for application in _job_store.list()):
+        raise ApiError(404, "not_found", f"no application with id {app_id}")
+    return {"events": [asdict(event) for event in _job_store.history(app_id)]}
+
+
+class JobFollowUpIn(BaseModel):
+    days: int = Field(gt=0, strict=True)
+
+
+@app.post("/api/job/applications/{app_id}/follow_up")
+def job_application_follow_up(app_id: int, body: JobFollowUpIn) -> dict:
+    from companion.job_applications import FollowUpExists, schedule_follow_up
+
+    try:
+        reminder = schedule_follow_up(_job_store, _reminders_store, app_id, body.days)
+    except LookupError as exc:
+        raise ApiError(404, "not_found", str(exc)) from None
+    except FollowUpExists as exc:
+        raise ApiError(409, "follow_up_exists", str(exc)) from None
+    except ValueError as exc:
+        raise ApiError(400, "invalid_days", str(exc)) from None
+    return {"reminder": asdict(reminder)}
 
 
 class UpdateJobApplicationStatusIn(BaseModel):
@@ -2335,6 +4107,52 @@ def focus_probe(body: FocusProbeIn) -> dict:
     return {"session": asdict(session)}
 
 
+@app.middleware("http")
+async def _focus_room_no_store(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/focus/") and request.url.path.endswith("/room"):
+        if response.status_code == 422:
+            response = JSONResponse(
+                {"error": {"code": "focus_invalid", "message": "Choose a finished Focus block."}},
+                status_code=422,
+            )
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/focus/{session_id}/room")
+def focus_room_recap(session_id: int) -> dict:
+    from companion.db import is_local_personal
+    from companion.focus_room import interval, summarize
+
+    if not 0 < session_id < 2 ** 63:
+        raise ApiError(422, "focus_invalid", "Choose a finished Focus block.")
+    settings = get_settings()
+    if (settings.tenant != "personal" or not settings.owner_machine or settings.database_url
+            or not is_local_personal(_focus_store._engine, settings)):
+        raise ApiError(403, "owner_only", "Room recaps are available on the owner's local Kyra.")
+    try:
+        session = _focus_store.get(session_id)
+    except KeyError:
+        raise ApiError(404, "focus_missing", "Focus block not found.") from None
+    except Exception:
+        raise ApiError(503, "focus_history_unavailable", "Saved Focus history is unavailable.") from None
+    if session.ended_at is None or session.abandoned:
+        raise ApiError(409, "focus_not_finished", "Choose a finished Focus block.")
+    try:
+        start, end = interval(datetime.fromisoformat(session.started_at), datetime.fromisoformat(session.ended_at))
+    except (ValueError, TypeError, OverflowError):
+        raise ApiError(409, "focus_interval_invalid", "This block has no supported finished interval.") from None
+    try:
+        rows = _env_history().window("humidifier.room", "humidity", start, end)
+    except FileNotFoundError:
+        return summarize(start, end, []) | {"history_state": "not_recorded"}
+    except Exception:
+        raise ApiError(503, "room_history_unavailable", "Saved room history is unavailable. Try again later.") from None
+    result = summarize(start, end, rows)
+    return result | {"history_state": "recorded" if result["samples"] else "empty"}
+
+
 @app.get("/api/focus/history")
 def focus_history(limit: int = 50) -> dict:
     return {"sessions": [asdict(s) for s in _focus_store.list(limit=limit)]}
@@ -2411,11 +4229,21 @@ def save_checkpoint(checkpoint_id: UUID, body: CheckpointDraft) -> dict:
         raise ApiError(409, "revision_conflict", str(exc)) from exc
 
 
-@cache
 def _reels_store():
+    from sqlalchemy import inspect
+
+    from companion.db import _engine_for, normalize_db_url
     from companion.reels import ReelsStore
 
-    return ReelsStore()
+    url = get_settings().database_url
+    path = DATA_DIR / "reels.db"
+    if not url and not path.exists():
+        return None
+    engine = _engine_for(normalize_db_url(url) if url else f"sqlite:///{path}")
+    if not inspect(engine).has_table("reel_moments"):
+        engine.dispose()
+        return None
+    return ReelsStore(engine=engine)
 
 
 @app.get("/api/reels/due")
@@ -2424,6 +4252,8 @@ def reels_due() -> dict:
 
     store = _reels_store()
     due = []
+    if store is None:
+        return {"due": due}
     for moment in store.due("duc", at=_utcnow()):
         source = store.get_source(moment.source_id)
         if source is None or source.rights_state == RightsState.REJECTED:
@@ -2449,7 +4279,7 @@ def answer_reel(moment_id: int, body: ReelAnswerIn) -> dict:
     from companion.reels import NotApprovedError, NotDueError, RightsError
 
     store = _reels_store()
-    if store.get_moment(moment_id) is None:
+    if store is None or store.get_moment(moment_id) is None:
         raise ApiError(404, "not_found", "Unknown moment")
     try:
         return store.record_attempt("duc", moment_id, body.kind, body.chosen, at=_utcnow()).model_dump()
@@ -2466,6 +4296,12 @@ def answer_reel(moment_id: int, body: ReelAnswerIn) -> dict:
 @app.get("/api/learning/due")
 def learning_due() -> dict:
     return {"due": [asdict(i) for i in _learning_store.due()]}
+
+
+@app.get("/api/learning/summary")
+def learning_summary() -> dict:
+    store = _reels_store()
+    return {**_learning_store.summary(), "due_reels": len(store.due("duc", at=_utcnow())) if store else 0}
 
 
 class AddLearningItemIn(BaseModel):
@@ -2485,11 +4321,16 @@ def add_learning_item(body: AddLearningItemIn) -> dict:
 
 class MarkReviewedIn(BaseModel):
     remembered: bool
+    expected_next_review_at: str | None = None
 
 
 @app.post("/api/learning/{item_id}/review")
 def mark_learning_reviewed(item_id: int, body: MarkReviewedIn) -> dict:
-    result = _learning_store.mark_reviewed(item_id, body.remembered)
+    try:
+        result = _learning_store.mark_reviewed(item_id, body.remembered,
+                                               expected_next_review_at=body.expected_next_review_at)
+    except StaleReview as exc:
+        raise ApiError(409, "stale_review", str(exc), {"next_review_at": exc.next_review_at}) from exc
     if not result:
         raise ApiError(404, "not_found", f"no learning item with id {item_id}")
     return result
@@ -2535,7 +4376,7 @@ def dismiss_initiative(initiative_id: str, body: DismissInitiativeIn):
 # Working loop stays personal and loopback-only, independently of the optional LAN token.
 @app.middleware("http")
 async def _loop_boundary(request: Request, call_next):
-    if request.url.path == "/loop" or request.url.path.startswith("/api/loop/"):
+    if request.url.path.rstrip("/") in {"/loop", "/api/progress", "/api/reflections", "/api/myself", "/api/attention", "/api/attention/snooze", "/api/scout", "/api/ready"} or request.url.path.startswith(("/api/loop/", "/api/reflections/", "/api/scout/", "/api/ready/")):
         error = None
         if _client_host(request) not in {"127.0.0.1", "::1"}:
             error = "loopback_only"
@@ -2576,6 +4417,15 @@ def loop_page() -> HTMLResponse:
     return HTMLResponse(html)
 
 
+@app.get("/model3d")
+def model3d_page() -> HTMLResponse:
+    """The 3D viewer; its jobs API lives in the model3d router."""
+    html = (WEB_DIR / "model3d.html").read_text(encoding="utf-8")
+    for asset in ("model3d.js", "model3d.css"):
+        html = html.replace(f'/static/{asset}"', f'/static/{asset}?v={(WEB_DIR / asset).stat().st_mtime_ns}"')
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+
 class AssignmentIn(BaseModel):
     model_config = {"extra": "forbid"}
     code: str
@@ -2597,7 +4447,8 @@ class AssignmentAdvanceIn(BaseModel):
 @app.get("/api/loop/assignments")
 def loop_assignments() -> dict:
     controller = _loop_controller()
-    return {"assignments": [asdict(a) for a in controller.store.list_assignments(owner=controller.owner)]}
+    return {"assignments": [asdict(a) for a in controller.store.list_assignments(owner=controller.owner)],
+            "headless_enabled": get_settings().loop_headless}
 
 
 @app.post("/api/loop/assignments")
@@ -2645,12 +4496,107 @@ def _loop_dispatcher():
                       repo_root=WEB_DIR.parent, worktrees_dir=DATA_DIR / "working_loop" / "worktrees")
 
 
+def _handoff_tasks():
+    from companion import app_tasks
+    return (app_tasks.discover_codex(Path.home() / ".codex/sessions")
+            + app_tasks.discover_claude(Path.home() / ".claude/sessions"))
+
+
+def _handoff_runner():
+    import subprocess
+    return subprocess.run
+
+
+def _deliveries_store():
+    return DATA_DIR / "dispatch/deliveries.json"
+
+
+def _pins_store():
+    return DATA_DIR / "dispatch/destinations.json"
+
+
+def _destination_tasks():
+    root = _loop_dispatcher().repo_root.resolve()
+    return [task for task in _handoff_tasks() if Path(task.cwd).expanduser().resolve() == root]
+
+
+class DestinationPinIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    app: Literal["codex", "claude"]
+    id: str = Field(min_length=1)
+
+
+@app.get("/api/loop/destinations")
+def loop_destinations() -> dict:
+    from companion.app_dispatch import load_pins
+
+    pins = load_pins(_pins_store())
+    return {"destinations": [{"app": task.app, "id": task.id, "name": task.name,
+                              "idle": task.idle, "pinned": pins[task.app] == task.id,
+                              "updated_at": task.updated_at}
+                             for task in sorted(_destination_tasks(), key=lambda task: task.updated_at, reverse=True)]}
+
+
+@app.post("/api/loop/destinations/pin")
+def pin_loop_destination(body: DestinationPinIn) -> dict:
+    from companion.app_dispatch import save_pin
+
+    if not any(task.app == body.app and task.id == body.id for task in _destination_tasks()):
+        raise ApiError(404, "destination_not_found", "No such visible conversation in this repository")
+    return {"pins": save_pin(body.app, body.id, _pins_store())}
+
+
+class AssignmentHandoffIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    app: Literal["codex", "claude"]
+    kind: str
+
+
+@app.post("/api/loop/assignments/{assignment_id}/handoff")
+def loop_handoff_assignment(assignment_id: int, body: AssignmentHandoffIn) -> dict:
+    from companion.app_dispatch import DuplicateDelivery, StaleResult, load_pins
+    from companion.working_loop import PolicyRefused
+    try:
+        return _loop_dispatcher().handoff(assignment_id, app=body.app, kind=body.kind,
+                                         tasks=_handoff_tasks(), store_path=_deliveries_store(), runner=_handoff_runner(),
+                                         pins=load_pins(_pins_store()))
+    except StaleResult:
+        raise ApiError(409, "stale_result", "A previous result exists; review and move it before sending again.") from None
+    except DuplicateDelivery:
+        raise ApiError(409, "duplicate_delivery", "This assignment already has an open or uncertain delivery.") from None
+    except PolicyRefused as exc:
+        raise ApiError(409, str(exc), str(exc)) from None
+    except LookupError:
+        raise ApiError(404, "not_found", "Assignment not found") from None
+
+
+@app.get("/api/loop/deliveries")
+def loop_deliveries() -> dict:
+    from companion import app_dispatch
+    def read_rollout(path, offset):
+        try:
+            with Path(path).open("rb") as stream:
+                stream.seek(offset)
+                return stream.read().decode("utf-8", errors="replace").splitlines()
+        except OSError:
+            return []  # A closed/rotated rollout must not erase the last observation.
+
+    statuses = {task.id: ("idle" if task.idle else "busy")
+                for task in _handoff_tasks() if task.app == "claude" and task.idle is not None}
+    return {"deliveries": app_dispatch.observe(
+        _deliveries_store(), read_rollout=read_rollout, claude_status=statuses.get,
+        exists=lambda p: Path(p).is_file() and not Path(p).is_symlink(),
+    )}
+
+
 def _assignment_stage(assignment_id, stage):
     from companion.working_loop import PolicyRefused
     dispatcher = _loop_dispatcher()
     try:
         run = getattr(dispatcher, stage)(assignment_id)
     except PolicyRefused as exc:
+        if str(exc) == "headless_disabled":
+            raise ApiError(409, "headless_disabled", "Use Hand off to work in the visible conversation.") from None
         raise ApiError(400, "policy_refused", str(exc)) from None
     except LookupError:
         raise ApiError(404, "not_found", "Assignment not found") from None
@@ -2675,6 +4621,8 @@ def loop_build_assignment(assignment_id: int, body: AssignmentBuildIn) -> dict:
     try:
         assignment, _, _ = dispatcher.check_build(assignment_id, confirmed=body.confirmed)
     except PolicyRefused as exc:
+        if str(exc) == "headless_disabled":
+            raise ApiError(409, "headless_disabled", "Use Hand off to work in the visible conversation.") from None
         if str(exc) == "confirmation_required":
             raise ApiError(409, "confirmation_required", str(exc)) from None
         raise ApiError(400, "policy_refused", str(exc)) from None
@@ -2820,3 +4768,274 @@ def loop_reconcile(run_id: int, body: LoopReconciliationIn) -> dict:
     except PolicyRefused as exc:
         raise ApiError(409, "reconcile_refused", str(exc)) from None
     return {"reconciliation": asdict(result)}
+
+# Cast pixels stay native. These routes only authorize local viewing.
+def _cast_store():
+    from companion.cast_sessions import CastSessionStore
+    return CastSessionStore(DATA_DIR / "cast" / "devices.json")
+
+
+def _cast_bridge_secret_path():
+    return DATA_DIR / "cast" / "bridge-secret"
+
+
+def _cast_local(request: Request):
+    if _client_host(request) not in _LOOPBACK:
+        raise ApiError(403, "cast_auth", "Cast approval requires this Mac")
+    origin = request.headers.get("origin")
+    if (request.url.hostname not in _LOOPBACK
+            or (origin and origin != str(request.base_url).rstrip("/"))):
+        raise ApiError(403, "cast_auth", "Cast authorization refused")
+
+
+def _cast_bridge(request: Request):
+    from companion.cast_sessions import bridge_secret
+    _cast_local(request)
+    expected = bridge_secret(_cast_bridge_secret_path())
+    if not secrets.compare_digest(request.headers.get("x-kyra-bridge", ""), expected):
+        raise ApiError(401, "cast_auth", "Cast authorization refused")
+
+
+async def _cast_body(request: Request, fields: dict, optional: frozenset = frozenset()):
+    # Do not let validation errors reflect credential values back to a caller.
+    size, chunks = 0, []
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > 4096:
+            raise ApiError(400, "cast_auth", "Invalid cast request")
+        chunks.append(chunk)
+    try:
+        body = json.loads(b"".join(chunks))
+        if not isinstance(body, dict) or not set(fields) <= set(body) or set(body) - set(fields) - optional:
+            raise ValueError()
+        for key, kind in fields.items():
+            if type(body[key]) is not kind or (kind is str and not 0 < len(body[key]) <= 1024):
+                raise ValueError()
+        return body
+    except (ValueError, TypeError):
+        raise ApiError(400, "cast_auth", "Invalid cast request") from None
+
+
+async def _cast_call(method, **kwargs):
+    from starlette.concurrency import run_in_threadpool
+
+    from companion.cast_sessions import CastAuthError, bridge_secret
+    try:
+        await run_in_threadpool(bridge_secret, _cast_bridge_secret_path())
+        return await run_in_threadpool(method, **kwargs)
+    except CastAuthError:
+        raise ApiError(401, "cast_auth", "Cast authorization refused") from None
+
+
+@app.post("/api/cast/enroll")
+async def cast_enroll(request: Request):
+    return await _cast_call(_cast_store().begin_enrollment, **await _cast_body(request, {"name": str}), now=time.time())
+
+
+@app.post("/api/cast/enroll/{enrollment_id}/approve")
+async def cast_approve(enrollment_id: str, request: Request):
+    _cast_local(request)
+    return await _cast_call(_cast_store().approve, enrollment_id=enrollment_id,
+                            **await _cast_body(request, {"code": str}), now=time.time())
+
+
+@app.get("/api/cast/devices")
+async def cast_devices(request: Request):
+    _cast_local(request)
+    return {"devices": await _cast_call(_cast_store().devices)}
+
+
+@app.post("/api/cast/devices/{device_id}/revoke")
+async def cast_revoke(device_id: str, request: Request):
+    _cast_local(request)
+    await _cast_call(_cast_store().revoke, device_id=device_id)
+    return {"revoked": True}
+
+
+@app.post("/api/cast/session")
+async def cast_session(request: Request):
+    cap = await _cast_call(_cast_store().issue_capability,
+                          **await _cast_body(request, {"device_id": str, "secret": str}), now=time.time())
+    return {"capability": cap}
+
+
+@app.post("/api/cast/bridge/redeem")
+async def cast_redeem(request: Request):
+    _cast_bridge(request)
+    return await _cast_call(_cast_store().redeem_capability,
+                           **await _cast_body(request, {"capability": str}), now=time.time())
+
+
+@app.post("/api/cast/bridge/ticket")
+async def cast_ticket(request: Request):
+    _cast_bridge(request)
+    ticket = await _cast_call(_cast_store().issue_ticket,
+                             **await _cast_body(request, {"session_id": str, "stream_id": str, "epoch": int}), now=time.time())
+    return {"ticket": ticket}
+
+
+@app.post("/api/cast/bridge/verify")
+async def cast_verify(request: Request):
+    _cast_bridge(request)
+    device_id = await _cast_call(_cast_store().verify_ticket,
+                                **await _cast_body(request, {"ticket": str, "stream_id": str, "epoch": int}), now=time.time())
+    return {"device_id": device_id}
+
+
+@app.post("/api/cast/bridge/check")
+async def cast_check(request: Request):
+    _cast_bridge(request)
+    return await _cast_call(_cast_store().check_session,
+                           **await _cast_body(request, {"session_id": str}), now=time.time())
+
+
+@app.post("/api/cast/bridge/close")
+async def cast_close(request: Request):
+    _cast_bridge(request)
+    await _cast_call(_cast_store().close_session, **await _cast_body(request, {"session_id": str}))
+    return {"closed": True}
+
+
+@app.post("/api/cast/bridge/health")
+async def cast_bridge_health(request: Request):
+    _cast_bridge(request)
+    return {"ok": True}
+
+
+@app.post("/api/cast/enroll/{enrollment_id}/claim")
+async def cast_claim(enrollment_id: str, request: Request):
+    return await _cast_call(_cast_store().claim, enrollment_id=enrollment_id,
+                           **await _cast_body(request, {"claim": str}), now=time.time())
+
+
+@app.get("/api/cast/pending")
+async def cast_pending(request: Request):
+    _cast_local(request)
+    return {"pending": await _cast_call(_cast_store().pending, now=time.time())}
+
+
+@app.get("/cast-devices")
+async def cast_devices_page(request: Request):
+    _cast_local(request)
+    return FileResponse(WEB_DIR / "cast-devices.html", headers={"Cache-Control": "no-store"})
+
+
+@app.on_event("startup")
+def _cast_startup():
+    from companion.cast_sessions import bridge_secret
+    bridge_secret(_cast_bridge_secret_path())
+
+
+@app.middleware("http")
+async def _cast_no_cache(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/cast/") or request.url.path == "/cast-devices" or request.url.path.startswith("/cast/artifacts/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _cast_artifacts():
+    from companion.cast_artifacts import ArtifactStore
+    return ArtifactStore(DATA_DIR / "cast" / "artifacts")
+
+
+def _cast_breakdown_model():
+    from companion.cast_artifacts import breakdown_model
+    return breakdown_model()
+
+
+def _cast_artifact_owner(request: Request):
+    token = get_settings().api_token
+    if not token or not _authorized(request, token):
+        raise ApiError(401, "cast_auth", "Owner authentication required")
+    origin = request.headers.get("origin")
+    if origin and origin != str(request.base_url).rstrip("/"):
+        raise ApiError(403, "cast_auth", "Cross-origin artifact action refused")
+
+
+@app.post("/api/cast/artifacts/approve")
+async def cast_artifact_approve(request: Request):
+    _cast_artifact_owner(request)
+    from companion.cast_artifacts import declaration_label
+    body = await _cast_body(request, {"freeze_id": str, "digest": str}, frozenset({"source", "declaration"}))
+    label = declaration_label(body.pop("source", None), body.pop("declaration", None))
+    approval = await _cast_call(_cast_artifacts().approve, **body, session_id="owner", now=time.time(), label=label)
+    return {"approval": approval}
+
+
+@app.post("/api/cast/bridge/release")
+async def cast_artifact_release(request: Request):
+    from companion.cast_artifacts import MAX_PNG, GraphError
+    _cast_bridge(request)
+    if request.headers.get("content-type", "").lower() != "image/png":
+        raise ApiError(415, "cast_image", "A raw PNG is required")
+    data = bytearray()
+    async for chunk in request.stream():
+        if len(data) + len(chunk) > MAX_PNG:
+            raise ApiError(413, "cast_image", "Image exceeds 4 MiB")
+        data.extend(chunk)
+    try:
+        artifact = await _cast_call(_cast_artifacts().release,
+            approval=request.headers.get("x-kyra-approval", ""), png=bytes(data),
+            freeze_id=request.headers.get("x-kyra-freeze", ""),
+            model=_cast_breakdown_model(), now=time.time())
+    except GraphError:
+        raise ApiError(422, "cast_graph", "The model did not return a valid graph; approval consumed") from None
+    return {"artifact_id": artifact["id"]}
+
+
+def _cast_artifact_get(ident):
+    from companion.cast_artifacts import GraphError
+    try:
+        return _cast_artifacts().get(ident)
+    except (GraphError, FileNotFoundError):
+        raise ApiError(404, "cast_artifact", "Artifact unavailable") from None
+
+
+@app.get("/api/cast/artifacts/{artifact_id}")
+def cast_artifact_get(artifact_id: str, request: Request):
+    _cast_artifact_owner(request)
+    return _cast_artifact_get(artifact_id)
+
+
+@app.post("/api/cast/artifacts/{artifact_id}/open-on-mac")
+def cast_artifact_open(artifact_id: str, request: Request):
+    _cast_artifact_owner(request)
+    _cast_artifact_get(artifact_id)
+    _cast_artifacts().request_open(artifact_id)
+    return {"queued": True}
+
+
+@app.get("/api/cast/bridge/opens")
+def cast_artifact_opens(request: Request):
+    _cast_bridge(request)
+    return {"ids": _cast_artifacts().pending_opens()}
+
+
+@app.get("/cast/artifacts/{artifact_id}")
+def cast_artifact_viewer(artifact_id: str, request: Request):
+    from fastapi.responses import HTMLResponse
+    _cast_local(request)
+    graph = json.dumps(_cast_artifact_get(artifact_id)["graph"], ensure_ascii=True).replace("<", "\\u003c")
+    page = (WEB_DIR / "cast-artifact.html").read_text().replace("__GRAPH_JSON__", graph)
+    return HTMLResponse(page, headers={"Cache-Control": "no-store",
+        "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'"})
+
+
+# Routes are entirely inside the existing protected /api/loop/ prefix.
+from companion.workflow_http import router as workflow_router  # noqa: E402
+
+app.include_router(workflow_router)
+
+from companion.team_http import install as install_team  # noqa: E402
+
+install_team(app)
+
+from companion.team_agent_threads import router as agent_threads_router  # noqa: E402
+
+app.include_router(agent_threads_router)
+
+# Kyra 3D jobs: same app-wide token gate as every other /api/ route.
+from companion.model3d_http import router as model3d_router  # noqa: E402
+
+app.include_router(model3d_router)

@@ -68,15 +68,17 @@ final class KyraClient: WorkspaceAPI, LessonAPI {
     }
 
     var token: String {
-        didSet { UserDefaults.standard.set(token, forKey: "kyra.token") }
+        didSet { secrets.write("kyra.token", token) }
     }
 
+    private let secrets = KeychainSecretStore()
+
     init() {
+        migrateLegacyToken(defaults: .standard, store: secrets)
         baseURL = UserDefaults.standard.string(forKey: "kyra.baseURL") ?? ""
-        token = UserDefaults.standard.string(forKey: "kyra.token") ?? ""
+        token = secrets.read("kyra.token") ?? ""
         // Persist settings supplied by the paired Mac at launch, just as field edits do.
         UserDefaults.standard.set(baseURL, forKey: "kyra.baseURL")
-        UserDefaults.standard.set(token, forKey: "kyra.token")
     }
 
     private func request(_ path: String, body: Data? = nil) throws -> URLRequest {

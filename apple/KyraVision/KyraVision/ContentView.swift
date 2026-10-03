@@ -7,12 +7,12 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var textFocused: Bool
 
-    @State private var presentation = OrbPresentation()
+    @Binding var presentation: OrbPresentation
     @State private var draft = ""
     @State private var backend = "…"
     @State private var showSettings = false
     @State private var turn: Task<Void, Never>?
-    @State private var speech = SpeechPlayer()
+    let speech: SpeechPlayer
     @State private var voice = VoiceInput(recorder: HeadsetVoiceRecorder())
     @State private var turnID = UUID()
     @State private var reviewTask: Task<Void, Never>?
@@ -64,13 +64,18 @@ struct ContentView: View {
         .ornament(attachmentAnchor: .scene(.top)) {
             // The backend badge lives on an ornament rather than in the window,
             // so it never competes with the conversation for attention.
-            Text(connected ? backend.uppercased() : "NOT CONNECTED")
+            Text(connected ? (backend == "offline" ? "OFFLINE - tap to fix" : backend.uppercased()) : "NOT CONNECTED")
                 .font(.system(.caption, design: .monospaced))
                 .padding(.horizontal, 16).padding(.vertical, 10)
                 .glassBackgroundEffect()
                 .onTapGesture { stop(); showSettings = true }
         }
-        .sheet(isPresented: $showSettings) { settings }
+        .sheet(isPresented: $showSettings) {
+            ConnectionSettingsForm(client: client) {
+                showSettings = false
+                Task { await refreshBackend() }
+            }
+        }
         .task { await refreshBackend() }
         .onDisappear { stop() }
         .onChange(of: speech.error) {
@@ -190,6 +195,11 @@ struct ContentView: View {
                         .disabled(!presentation.stopEnabled && reviewTask == nil)
                 }
             }
+            Button("Connection", systemImage: "gearshape") {
+                stop()
+                showSettings = true
+            }
+            .labelStyle(.titleAndIcon)
         }
         .buttonStyle(.bordered)
         .controlSize(.large)
@@ -284,38 +294,6 @@ struct ContentView: View {
                 presentation.presence = .failed
             }
         }
-    }
-
-    private var settings: some View {
-        NavigationStack {
-            Form {
-                Section("Your Mac") {
-                    TextField("http://192.168.1.20:8420", text: Binding(
-                        get: { client.baseURL }, set: { client.baseURL = $0 }))
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                }
-                Section {
-                    SecureField("KYRA_API_TOKEN", text: Binding(
-                        get: { client.token }, set: { client.token = $0 }))
-                } header: {
-                    Text("Token")
-                } footer: {
-                    Text("Start the Mac with KYRA_HOST=0.0.0.0 and set KYRA_API_TOKEN in .env. "
-                         + "Without the token the server refuses anything that is not the Mac itself.")
-                }
-            }
-            .navigationTitle("Connect to Kyra")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        showSettings = false
-                        Task { await refreshBackend() }
-                    }
-                }
-            }
-        }
-        .frame(minWidth: 520, minHeight: 380)
     }
 
     private func refreshBackend() async {
@@ -459,5 +437,40 @@ struct ContentView: View {
             presentation.lines[last].badge = "interrupted"
         }
         presentation.presence = .interrupted
+    }
+}
+
+/// Connection editing only; presenting this form never starts a conversation or microphone.
+struct ConnectionSettingsForm: View {
+    let client: KyraClient
+    let done: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Your Mac") {
+                    TextField("https://<your Mac>:8443", text: Binding(
+                        get: { client.baseURL }, set: { client.baseURL = $0 }))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                }
+                Section {
+                    SecureField("KYRA_API_TOKEN", text: Binding(
+                        get: { client.token }, set: { client.token = $0 }))
+                } header: {
+                    Text("Token")
+                } footer: {
+                    Text("Use the HTTPS address from START-HERE. Trust Kyra Root CA on the headset once, "
+                         + "then paste KYRA_API_TOKEN without quotes.")
+                }
+            }
+            .navigationTitle("Connect to Kyra")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", action: done)
+                }
+            }
+        }
+        .frame(minWidth: 520, minHeight: 380)
     }
 }

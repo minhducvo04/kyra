@@ -68,13 +68,13 @@ def test_learning_streak_counts_once_per_day(tmp_path):
 
 def test_job_applications_crud_and_validation(tmp_path):
     store = JobApplicationStore(tmp_path / "j.db")
-    app = store.add("Stripe", "Backend", link="https://x", notes="n")
+    app = store.add("Northwind", "Backend", link="https://x", notes="n")
     assert app.status == "applied"
     assert [a.id for a in store.list()] == [app.id]
     assert store.list("offer") == []
     updated = store.update_status(app.id, "interviewing")
     assert updated.status == "interviewing" and updated.notes == "n"
-    assert store.update_status(app.id, "offer", notes="yay").notes == "yay"
+    assert store.update_status(app.id, "offer", notes="yay").notes == "n\nyay"
     assert store.update_status(999, "offer") is None
     with pytest.raises(ValueError):
         store.update_status(app.id, "hired")

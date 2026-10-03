@@ -145,7 +145,7 @@ def default_listings(today: str) -> dict[str, dict]:
             {"id": 12, "text": "send thank-you email to the recruiter", "due_at": d(1), "created_at": d(0), "done": False},
         ]},
         "list_job_applications": {"applications": [
-            {"id": 7, "company": "Stripe", "role": "Backend Engineer", "status": "applied", "link": None, "notes": None},
+            {"id": 7, "company": "Northwind", "role": "Backend Engineer", "status": "applied", "link": None, "notes": None},
             {"id": 8, "company": "Cursor", "role": "AI Engineer", "status": "applied", "link": None, "notes": None},
             {"id": 10, "company": "Meta", "role": "Software Engineer", "status": "interviewing", "link": None, "notes": None},
             {"id": 13, "company": "Slack", "role": "Platform Engineer", "status": "applied", "link": None, "notes": None},
@@ -384,7 +384,7 @@ GEN_CATEGORIES: dict[str, tuple[str, str, list[str]]] = {
     "find_then_act": ("tool",
                       "referring to an EXISTING reminder, tracked job application, or review item by description rather "
                       "than by id, and asking to complete / snooze / update / mark it - the assistant has to look it up first",
-                      ["the dentist one is done", "push the rent reminder to Friday", "Stripe moved me to onsite, update it",
+                      ["the dentist one is done", "push the rent reminder to Friday", "Northwind moved me to onsite, update it",
                        "I remembered the Raft one"]),
     "two_tools": ("tool",
                   "one message asking for two different things that are two different tools (log an application AND set a "

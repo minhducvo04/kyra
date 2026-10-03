@@ -7,6 +7,39 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B20000000000000000000050 /* PetActionDock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000050; };
+		B20000000000000000000049 /* PetPlacementGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000049; };
+		B20000000000000000000048 /* PetDock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000048; };
+		B20000000000000000000042 /* CompanionPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000042; };
+		B20000000000000000000044 /* PetPerchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000044; };
+		B20000000000000000000047 /* PetPoseSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000047; };
+		B20000000000000000000046 /* PetFollowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000046; };
+		B20000000000000000000045 /* PetFollow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000045; };
+		B20000000000000000000043 /* PetPerch.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000043; };
+		B20000000000000000000041 /* PetLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000041; };
+		B20000000000000000000040 /* PetRolePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000040; };
+		B20000000000000000000039 /* CapybaraVolumeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000039; };
+		B20000000000000000000038 /* CapybaraGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000038; };
+		B20000000000000000000032 /* OwlVolumeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000032; };
+		B20000000000000000000031 /* OwlPose.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000031; };
+		B20000000000000000000033 /* OwlMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000033; };
+		B20000000000000000000035 /* OwlGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000035; };
+		B20000000000000000000037 /* PetLanding.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000037; };
+		B20000000000000000000036 /* PetLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000036; };
+		B20000000000000000000051 /* SketchStrokeMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000051; };
+		B20000000000000000000052 /* SpatialSketch.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000052; };
+		B20000000000000000000053 /* SketchSpaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000053; };
+B20000000000000000000060 /* Model3D.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000060; };
+B20000000000000000000061 /* Model3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000061; };
+		B20000000000000000000034 /* OwlStance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000034; };
+B20000000000000000000030 /* CastArtifactScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000030; };
+B20000000000000000000029 /* CastArtifacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000029; };
+B20000000000000000000028 /* CastSpace.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000028; };
+B20000000000000000000027 /* CastLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000027; };
+B20000000000000000000026 /* StreamManagement.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000026; };
+B20000000000000000000025 /* CastCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000025; };
+		A1000000000000000000119 /* PanelWindowScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000019 /* PanelWindowScene.swift */; };
+		A1000000000000000000118 /* PanelWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000018 /* PanelWindows.swift */; };
 		A1000000000000000000117 /* SecondOpinion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000017 /* SecondOpinion.swift */; };
 		A1000000000000000000116 /* OrbPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000016 /* OrbPresentation.swift */; };
 		A1000000000000000000115 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000015 /* Assets.xcassets */; };
@@ -23,9 +56,47 @@
 		A1000000000000000000112 /* LearningLab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000012 /* LearningLab.swift */; };
 		A1000000000000000000113 /* VoiceInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000013 /* VoiceInput.swift */; };
 		A1000000000000000000114 /* VoiceStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000014 /* VoiceStream.swift */; };
+		B20000000000000000000020 /* CastWindowScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020; };
+		B20000000000000000000021 /* CastProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000021; };
+		B20000000000000000000022 /* CastConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000022; };
+		B20000000000000000000023 /* CastVideo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000023; };
+		B20000000000000000000024 /* CastClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000024; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		B10000000000000000000050 /* PetActionDock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetActionDock.swift; sourceTree = "<group>"; };
+		B10000000000000000000049 /* PetPlacementGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetPlacementGuide.swift; sourceTree = "<group>"; };
+		B10000000000000000000048 /* PetDock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetDock.swift; sourceTree = "<group>"; };
+		B10000000000000000000042 /* CompanionPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionPresentation.swift; sourceTree = "<group>"; };
+		B10000000000000000000044 /* PetPerchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetPerchView.swift; sourceTree = "<group>"; };
+		B10000000000000000000047 /* PetPoseSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetPoseSource.swift; sourceTree = "<group>"; };
+		B10000000000000000000046 /* PetFollowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetFollowView.swift; sourceTree = "<group>"; };
+		B10000000000000000000045 /* PetFollow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetFollow.swift; sourceTree = "<group>"; };
+		B10000000000000000000043 /* PetPerch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetPerch.swift; sourceTree = "<group>"; };
+		B10000000000000000000041 /* PetLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetLifecycle.swift; sourceTree = "<group>"; };
+		B10000000000000000000040 /* PetRolePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetRolePolicy.swift; sourceTree = "<group>"; };
+		B10000000000000000000039 /* CapybaraVolumeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapybaraVolumeView.swift; sourceTree = "<group>"; };
+		B10000000000000000000038 /* CapybaraGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapybaraGeometry.swift; sourceTree = "<group>"; };
+		B10000000000000000000032 /* OwlVolumeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwlVolumeView.swift; sourceTree = "<group>"; };
+		B10000000000000000000031 /* OwlPose.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwlPose.swift; sourceTree = "<group>"; };
+		B10000000000000000000033 /* OwlMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwlMotion.swift; sourceTree = "<group>"; };
+		B10000000000000000000035 /* OwlGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwlGeometry.swift; sourceTree = "<group>"; };
+		B10000000000000000000037 /* PetLanding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetLanding.swift; sourceTree = "<group>"; };
+		B10000000000000000000036 /* PetLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetLayout.swift; sourceTree = "<group>"; };
+		B10000000000000000000051 /* SketchStrokeMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SketchStrokeMesh.swift; sourceTree = "<group>"; };
+		B10000000000000000000052 /* SpatialSketch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialSketch.swift; sourceTree = "<group>"; };
+		B10000000000000000000053 /* SketchSpaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SketchSpaceView.swift; sourceTree = "<group>"; };
+B10000000000000000000060 /* Model3D.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model3D.swift; sourceTree = "<group>"; };
+B10000000000000000000061 /* Model3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model3DView.swift; sourceTree = "<group>"; };
+		B10000000000000000000034 /* OwlStance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwlStance.swift; sourceTree = "<group>"; };
+B10000000000000000000030 /* CastArtifactScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CastArtifactScene.swift"; sourceTree = "<group>"; };
+B10000000000000000000029 /* CastArtifacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../../KyraCast/Protocol/CastArtifacts.swift"; sourceTree = "<group>"; };
+B10000000000000000000028 /* CastSpace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CastSpace.swift"; sourceTree = "<group>"; };
+B10000000000000000000027 /* CastLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../../KyraCast/Protocol/CastLayout.swift"; sourceTree = "<group>"; };
+B10000000000000000000026 /* StreamManagement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../../KyraCast/Protocol/StreamManagement.swift"; sourceTree = "<group>"; };
+B10000000000000000000025 /* CastCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../../KyraCast/Shared/CastCredentials.swift"; sourceTree = "<group>"; };
+		A1000000000000000000019 /* PanelWindowScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelWindowScene.swift; sourceTree = "<group>"; };
+		A1000000000000000000018 /* PanelWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelWindows.swift; sourceTree = "<group>"; };
 		A1000000000000000000017 /* SecondOpinion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondOpinion.swift; sourceTree = "<group>"; };
 		A1000000000000000000016 /* OrbPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbPresentation.swift; sourceTree = "<group>"; };
 		A1000000000000000000015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -43,6 +114,11 @@
 		A1000000000000000000012 /* LearningLab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningLab.swift; sourceTree = "<group>"; };
 		A1000000000000000000013 /* VoiceInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInput.swift; sourceTree = "<group>"; };
 		A1000000000000000000014 /* VoiceStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceStream.swift; sourceTree = "<group>"; };
+		B10000000000000000000020 /* CastWindowScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CastWindowScene.swift"; sourceTree = "<group>"; };
+		B10000000000000000000021 /* CastProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../../KyraCast/Protocol/CastProtocol.swift"; sourceTree = "<group>"; };
+		B10000000000000000000022 /* CastConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../../KyraCast/Shared/CastConnection.swift"; sourceTree = "<group>"; };
+		B10000000000000000000023 /* CastVideo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../../KyraCast/Shared/CastVideo.swift"; sourceTree = "<group>"; };
+		B10000000000000000000024 /* CastClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../../KyraCast/Shared/CastClient.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -67,6 +143,44 @@
 		A1000000000000000000301 /* KyraVision */ = {
 			isa = PBXGroup;
 			children = (
+				B10000000000000000000027 /* CastLayout.swift */,
+				B10000000000000000000028 /* CastSpace.swift */,
+				B10000000000000000000029 /* CastArtifacts.swift */,
+				B10000000000000000000030 /* CastArtifactScene.swift */,
+				B10000000000000000000020 /* CastWindowScene.swift */,
+				B10000000000000000000021 /* CastProtocol.swift */,
+				B10000000000000000000022 /* CastConnection.swift */,
+				B10000000000000000000023 /* CastVideo.swift */,
+				B10000000000000000000024 /* CastClient.swift */,
+                B10000000000000000000025 /* CastCredentials.swift */,
+                B10000000000000000000026 /* StreamManagement.swift */,
+				A1000000000000000000018 /* PanelWindows.swift */,
+				A1000000000000000000019 /* PanelWindowScene.swift */,
+				B10000000000000000000032 /* OwlVolumeView.swift */,
+				B10000000000000000000031 /* OwlPose.swift */,
+				B10000000000000000000033 /* OwlMotion.swift */,
+				B10000000000000000000035 /* OwlGeometry.swift */,
+				B10000000000000000000037 /* PetLanding.swift */,
+				B10000000000000000000039 /* CapybaraVolumeView.swift */,
+				B10000000000000000000042 /* CompanionPresentation.swift */,
+				B10000000000000000000044 /* PetPerchView.swift */,
+				B10000000000000000000047 /* PetPoseSource.swift */,
+				B10000000000000000000050 /* PetActionDock.swift */,
+				B10000000000000000000049 /* PetPlacementGuide.swift */,
+				B10000000000000000000048 /* PetDock.swift */,
+				B10000000000000000000046 /* PetFollowView.swift */,
+				B10000000000000000000045 /* PetFollow.swift */,
+				B10000000000000000000043 /* PetPerch.swift */,
+				B10000000000000000000041 /* PetLifecycle.swift */,
+				B10000000000000000000040 /* PetRolePolicy.swift */,
+				B10000000000000000000038 /* CapybaraGeometry.swift */,
+				B10000000000000000000036 /* PetLayout.swift */,
+				B10000000000000000000051 /* SketchStrokeMesh.swift */,
+				B10000000000000000000052 /* SpatialSketch.swift */,
+				B10000000000000000000053 /* SketchSpaceView.swift */,
+				B10000000000000000000060 /* Model3D.swift */,
+				B10000000000000000000061 /* Model3DView.swift */,
+				B10000000000000000000034 /* OwlStance.swift */,
 				A1000000000000000000017 /* SecondOpinion.swift */,
 				A1000000000000000000016 /* OrbPresentation.swift */,
 				A1000000000000000000015 /* Assets.xcassets */,
@@ -164,6 +278,44 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B20000000000000000000027 /* CastLayout.swift in Sources */,
+				B20000000000000000000028 /* CastSpace.swift in Sources */,
+				B20000000000000000000029 /* CastArtifacts.swift in Sources */,
+				B20000000000000000000030 /* CastArtifactScene.swift in Sources */,
+				B20000000000000000000020 /* CastWindowScene.swift in Sources */,
+				B20000000000000000000021 /* CastProtocol.swift in Sources */,
+				B20000000000000000000022 /* CastConnection.swift in Sources */,
+				B20000000000000000000023 /* CastVideo.swift in Sources */,
+				B20000000000000000000024 /* CastClient.swift in Sources */,
+                B20000000000000000000025 /* CastCredentials.swift in Sources */,
+                B20000000000000000000026 /* StreamManagement.swift in Sources */,
+				A1000000000000000000118 /* PanelWindows.swift in Sources */,
+				A1000000000000000000119 /* PanelWindowScene.swift in Sources */,
+				B20000000000000000000032 /* OwlVolumeView.swift in Sources */,
+				B20000000000000000000031 /* OwlPose.swift in Sources */,
+				B20000000000000000000033 /* OwlMotion.swift in Sources */,
+				B20000000000000000000035 /* OwlGeometry.swift in Sources */,
+				B20000000000000000000037 /* PetLanding.swift in Sources */,
+				B20000000000000000000039 /* CapybaraVolumeView.swift in Sources */,
+				B20000000000000000000042 /* CompanionPresentation.swift in Sources */,
+				B20000000000000000000044 /* PetPerchView.swift in Sources */,
+				B20000000000000000000047 /* PetPoseSource.swift in Sources */,
+				B20000000000000000000050 /* PetActionDock.swift in Sources */,
+				B20000000000000000000049 /* PetPlacementGuide.swift in Sources */,
+				B20000000000000000000048 /* PetDock.swift in Sources */,
+				B20000000000000000000046 /* PetFollowView.swift in Sources */,
+				B20000000000000000000045 /* PetFollow.swift in Sources */,
+				B20000000000000000000043 /* PetPerch.swift in Sources */,
+				B20000000000000000000041 /* PetLifecycle.swift in Sources */,
+				B20000000000000000000040 /* PetRolePolicy.swift in Sources */,
+				B20000000000000000000038 /* CapybaraGeometry.swift in Sources */,
+				B20000000000000000000036 /* PetLayout.swift in Sources */,
+				B20000000000000000000051 /* SketchStrokeMesh.swift in Sources */,
+				B20000000000000000000052 /* SpatialSketch.swift in Sources */,
+				B20000000000000000000053 /* SketchSpaceView.swift in Sources */,
+				B20000000000000000000060 /* Model3D.swift in Sources */,
+				B20000000000000000000061 /* Model3DView.swift in Sources */,
+				B20000000000000000000034 /* OwlStance.swift in Sources */,
 				A1000000000000000000117 /* SecondOpinion.swift in Sources */,
 				A1000000000000000000116 /* OrbPresentation.swift in Sources */,
 				A1000000000000000000113 /* VoiceInput.swift in Sources */,
@@ -208,7 +360,7 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
-				XROS_DEPLOYMENT_TARGET = 2.0;
+				XROS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Debug;
 		};
@@ -229,7 +381,7 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
-				XROS_DEPLOYMENT_TARGET = 2.0;
+				XROS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Release;
 		};
@@ -238,11 +390,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Kyra runs on your Mac; the headset talks to it over your own Wi-Fi.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "So you can talk to Kyra.";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Track your index finger and pinch to draw private lines in Kyra Sketch.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "So Kyra can hear what you say.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -263,11 +417,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Kyra runs on your Mac; the headset talks to it over your own Wi-Fi.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "So you can talk to Kyra.";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Track your index finger and pinch to draw private lines in Kyra Sketch.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "So Kyra can hear what you say.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (

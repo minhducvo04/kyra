@@ -97,9 +97,9 @@ def test_checkpoint_and_learning_save_races_on_backend(engine, same_payload):
 
 def test_job_applications_on_backend(engine):
     store = JobApplicationStore(engine=engine)
-    a = store.add("Stripe", "SDE", link="https://x", notes="n")
+    a = store.add("Northwind", "SDE", link="https://x", notes="n")
     assert store.list()[0].id == a.id and store.list("offer") == []
-    assert store.update_status(a.id, "offer", notes="yay").notes == "yay"
+    assert store.update_status(a.id, "offer", notes="yay").notes == "n\nyay"
     assert store.update_status(10**6, "offer") is None
     with pytest.raises(ValueError):
         store.update_status(a.id, "hired")

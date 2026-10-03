@@ -233,3 +233,127 @@ def test_a_board_that_cannot_be_reached_is_still_added(tmp_path):
     entry = WatchEntry("Acme", "greenhouse", "acme", [])
     report = seed_entry(entry, seen_path=tmp_path / "seen.json", sources={"greenhouse": GreenhouseBoard(boom)})
     assert report.new == [] and report.errors and "no network" in report.errors[0]
+
+
+def _watch_script():
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location('watch_boards_hits_test', Path(__file__).parents[1] / 'scripts/watch_boards.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_import_seeds_without_flood_and_only_new_hits_are_queued(tmp_path):
+    from companion.db import engine_for_store
+    from companion.job_applications import JobApplicationStore
+    from companion.jobs import DbJobQueue
+    from companion.ready import ReadyStore
+
+    script = _watch_script()
+    folder = tmp_path / 'job_boards'
+    csv = tmp_path / 'boards.csv'
+    csv.write_text('company,url\nNorthwind,https://jobs.lever.co/northwind\n')
+    postings = [{'id': 'old', 'text': 'Senior Software Engineer', 'hostedUrl': 'https://jobs.lever.co/northwind/old',
+                 'descriptionPlain': 'Python SQL'}]
+    sources = {'lever': LeverBoard(lambda url: postings)}
+    args = dict(watchlist_path=folder / 'watchlist.json', seen_path=folder / 'seen.json', sources=sources)
+    assert script.import_boards(csv, **args)['imported'] == 1
+    assert script.import_boards(csv, **args)['skipped'] == 1
+    engine = engine_for_store(tmp_path / 'kyra.db')
+    apps, queue, ready = JobApplicationStore(engine=engine), DbJobQueue(engine), ReadyStore(folder / 'ready.json')
+    kwargs = dict(resume_text='Python SQL', data_dir=tmp_path, sources=sources, applications=apps, queue=queue, ready=ready)
+    assert script.watch_hits(**kwargs)['new'] == 0
+    postings.append({'id': 'new', 'text': 'ML Engineer', 'hostedUrl': 'https://jobs.lever.co/northwind/new',
+                     'descriptionPlain': 'Python SQL'})
+    # A digest check must not consume the watcher's new hit.
+    check_boards(load_watchlist(folder / 'watchlist.json'), folder / 'seen.json', sources)
+    assert script.watch_hits(**kwargs)['enqueued'] == 1
+    assert script.watch_hits(**kwargs)['new'] == 0
+    hits = [json.loads(line) for line in (folder / 'hits.jsonl').read_text().splitlines()]
+    assert len(hits) == 1 and hits[0]['score'] >= 70 and hits[0]['urgency'] == 'high'
+    assert len(apps.list()) == 1 and apps.list()[0].status == 'targeting'
+    jobs = queue.list()
+    assert len(jobs) == 1 and jobs[0].kind == 'prepare'
+    assert ready.list()[0]['state'] == 'needs_input'  # not yet a prepared document
+
+
+def test_import_failed_seed_does_not_install_unseeded_board(tmp_path):
+    script = _watch_script()
+    csv = tmp_path / 'boards.csv'
+    csv.write_text('company,url\nNorthwind,https://jobs.lever.co/northwind\n')
+
+    def failed(url):
+        raise OSError('fixture failure')
+
+    result = script.import_boards(csv, watchlist_path=tmp_path / 'watchlist.json', seen_path=tmp_path / 'seen.json',
+                                  sources={'lever': LeverBoard(failed)})
+    assert result['errors'] and result['imported'] == 0
+    assert not (tmp_path / 'watchlist.json').exists()
+
+
+def test_hit_handoff_failure_is_retried_without_duplicate_journal_or_tracker(tmp_path):
+    from companion.db import engine_for_store
+    from companion.job_applications import JobApplicationStore
+    from companion.jobs import DbJobQueue
+    from companion.ready import ReadyStore
+
+    script = _watch_script()
+    engine = engine_for_store(tmp_path / 'kyra.db')
+    apps, queue = JobApplicationStore(engine=engine), DbJobQueue(engine)
+
+    class OnceFailingReady(ReadyStore):
+        fail = True
+
+        def enqueue_preparation(self, *args, **kwargs):
+            if self.fail:
+                self.fail = False
+                raise OSError('fixture interruption')
+            return super().enqueue_preparation(*args, **kwargs)
+
+    # This delivery test starts from an initialized board with one older posting.
+    folder = tmp_path / 'job_boards'
+    folder.mkdir(exist_ok=True)
+    (folder / 'watcher-seen.json').write_text(
+        '{"lever:Northwind:baseline": {"source": "lever", "company": "Northwind"}}')
+    ready = OnceFailingReady(tmp_path / 'job_boards' / 'ready.json')
+    kwargs = dict(resume_text='Python', data_dir=tmp_path, entries=[WatchEntry('Northwind', 'lever', 'northwind', [])],
+                  sources={'lever': LeverBoard(lambda url: LV)}, applications=apps, queue=queue, ready=ready)
+    assert script.watch_hits(**kwargs)['errors']
+    result = script.watch_hits(**kwargs)
+    assert result['enqueued'] == 1, result
+    assert script.watch_hits(**kwargs)['enqueued'] == 0
+    assert len(apps.list()) == len(queue.list()) == 1
+    assert len((tmp_path / 'job_boards' / 'hits.jsonl').read_text().splitlines()) == 1
+
+
+def test_failed_hit_persistence_does_not_advance_seen(tmp_path):
+    def fail(posting):
+        raise OSError('disk unavailable')
+
+    import pytest
+    with pytest.raises(OSError):
+        check_boards([WatchEntry('Northwind', 'lever', 'northwind', [])], tmp_path / 'seen.json',
+                     {'lever': LeverBoard(lambda url: LV)}, on_new=fail)
+    assert not (tmp_path / 'seen.json').exists()
+
+
+def test_seen_metadata_drops_descriptions_including_old_records(tmp_path):
+    seen = tmp_path / 'seen.json'
+    seen.write_text(json.dumps({'closed': {'title': 'Software Engineer', 'text': 'old description'}}))
+    data = {'jobs': [{**GH['jobs'][0], 'title': 'AI Engineer', 'content': '&lt;p&gt;Python &amp; SQL&lt;/p&gt;'}]}
+    report = check_boards([WatchEntry('Northwind', 'greenhouse', 'northwind', [])], seen,
+                          {'greenhouse': GreenhouseBoard(lambda url: data)})
+    assert report.new[0].text == 'Python & SQL'
+    assert all('text' not in row for row in json.loads(seen.read_text()).values())
+    assert report.new[0].text  # still available to the hit journal callback
+
+
+def test_workday_default_uses_only_specific_bounded_searches(tmp_path):
+    from companion.job_boards import WorkdayBoard
+    calls = []
+    check_boards([WatchEntry('Northwind', 'workday', 'northwind.wd5/jobs', [])], tmp_path / 'seen.json',
+                 {'workday': WorkdayBoard(post_json=_wd_post(calls))})
+    terms = {body['searchText'] for _, body in calls}
+    assert terms == {'engineer', 'developer', 'scientist'}
+    assert len(calls) <= 3 * WorkdayBoard.MAX_PAGES

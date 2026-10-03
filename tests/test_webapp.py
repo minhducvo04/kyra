@@ -57,7 +57,7 @@ def test_learning_roundtrip(client):
 
 
 def test_tracker_roundtrip(client):
-    app_ = client.post("/api/job/applications", json={"company": "Stripe", "role": "SDE"}).json()
+    app_ = client.post("/api/job/applications", json={"company": "Northwind", "role": "SDE"}).json()
     assert app_["status"] == "applied"
     bad = client.post("/api/job/applications/status", json={"id": app_["id"], "status": "hired"})
     assert bad.status_code == 400 and bad.json()["error"]["code"] == "invalid_status"

@@ -15,7 +15,6 @@ from anthropic import APIConnectionError, APITimeoutError, InternalServerError, 
 from companion.approvals import ApprovalRequired, describe
 from companion.llm_utils import extract_text
 from companion.outbound import ReleaseRefused
-from companion.paths import DATA_DIR
 from companion.privacy import UNKNOWN, combine
 from companion.provider import (
     AuditUnavailable,
@@ -24,6 +23,7 @@ from companion.provider import (
     release_label,
     widen_release_label,
 )
+from companion.settings import get_settings
 
 # Benchmarked as the best speed/quality tradeoff for a local backend: close
 # to the 32B's score in docs/model-benchmark.md at more than twice the
@@ -67,11 +67,11 @@ class TurnCancelled(Exception):
     """
 
 # Local LLM weights are large (GBs) and reproducible - keep them out of the
-# default ~/.cache/huggingface and in this project's own gitignored data/
-# dir, same convention as data/voice_models. Separate from
-# scratchpad/bench/'s throwaway HF cache, which is safe to delete anytime.
+# default ~/.cache/huggingface, in KYRA_MODELS_DIR/local_llm_models (settings.py:
+# ~/kyra-models once Duc has moved them there, else data/), beside voice_models.
+# Separate from bench_hf, the benchmark scripts' own HF cache.
 os.environ.setdefault(
-    "HF_HOME", str(DATA_DIR / "local_llm_models")
+    "HF_HOME", str(get_settings().models_dir / "local_llm_models")
 )
 
 
@@ -340,6 +340,27 @@ class LocalLLM(LLMBackend):
         # (see router_ft.py) - the base weights stay untouched, the adapter
         # is applied on load. None = the plain instruct model.
         self._model, self._tokenizer = load(repo, adapter_path=adapter_path)
+
+    def label_probabilities(self, *, system: str, user_input: str, labels: dict) -> dict:
+        """Relative likelihood of complete fixed labels, not calibrated correctness."""
+        import math
+
+        import mlx.core as mx
+
+        prompt = self._tokenizer.apply_chat_template(
+            [{"role": "system", "content": system}, {"role": "user", "content": user_input}],
+            add_generation_prompt=True,
+        )
+        scores = {}
+        for label, text in labels.items():
+            completion = self._tokenizer.encode(text, add_special_tokens=False)
+            logits = self._model(mx.array([prompt + completion]))[0]
+            log_probs = logits - mx.logsumexp(logits, axis=-1, keepdims=True)
+            scores[label] = sum(log_probs[len(prompt) - 1 + i, token].item()
+                                for i, token in enumerate(completion))
+        peak = max(scores.values())
+        normalizer = peak + math.log(sum(math.exp(score - peak) for score in scores.values()))
+        return {label: math.exp(score - normalizer) for label, score in scores.items()}
 
     def prompt_token_count(self, system: str, user_input: str) -> int:
         """How many tokens the chat-templated prompt costs - the number a

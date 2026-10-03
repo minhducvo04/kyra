@@ -21,6 +21,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from companion.job_match import matches_role
 from companion.paths import DATA_DIR, write_json
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,8 @@ logger = logging.getLogger(__name__)
 BOARDS_DIR = DATA_DIR / "job_boards"
 WATCHLIST_PATH = BOARDS_DIR / "watchlist.json"
 SEEN_PATH = BOARDS_DIR / "seen.json"
+# Three profession searches, not short ambiguous skill/acronym searches.
+DEFAULT_WORKDAY_SEARCHES = ('engineer', 'developer', 'scientist')
 USER_AGENT = "kyra-board-watch/1.0 (personal job search; contact via GitHub minhducvo04)"
 
 
@@ -40,6 +43,8 @@ class Posting:
     location: str
     url: str
     updated_at: str  # ISO string as the board reports it (publish date where the API has one), "" if absent
+
+    text: str = ""  # Public posting description, when supplied by the board.
 
     @property
     def key(self) -> str:
@@ -56,6 +61,12 @@ class Posting:
         if dt.tzinfo is None:
             dt = dt.astimezone()
         return max(0, (now - dt).days)
+
+
+def _posting_text(raw: str) -> str:
+    # Lazy import: job_posting_fetch also uses these board adapters.
+    from companion.job_posting_fetch import _html_to_text
+    return _html_to_text(raw)
 
 
 def _norm_title(title: str) -> str:
@@ -120,13 +131,14 @@ class GreenhouseBoard(JobBoardSource):
         self._fetch_json = fetch_json
 
     def fetch(self, company: str, token: str, keywords: list[str] | None = None) -> list[Posting]:
-        data = self._fetch_json(f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs")
+        data = self._fetch_json(f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true")
         out = []
         for j in data.get("jobs", []):
             out.append(Posting(
                 source=self.name, company=company, id=str(j.get("id")), title=j.get("title", "").strip(),
                 location=(j.get("location") or {}).get("name", ""), url=j.get("absolute_url", ""),
                 updated_at=j.get("first_published") or j.get("updated_at", "") or "",
+                text=_posting_text(j.get("content") or ""),
             ))
         return out
 
@@ -149,6 +161,8 @@ class LeverBoard(JobBoardSource):
                 source=self.name, company=company, id=str(j.get("id")), title=j.get("text", "").strip(),
                 location=cats.get("location", ""), url=j.get("hostedUrl", ""),
                 updated_at=datetime.fromtimestamp(ts / 1000).astimezone().isoformat() if ts else "",
+                text=_posting_text("\n".join([j.get("descriptionPlain") or "", j.get("additionalPlain") or ""]
+                                             + [part.get("content") or "" for part in j.get("lists", [])])),
             ))
         return out
 
@@ -170,6 +184,7 @@ class AshbyBoard(JobBoardSource):
                 source=self.name, company=company, id=str(j.get("id")), title=(j.get("title") or "").strip(),
                 location=j.get("location") or "", url=j.get("jobUrl") or "",
                 updated_at=j.get("publishedAt") or "",
+                text=_posting_text(j.get("descriptionPlain") or j.get("descriptionHtml") or ""),
             ))
         return out
 
@@ -244,7 +259,7 @@ class WatchEntry:
     company: str
     source: str  # key into SOURCES
     token: str  # the board slug, e.g. "anthropic" for boards-api.greenhouse.io/v1/boards/anthropic
-    title_keywords: list[str]  # case-insensitive; a posting matches if ANY keyword is in the title ([] = all)
+    title_keywords: list[str]  # case-insensitive; a posting matches if ANY keyword is in the title ([] = default engineering families)
 
 
 # Small words that should not be title-cased into "Ai" / "Hq" when a board slug is
@@ -288,7 +303,7 @@ def save_watchlist(entries: list[WatchEntry], path: Path = WATCHLIST_PATH) -> No
 
 def _matches(posting: Posting, keywords: list[str]) -> bool:
     if not keywords:
-        return True
+        return matches_role(posting.title)
     title = posting.title.lower()
     return any(k.lower() in title for k in keywords)
 
@@ -304,6 +319,7 @@ class WatchReport:
 
 def check_boards(
     entries: list[WatchEntry], seen_path: Path = SEEN_PATH, sources: dict[str, JobBoardSource] | None = None,
+    *, on_new=None,
 ) -> WatchReport:
     """Fetch every watched board, return postings not seen before (that
     match the entry's title keywords), and record everything seen so the
@@ -328,7 +344,7 @@ def check_boards(
             errors.append(f"{entry.company}: unknown source {entry.source!r}")
             continue
         try:
-            postings = src.fetch(entry.company, entry.token, entry.title_keywords)
+            postings = src.fetch(entry.company, entry.token, entry.title_keywords or (list(DEFAULT_WORKDAY_SEARCHES) if src.requires_keywords else []))
         except Exception as e:
             errors.append(f"{entry.company} ({entry.source}/{entry.token}): {type(e).__name__}: {e}")
             logger.warning("board fetch failed for %s: %s", entry.company, e)
@@ -338,11 +354,17 @@ def check_boards(
                 continue
             still_open += 1
             if p.key not in seen:
+                if on_new is not None:
+                    on_new(p)  # Persist the hit before seen advances; a failed write is retryable.
                 new.append(p)
                 prior = known_titles.get((p.company, _norm_title(p.title)))
                 if prior and prior != p.key:
                     reposted.add(p.key)
             seen[p.key] = {**asdict(p), "first_seen": seen.get(p.key, {}).get("first_seen", now), "last_seen": now}
+    # Descriptions belong only in hit records, not the repeatedly rewritten index.
+    # Also shrink older entries, including closed postings and failed boards.
+    for metadata in seen.values():
+        metadata.pop("text", None)
     write_json(seen_path, seen)
     logger.info("board watch: %d watched, %d matching open, %d new, %d errors", len(entries), still_open, len(new), len(errors))
     return WatchReport(checked_at=now, new=new, still_open=still_open, errors=errors, reposted=reposted)

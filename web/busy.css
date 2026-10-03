@@ -19,3 +19,11 @@ button:disabled { opacity: .6; cursor: default; }
 #request-changes { background: var(--panel); color: var(--accent); }
 [hidden] { display: none !important; }
 @media (max-width: 500px) { main { padding: var(--space-3); } section { padding: var(--space-4); } button { width: 100%; } }
+.check { display: flex; align-items: center; gap: var(--space-3); }
+.check input { width: 28px; min-height: 28px; height: 28px; }
+#daily-report.overdue #daily-reminder { color: var(--danger); font-weight: 700; }
+#daily-report.overdue { border: 3px solid var(--danger); }
+.daily-day { border-top: 1px solid var(--grid); padding-top: var(--space-3); margin-top: var(--space-4); }
+.daily-draft { margin: var(--space-3) 0; overflow-wrap: anywhere; }
+.daily-draft p { margin: 4px 0; }
+#daily-missed li { color: var(--danger); font-weight: 600; }

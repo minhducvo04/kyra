@@ -1,6 +1,8 @@
 """Read-only room facade and five-minute environment history."""
 import logging
+import sqlite3
 from abc import ABC, abstractmethod
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import cached_property
@@ -156,6 +158,51 @@ class EnvHistory:
                 env_samples.c.slot >= _utc(since).isoformat(),
             ).order_by(env_samples.c.slot)).mappings()
             return [self._sample(row) for row in rows]
+
+    def window(self, entity: str, metric: str, start: datetime, end: datetime) -> list[Sample]:
+        """Read a bounded existing history without creating or migrating tables."""
+        start, end = _utc(start), _utc(end)
+        if not timedelta(0) < end - start <= timedelta(days=1):
+            raise ValueError("A history window must be positive and at most 24 hours")
+        since, until = slot_for(start).isoformat(), end.isoformat()
+        if self._engine is not None:
+            query = select(env_samples).where(
+                env_samples.c.entity == entity, env_samples.c.metric == metric,
+                env_samples.c.slot >= since, env_samples.c.slot < until,
+            ).order_by(env_samples.c.slot).limit(290)
+            with self._engine.connect() as conn:
+                rows = [dict(row) for row in conn.execute(query).mappings()]
+        else:
+            if get_settings().database_url:
+                raise ValueError("Saved room recaps require the local history store")
+            path = DATA_DIR / "env.db"
+            if not path.exists():
+                raise FileNotFoundError("Room history has not been recorded")
+            if not path.resolve().is_relative_to(DATA_DIR.resolve()):
+                raise ValueError("Room history is outside the configured data directory")
+            # A read-only WAL connection may create shared-memory sidecars.
+            # Fail closed instead of using immutable mode, which could miss WAL data.
+            with path.open("rb") as stream:
+                header = stream.read(20)
+            if header[18:19] == b"\x02" or header[19:20] == b"\x02":
+                raise ValueError("WAL room history is not supported by this read-only view")
+            with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=1)) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = [dict(row) for row in conn.execute(
+                    "SELECT slot, entity, metric, value, unit, quality, observed_at FROM env_samples "
+                    "WHERE entity = ? AND metric = ? AND slot >= ? AND slot < ? ORDER BY slot LIMIT 290",
+                    (entity, metric, since, until),
+                )]
+        if len(rows) > 289:
+            raise ValueError("Room history has too many rows for this window")
+        samples = []
+        for row in rows:
+            try:
+                samples.append(self._sample(row))
+            except (ValueError, TypeError, OverflowError):
+                # A malformed saved sample is a gap, not a fabricated reading.
+                continue
+        return samples
 
     def latest(self) -> list[Sample]:
         latest = select(env_samples.c.entity, env_samples.c.metric, func.max(env_samples.c.slot).label("slot")).group_by(

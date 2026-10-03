@@ -263,7 +263,12 @@ def test_agent_thread_slug_cannot_escape_the_sessions_dir(client):
 
 
 def test_index_has_the_console_panel_and_toggle(client):
+    from pathlib import Path
+
     html = client.get("/").text
-    assert 'id="console-toggle"' in html and 'id="console-panel"' in html
+    nav = (Path(__file__).resolve().parent.parent / "web" / "navigation.js").read_text()
+    # NAV-1 (2026-09-29): the shared navigation generates this toggle from its routes table as <route>-toggle.
+    assert 'id="companion-navigation"' in html and '["console", ' in nav and "a.id = `${route}-toggle`" in nav
+    assert 'id="console-panel"' in html
     for tab in ("tools", "agents", "runs"):
         assert f'data-console-tab="{tab}"' in html and f'data-console-tab-panel="{tab}"' in html

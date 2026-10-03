@@ -1,3 +1,7 @@
+# LICENSING REVIEW REQUIRED before a new export: requirements.txt includes
+# python-kasa==0.10.2 (GPL-3.0-or-later). Do not approve a candidate as MIT-only.
+# Bulb integration is private/local; src/companion/bulb.py is not approved here.
+# Review dependencies AND importing files together before any public candidate.
 # Local candidate only; inclusion does not constitute publication approval.
 # Documents and GitHub workflows excluded pending approval.
 .dockerignore
@@ -341,7 +345,7 @@ web/tokens.css
 # a changed document is refused until he approves it again.
 README.md 2860bcef22f215c2e567584d368844a93e9cddb2c7587c64e9031acfd0fcdea6
 docs/design.md fb2b1aafc4b32a24982db749d7d189ea0a1136c647d950d3926020a869e4be2d
-docs/router-finetune.md 9d4e9a4520e9eecfc11f583737092401e0fe1cdcbf55ced41b806a0468778a24
+docs/router-finetune.md c2b60e195b532306467a0cf65ebdb870493f7dfd9ffb985e5a3dbfd313e1148a
 docs/search-eval.md f2aa995922ec2167fcb2ecaf00e7fccb9910d25a0832cb863c6846383074544c
 docs/tool-calling-distill.md 74aaeac98214ae37910f5632b039914269d6dbe3a10e6f004d1f4657b938caed
 docs/voice-latency.md e9e445cafe1043ab5a2e28dfe7bfc4f406ed9b7a724b7d6293c08668d9f33659

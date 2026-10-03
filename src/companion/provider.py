@@ -1,6 +1,8 @@
 """Labelled, audited synchronous Anthropic requests; no ambient client bypass."""
+import base64
 import json
 import math
+import threading
 from contextlib import contextmanager
 from contextvars import ContextVar, copy_context
 from functools import wraps
@@ -97,23 +99,24 @@ def _normalize(value):
     raise ValueError("Unsupported provider request value")
 
 
-def _request(kwargs):
+def _request(kwargs, *, cast_image=None):
     if kwargs.keys() - _FIELDS:
         raise ValueError("Unsupported provider request fields")
     request = _normalize(kwargs)  # independent snapshot, also used for the actual send
     _check_content(request.get("system"))
     for message in request.get("messages", []):
-        _check_content(message.get("content"))
+        _check_content(message.get("content"), cast_image=cast_image)
     return request
 
 
-def _check_content(content):
+def _check_content(content, *, cast_image=None):
     if isinstance(content, list):
         for block in content:
             if not isinstance(block, dict):
                 continue
             if block.get("type") in ("image", "document", "file"):
-                raise ValueError("Unsupported provider attachment")
+                if cast_image is None or block != cast_image:
+                    raise ValueError("Unsupported provider attachment")
             if block.get("type") == "tool_result":
                 _check_content(block.get("content"))
 
@@ -192,6 +195,28 @@ class _Stream:
         return self.__manager.__exit__(*exc)
 
 
+class CastImageRelease:
+    """Typed one-use exception for an approved Cast PNG. No general image bypass."""
+
+    def __init__(self, png: bytes, label):
+        from companion.cast_artifacts import MAX_PNG, PNG_MAGIC, image_label_allowed
+        from companion.outbound import ReleaseRefused
+        if type(png) is not bytes or not png.startswith(PNG_MAGIC) or len(png) > MAX_PNG:
+            raise ValueError("Invalid Cast image")
+        if not image_label_allowed(label):
+            raise ReleaseRefused(label[1])
+        self.__png, self.label = png, label
+        self.__lock = threading.Lock()
+
+    def consume(self):
+        with self.__lock:
+            if self.__png is None:
+                raise ValueError("Cast image release already consumed")
+            png, self.__png = self.__png, None
+        return {"type": "image", "source": {"type": "base64", "media_type": "image/png",
+                                            "data": base64.b64encode(png).decode("ascii")}}
+
+
 class _Messages:
     __slots__ = ("__client", "__gate")
 
@@ -204,6 +229,25 @@ class _Messages:
         _check_request(gate, request, current_release_label())
         response = self.__client.messages.create(**request)
         return _StreamView(response) if request.get("stream") else response
+
+    def create_cast_image(self, release: CastImageRelease, prompt: str):
+        from companion.cast_artifacts import image_label_allowed
+        from companion.outbound import OutboundGate, ReleaseRefused
+        if type(release) is not CastImageRelease or not isinstance(prompt, str):
+            raise ValueError("Cast image release required")
+        parent = _label.get()
+        label = release.label if parent is _UNSET else combine([release.label, parent])
+        if not image_label_allowed(label):
+            raise ReleaseRefused(label[1])
+        block = release.consume()
+        request = _request({"model": "claude-opus-5", "max_tokens": 8192,
+                            "messages": [{"role": "user", "content": [block, {"type": "text", "text": prompt}]}]},
+                           cast_image=block)
+        # Even a globally disabled audit/gate cannot disable the image boundary.
+        configured = _gate.get() or self.__gate
+        gate = OutboundGate(configured.policy, configured.audit, "enforce", configured._secrets)
+        _check_request(gate, request, label, required_gate=self.__gate)
+        return self.__client.messages.create(**request)
 
     def stream(self, **kwargs):
         return _Stream(self.__client, _gate.get() or self.__gate, _request(kwargs))

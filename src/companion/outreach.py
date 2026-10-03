@@ -93,6 +93,48 @@ def _now_iso(now: datetime | None = None) -> str:
     return (now or datetime.now(UTC)).isoformat()
 
 
+def draft_for_job_hit(contacts, applications, application_id: int, *, company_kind: str | None = None,
+                      public_email: str | None = None, now: datetime | None = None) -> dict | None:
+    """Local seed draft only: no model, clipboard, browser, mail or delivery calls.
+
+    Public email and startup/lab classification must be explicitly supplied metadata, never inferred.
+    A separate humanizer review is still required before using the draft outside Kyra.
+    """
+    existing = applications.outreach_plan(application_id)
+    if existing:
+        return existing
+    app = next((a for a in applications.list() if a.id == application_id), None)
+    if app is None:
+        raise LookupError("application not found")
+    if app.status not in {"targeting", "prepared", "ready_to_submit", "needs_attention"}:
+        return None
+    now = now or datetime.now(UTC)
+    if now.tzinfo is None:
+        raise ValueError("now must include a timezone")
+    warm_statuses = {"accepted", "replied", "call_done", "referred"}
+    matches = sorted(contacts.list(company=app.company), key=lambda c: (c.status not in warm_statuses, c.id))
+    role = re.sub(r"[\r\n]+", " ", app.role).strip()
+    context = f"{role} at {app.company.strip()}" + (f" ({app.link})" if app.link else "")
+    if matches:
+        contact = matches[0]
+        recipient, contact_id = contact.name, contact.id
+        if contact.status in warm_statuses:
+            note = f"Hi {first_name(contact.name)}, I'm interested in {context}. Would you be open to discussing a referral?"
+            kind = "referral"
+            deadline = (now.astimezone(UTC) + timedelta(hours=48)).isoformat()
+        else:
+            note = f"Hi {first_name(contact.name)}, I'm interested in {context}. Would you be open to a short coffee chat?"
+            kind, deadline = "coffee_chat", None
+    elif company_kind in {"startup", "lab"} and public_email and re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", public_email):
+        note = f"Hi, I'm interested in {context}. Could we talk about what your team is looking for?"
+        kind, recipient, contact_id, deadline = "hiring_note", public_email, None, None
+    else:
+        return None
+    return applications.save_outreach_plan(application_id, contact_id=contact_id, kind=kind,
+                                          recipient=recipient, note=note, apply_by_at=deadline,
+                                          review_state="needs_humanizer", created_at=now.isoformat())
+
+
 class OutreachStore:
     def __init__(self, path: Path | str | None = None, *, engine: Engine | None = None):
         self._engine = engine or engine_for_store(DB_PATH, path)

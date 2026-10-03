@@ -9,6 +9,11 @@ CONTRACT
   loop.css and busy.css contain no hex colour literal; they use the tokens.
   loop.html: no marketing line; its <h1> is one plain sentence under 60 characters; the contributions list
       (#runs) precedes the request form (#request) in document order. busy.html: #tasks precedes #start-form.
+  NAV-1 (2026-09-29): index.html and loop.html carry the one companion bar instead of a header nav: an empty
+      <nav id="companion-navigation"> that /static/navigation.js fills from its shared routes table, which reaches
+      Team ("/team") and Loop ("/loop"). busy.html keeps its own nav.
+  BUSY OFFICE (2026-10-01, Duc): Busy pages link only Busy pages; busy.html's nav reaches "/busy/office" and "/busy",
+      never "/" or "/loop".
 """
 import re
 from pathlib import Path
@@ -39,10 +44,16 @@ def test_every_page_links_tokens_first_and_carries_the_shared_header(name):
     links = re.findall(r'<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"', html)
     assert links and links[0].startswith("/static/tokens.css"), links
     assert 'class="app-header"' in html
+    if name in ("index.html", "loop.html"):
+        assert html.count("<nav") == 1 and '<nav id="companion-navigation"' in html
+        # 86a6094 added a cache-busting version to the shared script; the page must still load it.
+        assert re.search(r'<script src="/static/navigation\.js(\?v=[0-9a-f]+)?"></script>', html)
+        shared = (WEB / "navigation.js").read_text(encoding="utf-8")
+        assert 'link("/team", ' in shared and '["/loop", ' in shared, "the shared bar reaches Team and Loop"
+        return
     nav = re.search(r"<nav[^>]*>(.*?)</nav>", html, re.S)
-    assert nav and 'href="/"' in nav.group(1) and 'href="/loop"' in nav.group(1)
-    if name == "busy.html":
-        assert 'href="/busy"' in nav.group(1)
+    assert nav and 'href="/busy"' in nav.group(1) and 'href="/busy/office"' in nav.group(1)
+    assert not re.search(r'href="/(loop|team)?"', html), "Busy pages never link other Kyra modes"
 
 
 @pytest.mark.parametrize("name", ("loop.css", "busy.css"))

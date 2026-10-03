@@ -40,7 +40,10 @@ TESTSET_PATH = PROJECT_ROOT / "tests" / "data" / "router_testset.jsonl"
 # bucket generalizes, not to pick what ships (that stays TESTSET_PATH). Both are
 # blocked from the generator.
 TESTSET2_PATH = PROJECT_ROOT / "tests" / "data" / "router_testset_holdout2.jsonl"
-HELD_OUT_PATHS = sorted((PROJECT_ROOT / "tests" / "data").glob("router_testset*.jsonl"))
+HELD_OUT_PATHS = sorted(
+    path for pattern in ("router_testset*.jsonl", "router_confidence_*.jsonl")
+    for path in (PROJECT_ROOT / "tests" / "data").glob(pattern)
+)
 
 # The prompt the fine-tuned model sees. Short on purpose - the few-shot
 # examples and tool descriptions that make router.CLASSIFIER_PROMPT long
@@ -54,6 +57,19 @@ COMPACT_SYSTEM = (
     "looking something up in the user's own saved material (what was decided, written or noted), "
     "reading or changing the room humidifier (humidity, mist, display, night light), or asking what to work on next. "
     "text = anything else; backend claude for explanations, careful reasoning, or work coordination, local for casual chat."
+)
+
+# Backend-only policy paired with v8; the primary prompt above stays unchanged.
+BACKEND_SYSTEM = (
+    'Classify the user\'s message for an assistant router. Reply with JSON only: {"path": "tool"|"text", '
+    '"backend": "claude"|"local"}. tool = it asks for a reminder, tech news, science facts, '
+    "saving/reviewing learning items, job-application tracking/drafting/autofill, reading a job posting's "
+    'signals or targeting a posting URL, outreach contacts and their LinkedIn notes/follow-ups, saving a '
+    "durable fact about the user, looking something up in the user's own saved material (what was decided, "
+    'written or noted), reading or changing the room humidifier (humidity, mist, display, night light), or '
+    'asking what to work on next. text = anything else; backend local for casual chat, simple stable facts,'
+    ' brief definitions, fixed conversions, spelling, small arithmetic or a one-command general computing '
+    'how-to; claude for depth, advice, writing, synthesis, personal context or work coordination.'
 )
 
 # category id -> (path, backend, description for the generator, seed phrasings)
@@ -77,11 +93,11 @@ CATEGORIES: dict[str, tuple[str, str, str, list[str]]] = {
     "mark_learning_reviewed": ("tool", "claude", "reporting the outcome of a review (remembered or forgot) so it gets rescheduled",
                                ["yeah I remembered that one", "I forgot the Raft one, reset it"]),
     "add_job_application": ("tool", "claude", "asking to log/track a job application at a company for a role",
-                            ["I applied to Stripe for a backend role, log it", "track my application to Cursor"]),
+                            ["I applied to Northwind for a backend role, log it", "track my application to Cursor"]),
     "list_job_applications": ("tool", "claude", "asking which job applications are being tracked or their statuses",
                               ["what jobs am I tracking", "which applications are still open"]),
     "update_job_application_status": ("tool", "claude", "reporting a status change on a tracked application (interviewing/offer/rejected/withdrawn)",
-                                      ["mark the Stripe application as interviewing", "Cursor rejected me, update it"]),
+                                      ["mark the Northwind application as interviewing", "Cursor rejected me, update it"]),
     "draft_application_material": ("tool", "claude", "asking to draft a cover letter or resume bullets for a job",
                                    ["draft a cover letter for this posting", "write me resume bullets for an ML role"]),
     "autofill_job_application": ("tool", "claude", "asking to fill in a job application form at a URL (Greenhouse)",
@@ -126,9 +142,9 @@ CATEGORIES: dict[str, tuple[str, str, str, list[str]]] = {
                              "with a name, company, LinkedIn URL or how they are connected",
                              ["add Alex Rivera at Northwind as an outreach contact, a Cloudvale alum", "track this recruiter: linkedin.com/in/alex-example, Northwind"]),
     "draft_outreach_note": ("tool", "claude", "asking to draft the LinkedIn connection note or follow-up message for a specific saved contact",
-                            ["draft a connection note for Alex", "write the follow-up for my Stripe contact"]),
+                            ["draft a connection note for Alex", "write the follow-up for my Northwind contact"]),
     "copy_outreach_note": ("tool", "claude", "asking to copy a contact's drafted note/follow-up to the clipboard or open their profile so the user can send it",
-                           ["copy Alex's note so I can paste it", "put the follow-up for the Stripe guy on my clipboard"]),
+                           ["copy Alex's note so I can paste it", "put the follow-up for the Northwind guy on my clipboard"]),
     "update_outreach_status": ("tool", "claude", "reporting what happened with an outreach contact: note sent, connection accepted, they replied, "
                                "had the call, got referred, no reply",
                                ["I sent the note to Alex", "the Northwind contact accepted and replied, update it"]),

@@ -207,10 +207,10 @@ def test_each_sentence_is_synthesised_and_sent_as_it_completes(client, monkeypat
         events = _sse(res.read().decode())
 
     audio = [payload for kind, payload in events if kind == "audio"]
-    assert [a["text"] for a in audio] == ["Hey Duc.", "I looked it up.", "Nothing there."]
-    assert said == ["Hey Duc.", "I looked it up.", "Nothing there."], "one synthesis call per sentence"
+    assert [a["text"] for a in audio] == ["Hey Duc.", "I looked it up.", "Details are on screen."]
+    assert said == ["Hey Duc.", "I looked it up.", "Details are on screen."], "one synthesis call per sentence"
     assert base64.b64decode(audio[0]["b64"])[:4] == b"RIFF"
-    assert events[-1][0] == "done" and events[-1][1]["reply"].startswith("Hey Duc.")
+    assert events[-1][0] == "done" and events[-1][1]["reply"] == "Hey Duc. I looked it up. Nothing there."
 
 
 def test_markdown_never_reaches_the_synthesiser_per_sentence(client, monkeypatch):
@@ -267,7 +267,7 @@ def test_speak_streams_one_audio_chunk_per_sentence(client, monkeypatch):
 
     audio = [p for kind, p in events if kind == "audio"]
     # Markdown is stripped per sentence, exactly as on the voice path.
-    assert said == ["Sure.", "Run pytest now.", "Then read it."]
+    assert said == ["Sure.", "Run pytest now.", "Details are on screen."]
     assert [a["text"] for a in audio] == said
     assert base64.b64decode(audio[0]["b64"])[:4] == b"RIFF"
     assert events[-1][0] == "done"
@@ -294,3 +294,27 @@ def test_text_with_no_sayable_content_still_ends_cleanly(client, monkeypatch):
         events = _sse(res.read().decode())
     assert said == []
     assert [k for k, _ in events] == ["done"]
+
+
+@pytest.mark.parametrize("endpoint,streamed", [
+    ("/api/voice", False), ("/api/voice/stream", False),
+    ("/api/voice/stream", True), ("/api/speak", False),
+])
+def test_long_audio_is_bounded_but_written_detail_survives(client, monkeypatch, endpoint, streamed):
+    from companion.voice_text import MORE_CUE, SPOKEN_MAX_WORDS
+
+    reply = "The request is still pending. " + "Extra details follow " * 30 + ". Final detail."
+    said = _voice_stubs(monkeypatch, list(reply) if streamed else [], whole_reply=reply)
+    if endpoint == "/api/speak":
+        res = client.post(endpoint, json={"text": reply})
+    else:
+        res = client.post(endpoint, files={"audio": ("u.webm", b"..", "audio/webm")})
+    assert res.status_code == 200
+    speech = " ".join(said)
+    assert speech.endswith(MORE_CUE)
+    assert speech.count(MORE_CUE) == 1
+    assert len(speech.removesuffix(MORE_CUE).split()) <= SPOKEN_MAX_WORDS
+    if endpoint == "/api/voice":
+        assert res.json()["reply"] == reply
+    elif endpoint == "/api/voice/stream":
+        assert _sse(res.text)[-1][1]["reply"] == reply

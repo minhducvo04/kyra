@@ -43,7 +43,7 @@ import time
 from abc import ABC, abstractmethod
 from collections import Counter
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -477,7 +477,7 @@ def default_sources() -> list[Source]:
         FileSource(PROJECT_ROOT / "docs" / "plans", ["*.md"], kind="plan"),
         FileSource(PROJECT_ROOT, ["AGENTS.md", "CLAUDE.md", "README.md"], kind="doc", owns_root=False),
         FileSource(DATA_DIR / "memory_notes", ["*.md"], kind="memory_note"),
-        FileSource(DATA_DIR / "private_docs", ["*.md", "*.txt"], kind="private", sensitive=True),
+        FileSource(DATA_DIR / "private_docs", ["*.md", "*.txt", "handwritten/*.md"], kind="private", sensitive=True),
         FileSource(DATA_DIR / "resumes", ["*.tex"], kind="resume"),
         FileSource(DATA_DIR / "cover_letters", ["*.tex"], kind="cover_letter"),
         FileSource(DATA_DIR / "job_descriptions", ["*.pdf", "*.md"], kind="job_description"),
@@ -1068,6 +1068,49 @@ def answer(index: SearchIndex, query: str, k: int = 6, llm=None,
 # --- the chat tool ---------------------------------------------------------
 
 SEARCH_TOOL_SNIPPET_WORDS = 60
+_LOOKUP_STOPWORDS = frozenset("""
+a an the and or but nor not for from into onto with without about of to in on at by as
+is are was were be been being do does did have has had can could would should will shall
+this that these those it its they them their we our you your who whom whose what which
+when where why how than then there here also please
+""".split())
+
+
+def _lookup_words(text: str) -> set[str]:
+    return {word for token in _TOKEN.findall(text.casefold())
+            if (word := token.strip("'")) and sum(char.isalpha() for char in word) >= 3}
+
+
+def matches_lookup_query(hit: Hit, query: str) -> bool:
+    """A lexical hit must cover every content word to count as found inside."""
+    words = _lookup_words(query) - _LOOKUP_STOPWORDS
+    return (hit.lexical_rank is not None and bool(words)
+            and words <= _lookup_words(hit.chunk.title + " " + hit.chunk.text))
+
+
+class IndexEmpty(ValueError):
+    """Internal search has not been built; this is not an outside-search miss."""
+
+
+def lookup(index, query, *, outside=None, k=5) -> dict:
+    last = index.last_indexed()
+    if last is None:
+        raise IndexEmpty("The internal index has never been built. Use REINDEX before looking up a query.")
+    query = query.strip()
+    if not query:
+        raise ValueError("no query given - say what to look for")
+    k = max(1, min(int(k or 5), 10))
+    inside, related = [], []
+    for hit in index.search(query, k=k, include_sensitive=False):
+        item = {"path": hit.chunk.path, "kind": hit.chunk.kind, "title": hit.chunk.title,
+                "score": round(hit.score, 4),
+                "text": " ".join(hit.chunk.text.split()[:SEARCH_TOOL_SNIPPET_WORDS])}
+        found = matches_lookup_query(hit, query)
+        (inside if found else related).append(item)
+    external = outside.search(query, k) if not inside and outside is not None else []
+    return {"query": query, "found_inside": bool(inside), "inside": inside, "related": related,
+            "outside": [asdict(hit) for hit in external],
+            "index_last_updated": datetime.fromtimestamp(last).astimezone().strftime("%Y-%m-%d %H:%M")}
 
 
 class SearchKyraDataTool(Tool):
@@ -1160,3 +1203,29 @@ class SearchKyraDataTool(Tool):
                 datetime.fromtimestamp(last).astimezone().strftime("%Y-%m-%d %H:%M") if last else "never"
             ),
         }
+
+
+class LookUpTool(SearchKyraDataTool):
+    name = "look_up"
+    description = (
+        "Look up a question in Kyra's saved non-private material first. If there is no exact-term match, "
+        "search DuckDuckGo with only the query, subject to the privacy gate. Return internal matches, "
+        "related passages and outside links separately. An unbuilt index needs REINDEX."
+    )
+    input_schema = {"type": "object", "properties": {
+        key: value for key, value in SearchKyraDataTool.input_schema["properties"].items() if key != "kind"
+    }, "required": ["query"]}
+
+    def __init__(self, index=None, outside=None, index_factory=HybridSearchIndex):
+        super().__init__(index=index, index_factory=index_factory)
+        self._outside = outside
+
+    def run(self, query: str = "", k: int = 5) -> dict:
+        from companion.web_search import DdgsSearch, OutsideRefused
+
+        if self._outside is None:
+            self._outside = DdgsSearch()
+        try:
+            return lookup(self.index, query, outside=self._outside, k=k)
+        except (ValueError, OutsideRefused) as exc:
+            return {"error": str(exc)}

@@ -14,6 +14,7 @@ dependencies = [
     "sounddevice>=0.5.0",
     "torch>=2.0.0",
     "mlx-lm>=0.31.0",
+    "llguidance==1.8.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.30.0",
     "python-multipart>=0.0.9",
@@ -22,6 +23,7 @@ dependencies = [
     "sentence-transformers>=3.0.0",
     "playwright>=1.47.0",
     "python-docx>=1.1.0",
+    "openpyxl>=3.1",
     "sqlalchemy>=2.0",
     "alembic>=1.13",
     "psycopg[binary]>=3.1",
@@ -32,7 +34,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.package-data]
-companion = ["features.yaml"]
+companion = ["features.yaml", "system_map.yaml"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

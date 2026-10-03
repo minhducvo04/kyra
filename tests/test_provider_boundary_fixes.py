@@ -126,10 +126,18 @@ def test_an_audit_failure_is_a_final_event_with_no_retry_and_a_503_not_a_500(web
 
 
 def test_the_page_and_both_cli_loops_know_about_it():
+    """NAV-1 (2026-09-29): the page no longer sends turns, so the HUD retry that ran a tool effect twice (F07) has no
+    path left; an audit_unavailable from any remaining endpoint reaches the page's reader with its code and message.
+    Both CLI loops still name the exception."""
+    import re
     from pathlib import Path
 
     root = Path(__file__).resolve().parent.parent
-    assert "audit_unavailable" in (root / "web" / "app.js").read_text(encoding="utf-8")
+    for script in (root / "web").glob("*.js"):
+        assert not re.search(r'''["'`]/api/(chat|voice)\b''', script.read_text(encoding="utf-8")), script.name
+    js = (root / "web" / "app.js").read_text(encoding="utf-8")
+    reader = js[js.index("async function readJson"):js.index("async function readJson") + 600]
+    assert "e.code = err && err.code" in reader, "a coded refusal keeps its code and message on the page"
     for script in ("scripts/chat.py", "scripts/voice_chat.py"):
         assert "AuditUnavailable" in (root / script).read_text(encoding="utf-8"), script
 

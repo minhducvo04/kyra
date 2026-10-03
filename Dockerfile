@@ -25,4 +25,6 @@ EXPOSE 8420
 # set, so the old check answered 401 in exactly the configuration a real deploy uses
 # and the orchestrator would have restarted a healthy task forever.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8420/healthz',timeout=3)" || exit 1
+# Behind a TLS-terminating proxy, explicitly set KYRA_TLS_TERMINATED_UPSTREAM=true
+# and KYRA_API_TOKEN at deployment; restrict direct access to the container port.
 CMD ["python", "scripts/web_ui.py", "--host", "0.0.0.0", "--port", "8420"]

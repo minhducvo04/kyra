@@ -28,6 +28,8 @@ os.environ["KYRA_CLASSIFIER_ADAPTER"] = ""
 os.environ["KYRA_API_TOKEN"] = ""
 os.environ["VESYNC_USERNAME"] = ""
 os.environ["VESYNC_PASSWORD"] = ""
+for _bulb_setting in ("KASA_BULB_HOST", "KASA_USERNAME", "KASA_PASSWORD"):
+    os.environ[_bulb_setting] = ""
 # Tests drive the job queue explicitly with run_one(); no background thread racing them.
 os.environ["KYRA_INLINE_WORKER"] = "false"
 # Starting the app in a test must never load the classifier (~44s, and it would
@@ -77,3 +79,45 @@ def _no_release_label_left_behind():
     if leaked is not provider._UNSET:
         provider._label.set(provider._UNSET)
         pytest.fail(f"this test left a release label in the ambient context: {leaked}")
+
+
+@pytest.fixture(autouse=True)
+def _isolated_shadow_label_queue(request, monkeypatch, tmp_path):
+    """Shadow route tests enqueue work without running a model; never leave it for another test's worker."""
+    if not request.node.path.stem.startswith('test_shadow_labels'):
+        return
+    from sqlalchemy import create_engine
+
+    from companion import webapp
+    from companion.jobs import DbJobQueue
+    from companion.schema import jobs
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'shadow-jobs.db'}")
+    jobs.create(engine)
+    monkeypatch.setattr(webapp, '_queue', DbJobQueue(engine))
+    request.addfinalizer(engine.dispose)
+
+
+@pytest.fixture
+def legacy_lane_workspaces(monkeypatch):
+    """Old controller tests model dispatch, not git; retain their fake lane directory.
+
+    Task directory creation and authority are covered with real git repositories in
+    test_team_builders_d2.py and test_team_workspace.py, which do not use this fixture.
+    """
+    from pathlib import Path
+
+    from companion import team_chat
+
+    monkeypatch.setattr(team_chat, '_task_workspace', lambda run_id, binding: Path(binding['workspace']))
+
+@pytest.fixture
+def isolated_app_dispatch(monkeypatch, tmp_path):
+    """Adapter/voice unit tests isolate controller admission; D2 tests use the real gate."""
+    from companion import team_connected, team_transport
+    original = team_transport.read_config
+    monkeypatch.setattr(team_transport, 'read_config', lambda root: original(root) or {'workspace': str(tmp_path)})
+    def run(store, row, cfg, evidence, request, stop, authorized):
+        return team_connected._adapter(row['provider'], cfg).run(request, authorize=authorized,
+            entitlement=evidence, stop_event=stop, on_event=lambda event: store.event(row['id'], event))
+    monkeypatch.setattr(team_connected, '_run_claimed', run)

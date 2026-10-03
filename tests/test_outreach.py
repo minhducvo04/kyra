@@ -196,3 +196,99 @@ def test_an_em_dash_counts_too_and_a_plain_hyphen_does_not():
 
     assert has_dash("a — b") and has_dash("a – b") and has_dash("a - b")
     assert not has_dash("new-grad role") and not has_dash("Hi Alex, all good.")
+
+
+def test_posting_referral_is_private_idempotent_and_does_not_touch_contact(tmp_path):
+    from companion.outreach import draft_for_job_hit
+
+    contacts = OutreachStore(tmp_path / 'contacts.db')
+    apps = JobApplicationStore(tmp_path / 'apps.db')
+    contact = contacts.add('Alex Rivera', 'Northwind', relation='alumni')
+    contacts.set_draft(contact.id, 'Existing note', 'Existing follow-up')
+    contacts.update_status(contact.id, 'replied')
+    app = apps.add(' northwind ', 'Software Engineer', link='https://example.com/job/1', status='targeting')
+    plan = draft_for_job_hit(contacts, apps, app.id, now=NOW)
+    assert plan['kind'] == 'referral'
+    assert plan['contact_id'] == contact.id
+    assert plan['apply_by_at'] == (NOW + timedelta(hours=48)).isoformat()
+    assert plan['review_state'] == 'needs_humanizer'
+    assert app.link in plan['note'] and 'referral' in plan['note']
+    assert draft_for_job_hit(contacts, apps, app.id, now=NOW + timedelta(hours=4)) == plan
+    assert apps.list()[0].apply_by_at == plan['apply_by_at']
+    assert apps.list()[0].status == 'targeting'
+    assert contacts.get(contact.id).note == 'Existing note'
+    assert contacts.get(contact.id).sent_at is None
+
+
+def test_no_contact_requires_explicit_startup_or_lab_and_public_email(tmp_path):
+    from companion.outreach import draft_for_job_hit
+
+    contacts = OutreachStore(tmp_path / 'contacts.db')
+    apps = JobApplicationStore(tmp_path / 'apps.db')
+    app = apps.add('Northwind', 'Engineer', status='targeting')
+    assert draft_for_job_hit(contacts, apps, app.id, now=NOW) is None
+    assert draft_for_job_hit(contacts, apps, app.id, public_email='alex@example.com', now=NOW) is None
+    assert draft_for_job_hit(contacts, apps, app.id, company_kind='startup', now=NOW) is None
+    plan = draft_for_job_hit(contacts, apps, app.id, company_kind='lab', public_email='alex@example.com', now=NOW)
+    assert plan['kind'] == 'hiring_note' and plan['recipient'] == 'alex@example.com'
+    assert plan['apply_by_at'] is None
+    assert contacts.list() == []
+
+
+def test_posting_drafts_are_separate_and_do_not_delay_applied_roles(tmp_path):
+    from companion.outreach import draft_for_job_hit
+
+    contacts = OutreachStore(tmp_path / 'contacts.db')
+    apps = JobApplicationStore(tmp_path / 'apps.db')
+    contacts.add('Alex Rivera', 'Northwind')
+    one = apps.add('Northwind', 'Backend Engineer', status='targeting')
+    two = apps.add('Northwind', 'Research Engineer', status='targeting')
+    assert draft_for_job_hit(contacts, apps, one.id, now=NOW)['note'] != draft_for_job_hit(contacts, apps, two.id, now=NOW)['note']
+    applied = apps.add('Northwind', 'SWE', status='applied')
+    assert draft_for_job_hit(contacts, apps, applied.id, now=NOW) is None
+
+
+def test_watcher_hit_hook_creates_one_referral_without_delivery(tmp_path, monkeypatch):
+    from companion.job_boards import LeverBoard, WatchEntry
+    from tests.test_job_boards import _watch_script
+
+    monkeypatch.setattr(ClipboardChannel, 'deliver', lambda *a, **kw: pytest.fail('must never deliver'))
+    contacts = OutreachStore(tmp_path / 'outreach.db')
+    contact = contacts.add('Alex Rivera', 'Northwind')
+    contacts.update_status(contact.id, 'replied')
+    apps = JobApplicationStore(tmp_path / 'apps.db')
+    posting = {'id': 'fixture-one', 'text': 'Software Engineer', 'hostedUrl': 'https://example.com/jobs/one',
+               'categories': {'location': 'Remote'}, 'descriptionPlain': 'Python SQL'}
+    script = _watch_script()
+    # This delivery test starts from an initialized board with one older posting.
+    folder = tmp_path / 'job_boards'
+    folder.mkdir(exist_ok=True)
+    (folder / 'watcher-seen.json').write_text(
+        '{"lever:Northwind:baseline": {"source": "lever", "company": "Northwind"}}')
+    kwargs = dict(resume_text='Python SQL', data_dir=tmp_path, applications=apps,
+                  entries=[WatchEntry('Northwind', 'lever', 'northwind', [])],
+                  sources={'lever': LeverBoard(lambda _: [posting])})
+    assert script.watch_hits(**kwargs)['enqueued'] == 1
+    plan = apps.list()[0].outreach_plan
+    assert plan['kind'] == 'referral'
+    assert script.watch_hits(**kwargs)['new'] == 0
+    assert apps.list()[0].outreach_plan == plan
+    assert len(contacts.list()) == 1 and contacts.list()[0].sent_at is None
+
+
+@pytest.mark.parametrize('status', ['drafted', 'sent', 'no_reply', 'accepted', 'replied', 'call_done', 'referred'])
+def test_job_contact_warmth_controls_ask_and_clock(tmp_path, status):
+    from companion.outreach import draft_for_job_hit
+
+    contacts = OutreachStore(tmp_path / 'contacts.db')
+    contact = contacts.add('Alex Rivera', 'Northwind', relation='alumni')
+    contacts.update_status(contact.id, status)
+    apps = JobApplicationStore(tmp_path / 'apps.db')
+    app = apps.add('Northwind', 'Engineer', status='targeting')
+    plan = draft_for_job_hit(contacts, apps, app.id, now=NOW)
+    warm = status in {'accepted', 'replied', 'call_done', 'referred'}
+    assert plan['kind'] == ('referral' if warm else 'coffee_chat')
+    assert bool(plan['apply_by_at']) == warm
+    assert ('referral' in plan['note']) == warm
+    if not warm:
+        assert 'coffee' in plan['note']
