@@ -1,0 +1,197 @@
+/* Shared palette, themes and interface primitives. Link before page styles.
+   The Team page palette (web/team-ui.css, 2026-10-03) is the default for every surface since 2026-10-04:
+   system sans, monospace only for paths and code, 13 to 15 px type, 6 to 8 px radii, no glow or scanlines. */
+:root {
+  --bg: #111317;
+  --surface: #181b21;
+  --surface-2: #1f232a;
+  --rule: #2a2f38;
+  --muted: #8b919c;
+  --ok: #3fb67c;
+  --run: #4c8dff;
+  --wait: #d9a441;
+  --bad: #e5484d;
+  /* Older page rules use these names; they map onto the Team palette. */
+  --void: #111317;
+  --panel: #181b21;
+  --panel-2: #1f232a;
+  --grid: #2a2f38;
+  --text: #e6e8ec;
+  --text-dim: #8b919c;
+  --text-faint: #5d6471;
+  --accent: #e07a5b;
+  --accent-dim: #8a4a37;
+  --danger: #e5484d;
+  --fit-high: #3fb67c;
+  --fit-medium: #d9a441;
+  --fit-low: #8b919c;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --fs-row: 13px;
+  --fs-msg: 14px;
+  --fs-title: 15px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 15px;
+  --text-title: 18px;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-pill: 999px;
+  --focus-ring: 2px solid var(--accent);
+  --on-accent: #ffffff;
+  --border: #3a404b;
+  --queued: #3a404b;
+  --done: #3fb67c;
+  --failed: #e5484d;
+  --status-surface: var(--panel-2);
+  --backdrop: #0009;
+  --shade-strong: rgba(0, 0, 0, 0.55);
+  --panel-opaque: #181b21;
+  --hover-surface: rgba(255, 255, 255, 0.04);
+  --active-surface: rgba(255, 255, 255, 0.06);
+  --subtle-surface: rgba(255, 255, 255, 0.06);
+  --panel-fade: #181b21;
+  --input-surface: #1f232a;
+  --accent-hover: rgba(224, 122, 91, 0.12);
+  --accent-active: rgba(224, 122, 91, 0.2);
+  --danger-hover: rgba(229, 72, 77, 0.12);
+  --white: #fff;
+  --danger-surface: rgba(229, 72, 77, 0.1);
+  --danger-subtle: rgba(229, 72, 77, 0.06);
+  --success-surface: rgba(63, 182, 124, 0.1);
+  --border-soft: rgba(255,255,255,0.12);
+  --shade-soft: rgba(0, 0, 0, 0.25);
+  --attention: #d9a441;
+  --running: #4c8dff;
+}
+
+body[data-backend="local"] {
+  --accent: #d9a441;
+  --accent-dim: #7a5a1d;
+  --accent-hover: rgba(217, 164, 65, 0.12);
+  --accent-active: rgba(217, 164, 65, 0.2);
+}
+
+body[data-backend="auto"] {
+  --accent: #e07a5b;
+  --accent-dim: #8a4a37;
+}
+
+/* Evening: darker and warmer only; tests/test_evening_theme.py measures this against :root. */
+body[data-focus-evening="true"] {
+  --void: #070502;
+  --panel: #120c05;
+  --panel-2: #170f06;
+  --grid: #2a1c0c;
+  --text: #e8d3b0;
+  --text-dim: #8f7658;
+  --text-faint: #5c4c37;
+  --accent: #c97a30;
+  --accent-dim: #7a4a17;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #eef0f3;
+  --rule: #dde1e7;
+  --muted: #5f6672;
+  --ok: #1f8a55;
+  --run: #2f6fe0;
+  --wait: #a8740f;
+  --bad: #c9303a;
+  --void: #f6f7f9;
+  --panel: #ffffff;
+  --panel-2: #eef0f3;
+  --grid: #dde1e7;
+  --border: #c5cad3;
+  --text: #1b1e24;
+  --text-dim: #5f6672;
+  --text-faint: #656c79;
+  --accent: #c4573a;
+  --accent-dim: #e9b9a9;
+  --on-accent: #ffffff;
+  --danger: #c9303a;
+  --queued: #878b90;
+  --running: #2f6fe0;
+  --done: #1f8a55;
+  --failed: #c9303a;
+  --attention: #a8740f;
+  --fit-high: #1f8a55;
+  --fit-medium: #a8740f;
+  --fit-low: #5f6672;
+  --panel-opaque: #ffffff;
+  --panel-fade: #ffffff;
+  --input-surface: #ffffff;
+  --hover-surface: rgba(0, 0, 0, 0.04);
+  --active-surface: rgba(0, 0, 0, 0.06);
+  --subtle-surface: rgba(0, 0, 0, 0.05);
+  --border-soft: rgba(0, 0, 0, 0.12);
+  --focus-ring: 3px solid #b46300;
+}
+:root { color-scheme: dark; }
+:focus-visible { outline: var(--focus-ring); outline-offset: 3px; }
+
+.app-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--grid);
+  background: var(--panel);
+  color: var(--text);
+  font: 14px/1.5 var(--font-sans);
+  position: relative;
+  z-index: 10;
+  flex: 0 0 auto;
+}
+.app-brand { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 650; font-size: var(--fs-title); letter-spacing: 0; text-decoration: none; }
+.app-brand span { color: var(--accent); }
+.app-page { color: var(--text-dim); }
+.app-header nav { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.app-header nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-dim); text-decoration: none; }
+.app-header nav a:hover, .app-header nav a[aria-current="page"] { background: var(--panel-2); color: var(--accent); }
+.app-status { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 12px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
+
+/* Backend states are mapped to these five display states in each renderer. */
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  background: var(--status-surface);
+  font: 500 var(--text-xs)/1.5 var(--font-sans);
+  white-space: nowrap;
+}
+.status-queued { color: var(--queued); }
+.status-running { color: var(--running); }
+.status-done { color: var(--done); }
+.status-failed { color: var(--failed); }
+.status-needs-you { color: var(--attention); }
+
+@media (max-width: 560px) {
+  .app-header { padding: 12px 16px; gap: 8px 16px; }
+  .app-header nav { order: 1; margin-left: 0; flex-basis: 100%; }
+  .app-status { margin-left: auto; }
+}
+
+/* Shared companions: navigation only; never a model or permission control. */
+.companion-nav { display:flex; flex:0 0 auto; gap:12px; padding:10px 24px; border-bottom:1px solid var(--grid); background:var(--void); color:var(--text); font:14px/1.35 var(--font-sans); position:relative; z-index:9; }
+.companion-link { display:flex; align-items:center; gap:10px; min-height:48px; color:var(--text); text-decoration:none; border:1px solid transparent; padding:2px 12px 2px 2px; border-radius:var(--radius); }
+.companion-link:hover { background:var(--panel-2); border-color:var(--grid); }
+.companion-link svg { width:52px; height:52px; flex:none; overflow:visible; }
+.companion-link span { font-weight:650; }
+.companion-link small { display:block; color:var(--text-dim); font-size:12px; font-weight:400; margin-top:2px; }
+.welcome-companion { width:132px; height:132px; display:block; margin:0 auto 12px; }
+@media(max-width:560px) { .companion-nav { padding:8px 12px; gap:4px; justify-content:space-between; } .companion-link { gap:4px; padding-right:4px; font-size:13px; } .companion-link svg { width:40px; height:40px; } .companion-link small { font-size:10px; } }
+@media(prefers-reduced-motion:reduce) { .companion-nav *, .welcome-companion { animation:none !important; transition:none !important; } }

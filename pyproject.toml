@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "kyra-system"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2", "pydantic-settings>=2", "sqlalchemy>=2", "numpy>=1.24", "httpx>=0.27", "anthropic>=0.40", "fastapi>=0.115", "python-multipart>=0.0.9", "PyYAML>=6"]
+[project.optional-dependencies]
+test = ["pytest>=8", "pytest-xdist>=3"]
+cad = ["build123d>=0.10", "scipy>=1.11"]
+[tool.setuptools.packages.find]
+where = ["src"]
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+
+[tool.setuptools.package-data]
+"companion.cad" = ["worked_examples.json"]
+"companion" = ["model3d_library/*.json"]
+"kyra_memory" = ["pg_schema.sql"]

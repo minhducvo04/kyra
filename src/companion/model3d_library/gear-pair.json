@@ -1,0 +1,228 @@
+{
+  "slug": "gear-pair",
+  "title": "Gear pair",
+  "aliases": [
+    "gear pair",
+    "spur gear pair",
+    "two gears",
+    "gear train",
+    "ideal gears"
+  ],
+  "summary": "An ideal external spur gear pair: a 20-tooth input gear drives a 40-tooth output gear on parallel shafts 30 mm apart (module 1 mm). The output turns the other way at half the speed, from the mates, not from a formula.",
+  "approximate": true,
+  "disclaimer": "Ideal teaching fixture with trapezoid teeth; not a manufacturing fit.",
+  "units": "m",
+  "sources": [
+    {
+      "title": "Gear (Wikipedia): spur gears, module and gear ratio",
+      "url": "https://en.wikipedia.org/wiki/Gear"
+    }
+  ],
+  "parts": [
+    {
+      "slug": "frame",
+      "label": "Frame plate",
+      "group": "frame",
+      "does": "Fixes the two shafts 30 mm apart.",
+      "shape": "box",
+      "params": {
+        "sx": 0.08,
+        "sy": 0.004,
+        "sz": 0.052
+      },
+      "position": [
+        0,
+        -0.007,
+        0
+      ],
+      "color": [
+        0.3,
+        0.32,
+        0.36,
+        1
+      ],
+      "metallic": 0.2,
+      "roughness": 0.7,
+      "frames": {
+        "shaft-in": {
+          "origin": [
+            -0.015,
+            0.007,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ]
+        },
+        "shaft-out": {
+          "origin": [
+            0.015,
+            0.007,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "slug": "shaft-in",
+      "label": "Input shaft",
+      "group": "frame",
+      "does": "Carries its gear and lets it turn in the frame.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.0025,
+        "height": 0.02
+      },
+      "position": [
+        -0.015,
+        0,
+        0
+      ],
+      "color": [
+        0.5,
+        0.5,
+        0.52,
+        1
+      ],
+      "metallic": 0.8,
+      "roughness": 0.3
+    },
+    {
+      "slug": "shaft-out",
+      "label": "Output shaft",
+      "group": "frame",
+      "does": "Carries its gear and lets it turn in the frame.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.0025,
+        "height": 0.02
+      },
+      "position": [
+        0.015,
+        0,
+        0
+      ],
+      "color": [
+        0.5,
+        0.5,
+        0.52,
+        1
+      ],
+      "metallic": 0.8,
+      "roughness": 0.3
+    },
+    {
+      "slug": "gear-in",
+      "label": "Input gear (20 teeth)",
+      "group": "gears",
+      "does": "Turns with the input and pushes the output gear tooth by tooth.",
+      "shape": "gear",
+      "params": {
+        "radius": 0.011,
+        "teeth": 20,
+        "thickness": 0.006,
+        "tooth_depth": 0.00225,
+        "bore": 0.0025
+      },
+      "position": [
+        -0.015,
+        0,
+        0
+      ],
+      "color": [
+        0.85,
+        0.65,
+        0.2,
+        1
+      ],
+      "metallic": 0.7,
+      "roughness": 0.35
+    },
+    {
+      "slug": "gear-out",
+      "label": "Output gear (40 teeth)",
+      "group": "gears",
+      "does": "Turns the other way at half the input speed (ideal ratio; torque is not modelled).",
+      "shape": "gear",
+      "params": {
+        "radius": 0.021,
+        "teeth": 40,
+        "thickness": 0.006,
+        "tooth_depth": 0.00225,
+        "bore": 0.0025
+      },
+      "position": [
+        0.015,
+        0,
+        0
+      ],
+      "color": [
+        0.75,
+        0.75,
+        0.78,
+        1
+      ],
+      "metallic": 0.7,
+      "roughness": 0.35
+    }
+  ],
+  "mates": [
+    {
+      "id": "shaft-in-fixed",
+      "kind": "fixed",
+      "parts": [
+        "frame",
+        "shaft-in"
+      ]
+    },
+    {
+      "id": "shaft-out-fixed",
+      "kind": "fixed",
+      "parts": [
+        "frame",
+        "shaft-out"
+      ]
+    },
+    {
+      "id": "turn-in",
+      "kind": "revolute",
+      "parts": [
+        "frame",
+        "gear-in"
+      ],
+      "frame": "shaft-in"
+    },
+    {
+      "id": "turn-out",
+      "kind": "revolute",
+      "parts": [
+        "frame",
+        "gear-out"
+      ],
+      "frame": "shaft-out"
+    },
+    {
+      "id": "mesh",
+      "kind": "gear",
+      "mates": [
+        "turn-in",
+        "turn-out"
+      ],
+      "teeth": [
+        20,
+        40
+      ]
+    }
+  ],
+  "driven": {
+    "mate": "turn-in",
+    "value": 0
+  }
+}

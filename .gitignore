@@ -1,0 +1,14 @@
+.venv/
+.venv*/
+.env
+.env.*
+/data/
+**/.lane-send/
+**/muse-bin/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pytest_history.jsonl
+*.egg-info/
+build/
+dist/

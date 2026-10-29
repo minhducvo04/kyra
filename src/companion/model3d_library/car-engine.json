@@ -1,0 +1,2157 @@
+{
+ "slug": "car-engine",
+ "title": "Inline four-cylinder car engine",
+ "aliases": [
+  "engine",
+  "car engine",
+  "inline four",
+  "inline-4",
+  "four cylinder engine",
+  "petrol engine",
+  "gasoline engine",
+  "straight four",
+  "i4",
+  "dohc engine"
+ ],
+ "summary": "A 2.0 litre petrol engine with four cylinders in a row: pistons push a crankshaft round, and two overhead camshafts driven by a chain open 16 valves in time. Cylinders fire 1-3-4-2, shown with pistons 1 and 4 at top dead centre.",
+ "approximate": true,
+ "disclaimer": "Researched typical design (86 x 86 mm bore and stroke, DOHC, 16 valves), not a specific product; simplified shapes.",
+ "units": "m",
+ "sources": [
+  {
+   "title": "Straight-four engine (Wikipedia)",
+   "url": "https://en.wikipedia.org/wiki/Straight-four_engine"
+  },
+  {
+   "title": "Toyota AZ engine (Wikipedia)",
+   "url": "https://en.wikipedia.org/wiki/Toyota_AZ_engine"
+  },
+  {
+   "title": "Overhead camshaft engine (Wikipedia)",
+   "url": "https://en.wikipedia.org/wiki/Overhead_camshaft_engine"
+  }
+ ],
+ "parts": [
+  {
+   "slug": "block-wall-intake",
+   "label": "Engine block, intake side wall",
+   "group": "block",
+   "does": "Forms the strong cast case that holds the cylinders and crankshaft.",
+   "shape": "box",
+   "params": {
+    "sx": 0.4,
+    "sy": 0.3,
+    "sz": 0.012
+   },
+   "position": [
+    0,
+    0.065,
+    -0.076
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.8,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    0,
+    -1
+   ],
+   "explode_distance": 0.35
+  },
+  {
+   "slug": "block-wall-exhaust",
+   "label": "Engine block, exhaust side wall",
+   "group": "block",
+   "does": "Closes the other side of the block and carries coolant passages around the bores.",
+   "shape": "box",
+   "params": {
+    "sx": 0.4,
+    "sy": 0.3,
+    "sz": 0.012
+   },
+   "position": [
+    0,
+    0.065,
+    0.076
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.8,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.35
+  },
+  {
+   "slug": "block-end-front",
+   "label": "Engine block, front end wall",
+   "group": "block",
+   "does": "Closes the timing end of the block and supports the front main bearing.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.3,
+    "sz": 0.152
+   },
+   "position": [
+    -0.2,
+    0.065,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.8,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    -1,
+    0,
+    0
+   ],
+   "explode_distance": 0.2
+  },
+  {
+   "slug": "block-end-rear",
+   "label": "Engine block, rear end wall",
+   "group": "block",
+   "does": "Closes the flywheel end of the block and carries the rear oil seal.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.3,
+    "sz": 0.152
+   },
+   "position": [
+    0.2,
+    0.065,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.8,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    1,
+    0,
+    0
+   ],
+   "explode_distance": 0.2
+  },
+  {
+   "slug": "cylinder-liner",
+   "label": "Cylinder bore liner",
+   "group": "block",
+   "does": "Gives each piston a smooth, hard 86 mm bore to slide in.",
+   "shape": "tube",
+   "params": {
+    "outer": 0.05,
+    "inner": 0.043,
+    "height": 0.14
+   },
+   "position": [
+    -0.138,
+    0.145,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.25,
+    0.26,
+    0.28,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    0,
+    -1
+   ],
+   "explode_distance": 0.2,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "head-gasket",
+   "label": "Head gasket",
+   "group": "head",
+   "does": "Seals the joint between block and head so combustion pressure and coolant stay in.",
+   "shape": "box",
+   "params": {
+    "sx": 0.4,
+    "sy": 0.002,
+    "sz": 0.152
+   },
+   "position": [
+    0,
+    0.216,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.12,
+    0.12,
+    0.13,
+    1.0
+   ],
+   "metallic": 0.2,
+   "roughness": 0.8,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.25
+  },
+  {
+   "slug": "head-wall-intake",
+   "label": "Cylinder head, intake side",
+   "group": "head",
+   "does": "Holds the intake ports and valves on the intake side of each combustion chamber.",
+   "shape": "box",
+   "params": {
+    "sx": 0.4,
+    "sy": 0.095,
+    "sz": 0.012
+   },
+   "position": [
+    0,
+    0.2645,
+    -0.076
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.8,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    -0.6
+   ],
+   "explode_distance": 0.4
+  },
+  {
+   "slug": "head-wall-exhaust",
+   "label": "Cylinder head, exhaust side",
+   "group": "head",
+   "does": "Holds the exhaust ports and valves on the exhaust side of each combustion chamber.",
+   "shape": "box",
+   "params": {
+    "sx": 0.4,
+    "sy": 0.095,
+    "sz": 0.012
+   },
+   "position": [
+    0,
+    0.2645,
+    0.076
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.8,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0.6
+   ],
+   "explode_distance": 0.4
+  },
+  {
+   "slug": "valve-cover",
+   "label": "Valve cover",
+   "group": "head",
+   "does": "Closes the top of the head and keeps oil around the camshafts.",
+   "shape": "box",
+   "params": {
+    "sx": 0.4,
+    "sy": 0.012,
+    "sz": 0.164
+   },
+   "position": [
+    0,
+    0.318,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.25,
+    0.26,
+    0.28,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.55
+  },
+  {
+   "slug": "piston-tdc",
+   "label": "Piston (1 and 4, top dead centre)",
+   "group": "pistons",
+   "does": "Takes the push of the burning mixture and drives the connecting rod down.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.0425,
+    "height": 0.055
+   },
+   "position": [
+    -0.138,
+    0.2,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.8,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.3,
+   "repeat": {
+    "count": 2,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.276,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "piston-ring-tdc",
+   "label": "Piston ring set (1 and 4)",
+   "group": "pistons",
+   "does": "Seals the gap between piston and bore and scrapes oil off the wall.",
+   "shape": "torus",
+   "params": {
+    "major": 0.042,
+    "minor": 0.0018
+   },
+   "position": [
+    -0.138,
+    0.22,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.25,
+    0.26,
+    0.28,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.33,
+   "repeat": {
+    "count": 2,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.276,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "conrod-tdc",
+   "label": "Connecting rod (1 and 4)",
+   "group": "pistons",
+   "does": "Links the piston pin to the crankpin so up and down motion turns the crank.",
+   "shape": "box",
+   "params": {
+    "sx": 0.018,
+    "sy": 0.145,
+    "sz": 0.012
+   },
+   "position": [
+    -0.138,
+    0.11549999999999999,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    0.5,
+    1
+   ],
+   "explode_distance": 0.25,
+   "repeat": {
+    "count": 2,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.276,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "crankpin-tdc",
+   "label": "Crankpin (1 and 4)",
+   "group": "crankshaft",
+   "does": "Offset journal the rod big end turns on; sets the 43 mm crank radius.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.024,
+    "height": 0.022
+   },
+   "position": [
+    -0.138,
+    0.043,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    -1,
+    0
+   ],
+   "explode_distance": 0.2,
+   "repeat": {
+    "count": 2,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.276,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "piston-bdc",
+   "label": "Piston (2 and 3, bottom dead centre)",
+   "group": "pistons",
+   "does": "Takes the push of the burning mixture and drives the connecting rod down.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.0425,
+    "height": 0.055
+   },
+   "position": [
+    -0.046,
+    0.11399999999999999,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.8,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.3,
+   "repeat": {
+    "count": 2,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "piston-ring-bdc",
+   "label": "Piston ring set (2 and 3)",
+   "group": "pistons",
+   "does": "Seals the gap between piston and bore and scrapes oil off the wall.",
+   "shape": "torus",
+   "params": {
+    "major": 0.042,
+    "minor": 0.0018
+   },
+   "position": [
+    -0.046,
+    0.134,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.25,
+    0.26,
+    0.28,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.33,
+   "repeat": {
+    "count": 2,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "conrod-bdc",
+   "label": "Connecting rod (2 and 3)",
+   "group": "pistons",
+   "does": "Links the piston pin to the crankpin so up and down motion turns the crank.",
+   "shape": "box",
+   "params": {
+    "sx": 0.018,
+    "sy": 0.145,
+    "sz": 0.012
+   },
+   "position": [
+    -0.046,
+    0.0295,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    0.5,
+    1
+   ],
+   "explode_distance": 0.25,
+   "repeat": {
+    "count": 2,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "crankpin-bdc",
+   "label": "Crankpin (2 and 3)",
+   "group": "crankshaft",
+   "does": "Offset journal the rod big end turns on; sets the 43 mm crank radius.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.024,
+    "height": 0.022
+   },
+   "position": [
+    -0.046,
+    -0.043,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    -1,
+    0
+   ],
+   "explode_distance": 0.2,
+   "repeat": {
+    "count": 2,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "crankshaft-core",
+   "label": "Crankshaft main journals",
+   "group": "crankshaft",
+   "does": "Main axis of the crankshaft; turns piston strokes into rotation.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.022,
+    "height": 0.43
+   },
+   "position": [
+    0,
+    0,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    -1,
+    0
+   ],
+   "explode_distance": 0.25
+  },
+  {
+   "slug": "crank-web-1",
+   "label": "Crank webs and counterweights, cylinder 1",
+   "group": "crankshaft",
+   "does": "Joins the crankpin to the main journals and balances the throw's weight.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.11,
+    "sz": 0.06
+   },
+   "position": [
+    -0.15500000000000003,
+    0,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    -1,
+    0
+   ],
+   "explode_distance": 0.2,
+   "repeat": {
+    "count": 2,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.034,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "crank-web-2",
+   "label": "Crank webs and counterweights, cylinder 2",
+   "group": "crankshaft",
+   "does": "Joins the crankpin to the main journals and balances the throw's weight.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.11,
+    "sz": 0.06
+   },
+   "position": [
+    -0.063,
+    0,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    -1,
+    0
+   ],
+   "explode_distance": 0.2,
+   "repeat": {
+    "count": 2,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.034,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "crank-web-3",
+   "label": "Crank webs and counterweights, cylinder 3",
+   "group": "crankshaft",
+   "does": "Joins the crankpin to the main journals and balances the throw's weight.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.11,
+    "sz": 0.06
+   },
+   "position": [
+    0.028999999999999998,
+    0,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    -1,
+    0
+   ],
+   "explode_distance": 0.2,
+   "repeat": {
+    "count": 2,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.034,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "crank-web-4",
+   "label": "Crank webs and counterweights, cylinder 4",
+   "group": "crankshaft",
+   "does": "Joins the crankpin to the main journals and balances the throw's weight.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.11,
+    "sz": 0.06
+   },
+   "position": [
+    0.12100000000000001,
+    0,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    -1,
+    0
+   ],
+   "explode_distance": 0.2,
+   "repeat": {
+    "count": 2,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.034,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "main-bearing",
+   "label": "Main bearing",
+   "group": "crankshaft",
+   "does": "Supports the crankshaft in the block on a film of oil.",
+   "shape": "tube",
+   "params": {
+    "outer": 0.03,
+    "inner": 0.022,
+    "height": 0.022
+   },
+   "position": [
+    -0.184,
+    0,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": [
+    0.8,
+    0.6,
+    0.3,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    -1,
+    0
+   ],
+   "explode_distance": 0.35,
+   "repeat": {
+    "count": 5,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "flywheel",
+   "label": "Flywheel",
+   "group": "crankshaft",
+   "does": "Stores rotating energy to smooth the power pulses and meshes with the starter.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.14,
+    "teeth": 60,
+    "thickness": 0.02,
+    "tooth_depth": 0.006,
+    "bore": 0.02
+   },
+   "position": [
+    0.225,
+    0,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": [
+    0.25,
+    0.26,
+    0.28,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    1,
+    0,
+    0
+   ],
+   "explode_distance": 0.3
+  },
+  {
+   "slug": "oil-pan",
+   "label": "Oil pan",
+   "group": "block",
+   "does": "Holds the engine oil under the crankshaft.",
+   "shape": "box",
+   "params": {
+    "sx": 0.4,
+    "sy": 0.04,
+    "sz": 0.164
+   },
+   "position": [
+    0,
+    -0.105,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.25,
+    0.26,
+    0.28,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    -1,
+    0
+   ],
+   "explode_distance": 0.35
+  },
+  {
+   "slug": "crank-sprocket",
+   "label": "Crankshaft timing sprocket",
+   "group": "timing",
+   "does": "Drives the timing chain from the front of the crankshaft.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.022,
+    "teeth": 19,
+    "thickness": 0.016,
+    "tooth_depth": 0.004,
+    "bore": 0.008
+   },
+   "position": [
+    -0.222,
+    0,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    -1,
+    0,
+    0
+   ],
+   "explode_distance": 0.3
+  },
+  {
+   "slug": "cam-sprocket-intake",
+   "label": "Intake camshaft sprocket",
+   "group": "timing",
+   "does": "Turns the intake camshaft at half crankshaft speed.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.03,
+    "teeth": 38,
+    "thickness": 0.016,
+    "tooth_depth": 0.004,
+    "bore": 0.008
+   },
+   "position": [
+    -0.222,
+    0.285,
+    -0.03
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    -1,
+    0.3,
+    0
+   ],
+   "explode_distance": 0.35
+  },
+  {
+   "slug": "cam-sprocket-exhaust",
+   "label": "Exhaust camshaft sprocket",
+   "group": "timing",
+   "does": "Turns the exhaust camshaft at half crankshaft speed.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.03,
+    "teeth": 38,
+    "thickness": 0.016,
+    "tooth_depth": 0.004,
+    "bore": 0.008
+   },
+   "position": [
+    -0.222,
+    0.285,
+    0.03
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    -1,
+    0.3,
+    0
+   ],
+   "explode_distance": 0.35
+  },
+  {
+   "slug": "timing-chain-front",
+   "label": "Timing chain, front run",
+   "group": "timing",
+   "does": "Keeps the camshafts in step with the crankshaft so valves open at the right moment.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.29,
+    "sz": 0.006
+   },
+   "position": [
+    -0.222,
+    0.143,
+    -0.034999999999999996
+   ],
+   "rotation": [
+    5.9061411137705,
+    0,
+    0
+   ],
+   "color": [
+    0.25,
+    0.26,
+    0.28,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    -1,
+    0,
+    0
+   ],
+   "explode_distance": 0.45
+  },
+  {
+   "slug": "timing-chain-rear",
+   "label": "Timing chain, rear run",
+   "group": "timing",
+   "does": "Keeps the camshafts in step with the crankshaft so valves open at the right moment.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.29,
+    "sz": 0.006
+   },
+   "position": [
+    -0.222,
+    0.143,
+    0.034999999999999996
+   ],
+   "rotation": [
+    -5.9061411137705,
+    0,
+    0
+   ],
+   "color": [
+    0.25,
+    0.26,
+    0.28,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    -1,
+    0,
+    0
+   ],
+   "explode_distance": 0.45
+  },
+  {
+   "slug": "camshaft-intake",
+   "label": "Intake camshaft",
+   "group": "valvetrain",
+   "does": "Rotating shaft whose lobes open the intake valves in firing order 1-3-4-2.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.011,
+    "height": 0.42
+   },
+   "position": [
+    0,
+    0.285,
+    -0.03
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.45
+  },
+  {
+   "slug": "cam-lobe-intake-a",
+   "label": "Intake cam lobe (A valve)",
+   "group": "valvetrain",
+   "does": "Egg-shaped bump that pushes its valve open once every two turns of the crank.",
+   "shape": "ellipsoid",
+   "params": {
+    "rx": 0.007,
+    "ry": 0.02,
+    "rz": 0.016
+   },
+   "position": [
+    -0.156,
+    0.282,
+    -0.03
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.45,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "valve-intake-a",
+   "label": "Intake valve (A)",
+   "group": "valvetrain",
+   "does": "Opens to let air and fuel in and closes to seal the chamber.",
+   "shape": "cone",
+   "params": {
+    "radius_bottom": 0.017,
+    "radius_top": 0.003,
+    "height": 0.045
+   },
+   "position": [
+    -0.156,
+    0.239,
+    -0.0225
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.38,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "valve-spring-intake-a",
+   "label": "Intake valve spring (A)",
+   "group": "valvetrain",
+   "does": "Snaps the valve shut after the cam lobe passes.",
+   "shape": "helix",
+   "params": {
+    "radius": 0.009,
+    "pitch": 0.004,
+    "turns": 5,
+    "wire": 0.0014
+   },
+   "position": [
+    -0.156,
+    0.262,
+    -0.0225
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.25,
+    0.26,
+    0.28,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.42,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "cam-lobe-intake-b",
+   "label": "Intake cam lobe (B valve)",
+   "group": "valvetrain",
+   "does": "Egg-shaped bump that pushes its valve open once every two turns of the crank.",
+   "shape": "ellipsoid",
+   "params": {
+    "rx": 0.007,
+    "ry": 0.02,
+    "rz": 0.016
+   },
+   "position": [
+    -0.12000000000000001,
+    0.282,
+    -0.03
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.45,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "valve-intake-b",
+   "label": "Intake valve (B)",
+   "group": "valvetrain",
+   "does": "Opens to let air and fuel in and closes to seal the chamber.",
+   "shape": "cone",
+   "params": {
+    "radius_bottom": 0.017,
+    "radius_top": 0.003,
+    "height": 0.045
+   },
+   "position": [
+    -0.12000000000000001,
+    0.239,
+    -0.0225
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.38,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "valve-spring-intake-b",
+   "label": "Intake valve spring (B)",
+   "group": "valvetrain",
+   "does": "Snaps the valve shut after the cam lobe passes.",
+   "shape": "helix",
+   "params": {
+    "radius": 0.009,
+    "pitch": 0.004,
+    "turns": 5,
+    "wire": 0.0014
+   },
+   "position": [
+    -0.12000000000000001,
+    0.262,
+    -0.0225
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.25,
+    0.26,
+    0.28,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.42,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "camshaft-exhaust",
+   "label": "Exhaust camshaft",
+   "group": "valvetrain",
+   "does": "Rotating shaft whose lobes open the exhaust valves in firing order 1-3-4-2.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.011,
+    "height": 0.42
+   },
+   "position": [
+    0,
+    0.285,
+    0.03
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.45
+  },
+  {
+   "slug": "cam-lobe-exhaust-a",
+   "label": "Exhaust cam lobe (A valve)",
+   "group": "valvetrain",
+   "does": "Egg-shaped bump that pushes its valve open once every two turns of the crank.",
+   "shape": "ellipsoid",
+   "params": {
+    "rx": 0.007,
+    "ry": 0.02,
+    "rz": 0.016
+   },
+   "position": [
+    -0.156,
+    0.282,
+    0.03
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.45,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "valve-exhaust-a",
+   "label": "Exhaust valve (A)",
+   "group": "valvetrain",
+   "does": "Opens to let burnt gas out and closes to seal the chamber.",
+   "shape": "cone",
+   "params": {
+    "radius_bottom": 0.0148,
+    "radius_top": 0.003,
+    "height": 0.045
+   },
+   "position": [
+    -0.156,
+    0.239,
+    0.0225
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.5,
+    0.3,
+    0.22,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.38,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "valve-spring-exhaust-a",
+   "label": "Exhaust valve spring (A)",
+   "group": "valvetrain",
+   "does": "Snaps the valve shut after the cam lobe passes.",
+   "shape": "helix",
+   "params": {
+    "radius": 0.009,
+    "pitch": 0.004,
+    "turns": 5,
+    "wire": 0.0014
+   },
+   "position": [
+    -0.156,
+    0.262,
+    0.0225
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.25,
+    0.26,
+    0.28,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.42,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "cam-lobe-exhaust-b",
+   "label": "Exhaust cam lobe (B valve)",
+   "group": "valvetrain",
+   "does": "Egg-shaped bump that pushes its valve open once every two turns of the crank.",
+   "shape": "ellipsoid",
+   "params": {
+    "rx": 0.007,
+    "ry": 0.02,
+    "rz": 0.016
+   },
+   "position": [
+    -0.12000000000000001,
+    0.282,
+    0.03
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.62,
+    0.63,
+    0.66,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.45,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "valve-exhaust-b",
+   "label": "Exhaust valve (B)",
+   "group": "valvetrain",
+   "does": "Opens to let burnt gas out and closes to seal the chamber.",
+   "shape": "cone",
+   "params": {
+    "radius_bottom": 0.0148,
+    "radius_top": 0.003,
+    "height": 0.045
+   },
+   "position": [
+    -0.12000000000000001,
+    0.239,
+    0.0225
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.5,
+    0.3,
+    0.22,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.38,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "valve-spring-exhaust-b",
+   "label": "Exhaust valve spring (B)",
+   "group": "valvetrain",
+   "does": "Snaps the valve shut after the cam lobe passes.",
+   "shape": "helix",
+   "params": {
+    "radius": 0.009,
+    "pitch": 0.004,
+    "turns": 5,
+    "wire": 0.0014
+   },
+   "position": [
+    -0.12000000000000001,
+    0.262,
+    0.0225
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.25,
+    0.26,
+    0.28,
+    1.0
+   ],
+   "metallic": 0.7,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.42,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "spark-plug",
+   "label": "Spark plug",
+   "group": "ignition",
+   "does": "Fires a spark that lights the fuel-air mixture at the top of the compression stroke.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.007,
+    "height": 0.08
+   },
+   "position": [
+    -0.138,
+    0.27,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.9,
+    0.9,
+    0.88,
+    1.0
+   ],
+   "metallic": 0.3,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.6,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "intake-runner",
+   "label": "Intake manifold runner",
+   "group": "manifolds",
+   "does": "Carries air from the plenum into one cylinder's intake port.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.016,
+    "height": 0.07
+   },
+   "position": [
+    -0.138,
+    0.265,
+    -0.117
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.12,
+    0.12,
+    0.13,
+    1.0
+   ],
+   "metallic": 0.2,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    0,
+    -1
+   ],
+   "explode_distance": 0.3,
+   "repeat": {
+    "count": 4,
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "angle_deg": 0,
+    "offset": [
+     0.092,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "slug": "intake-plenum",
+   "label": "Intake manifold plenum",
+   "group": "manifolds",
+   "does": "Collects air from the throttle and shares it between the four runners.",
+   "shape": "box",
+   "params": {
+    "sx": 0.38,
+    "sy": 0.07,
+    "sz": 0.05
+   },
+   "position": [
+    0,
+    0.265,
+    -0.177
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.12,
+    0.12,
+    0.13,
+    1.0
+   ],
+   "metallic": 0.2,
+   "roughness": 0.4,
+   "explode": [
+    0,
+    0,
+    -1
+   ],
+   "explode_distance": 0.35
+  },
+  {
+   "slug": "exhaust-manifold",
+   "label": "Exhaust manifold",
+   "group": "manifolds",
+   "does": "Gathers hot exhaust gas from all four ports and sends it to the exhaust pipe.",
+   "shape": "box",
+   "params": {
+    "sx": 0.36,
+    "sy": 0.05,
+    "sz": 0.05
+   },
+   "position": [
+    0,
+    0.25,
+    0.107
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.5,
+    0.3,
+    0.22,
+    1.0
+   ],
+   "metallic": 0.5,
+   "roughness": 0.7,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.35
+  }
+ ]
+}

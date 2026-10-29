@@ -1,0 +1,2255 @@
+{
+ "units": {
+  "length": "m",
+  "angle": "deg"
+ },
+ "tolerance": 1e-06,
+ "cases": [
+  {
+   "name": "gear pair: one full turn forward",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "frame",
+      "position": [
+       0,
+       -0.007,
+       0
+      ]
+     },
+     {
+      "slug": "gear-in",
+      "position": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "gear-out",
+      "position": [
+       0.015,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "turn-in",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-in"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "turn-out",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-out"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "mesh",
+      "kind": "gear",
+      "mates": [
+       "turn-in",
+       "turn-out"
+      ],
+      "teeth": [
+       20,
+       40
+      ]
+     }
+    ],
+    "driven": {
+     "mate": "turn-in",
+     "value": 0
+    }
+   },
+   "driven_value": 360,
+   "expect": {
+    "poses": {
+     "frame": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "gear-in": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "gear-out": {
+      "rotation": [
+       [
+        -1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        -1
+       ]
+      ],
+      "translation": [
+       0.03,
+       0,
+       0
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "gear pair: one full turn backward",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "frame",
+      "position": [
+       0,
+       -0.007,
+       0
+      ]
+     },
+     {
+      "slug": "gear-in",
+      "position": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "gear-out",
+      "position": [
+       0.015,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "turn-in",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-in"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "turn-out",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-out"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "mesh",
+      "kind": "gear",
+      "mates": [
+       "turn-in",
+       "turn-out"
+      ],
+      "teeth": [
+       20,
+       40
+      ]
+     }
+    ],
+    "driven": {
+     "mate": "turn-in",
+     "value": 0
+    }
+   },
+   "driven_value": -360,
+   "expect": {
+    "poses": {
+     "frame": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "gear-in": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "gear-out": {
+      "rotation": [
+       [
+        -1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        -1
+       ]
+      ],
+      "translation": [
+       0.03,
+       0,
+       0
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "gear pair: quarter turn gives -45 on the 40-tooth gear",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "frame",
+      "position": [
+       0,
+       -0.007,
+       0
+      ]
+     },
+     {
+      "slug": "gear-in",
+      "position": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "gear-out",
+      "position": [
+       0.015,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "turn-in",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-in"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "turn-out",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-out"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "mesh",
+      "kind": "gear",
+      "mates": [
+       "turn-in",
+       "turn-out"
+      ],
+      "teeth": [
+       20,
+       40
+      ]
+     }
+    ],
+    "driven": {
+     "mate": "turn-in",
+     "value": 0
+    }
+   },
+   "driven_value": 90,
+   "expect": {
+    "poses": {
+     "frame": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "gear-in": {
+      "rotation": [
+       [
+        0,
+        0,
+        1
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        -1,
+        0,
+        0
+       ]
+      ],
+      "translation": [
+       -0.015,
+       0,
+       -0.015
+      ]
+     },
+     "gear-out": {
+      "rotation": [
+       [
+        0.7071067811865476,
+        0,
+        -0.7071067811865476
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0.7071067811865476,
+        0,
+        0.7071067811865476
+       ]
+      ],
+      "translation": [
+       0.004393398282201786,
+       0,
+       -0.010606601717798213
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "gear pair: default driven value from the record",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "frame",
+      "position": [
+       0,
+       -0.007,
+       0
+      ]
+     },
+     {
+      "slug": "gear-in",
+      "position": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "gear-out",
+      "position": [
+       0.015,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "turn-in",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-in"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "turn-out",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-out"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "mesh",
+      "kind": "gear",
+      "mates": [
+       "turn-in",
+       "turn-out"
+      ],
+      "teeth": [
+       20,
+       40
+      ]
+     }
+    ],
+    "driven": {
+     "mate": "turn-in",
+     "value": 0
+    }
+   },
+   "expect": {
+    "poses": {
+     "frame": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "gear-in": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "gear-out": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "revolute inside its range",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "base",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "door",
+      "position": [
+       0.5,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "hinge",
+      "kind": "revolute",
+      "parts": [
+       "base",
+       "door"
+      ],
+      "axis": [
+       0,
+       0,
+       1
+      ],
+      "anchor": [
+       0,
+       0,
+       0
+      ],
+      "range": [
+       -90,
+       90
+      ]
+     }
+    ],
+    "driven": {
+     "mate": "hinge",
+     "value": 0
+    }
+   },
+   "driven_value": 90,
+   "expect": {
+    "poses": {
+     "base": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "door": {
+      "rotation": [
+       [
+        0,
+        -1,
+        0
+       ],
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "revolute range hit",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "base",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "door",
+      "position": [
+       0.5,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "hinge",
+      "kind": "revolute",
+      "parts": [
+       "base",
+       "door"
+      ],
+      "axis": [
+       0,
+       0,
+       1
+      ],
+      "anchor": [
+       0,
+       0,
+       0
+      ],
+      "range": [
+       -90,
+       90
+      ]
+     }
+    ],
+    "driven": {
+     "mate": "hinge",
+     "value": 0
+    }
+   },
+   "driven_value": 120,
+   "expect": {
+    "refusal": "mate 'hinge': value 120 is outside range [-90, 90]"
+   }
+  },
+  {
+   "name": "slider along a non-unit axis",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "rail",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "carriage",
+      "position": [
+       0,
+       0.02,
+       0
+      ]
+     },
+     {
+      "slug": "lamp",
+      "position": [
+       0,
+       0.05,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "slide",
+      "kind": "slider",
+      "parts": [
+       "rail",
+       "carriage"
+      ],
+      "axis": [
+       0,
+       0,
+       2
+      ],
+      "range": [
+       0,
+       0.1
+      ]
+     },
+     {
+      "id": "lamp-on-carriage",
+      "kind": "fixed",
+      "parts": [
+       "carriage",
+       "lamp"
+      ]
+     }
+    ],
+    "driven": {
+     "mate": "slide",
+     "value": 0
+    }
+   },
+   "driven_value": 0.05,
+   "expect": {
+    "poses": {
+     "rail": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "carriage": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0.05
+      ]
+     },
+     "lamp": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0.05
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "fixed part rides a revolute parent",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "motor",
+      "position": [
+       0,
+       0,
+       0
+      ],
+      "frames": {
+       "spin": {
+        "origin": [
+         0,
+         0,
+         0
+        ],
+        "axis": [
+         0,
+         0,
+         1
+        ]
+       }
+      }
+     },
+     {
+      "slug": "shaft",
+      "position": [
+       0,
+       0,
+       0.02
+      ]
+     },
+     {
+      "slug": "blade",
+      "position": [
+       0,
+       0.03,
+       0.02
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "spin",
+      "kind": "revolute",
+      "parts": [
+       "motor",
+       "shaft"
+      ],
+      "frame": "spin"
+     },
+     {
+      "id": "blade-on-shaft",
+      "kind": "fixed",
+      "parts": [
+       "shaft",
+       "blade"
+      ]
+     }
+    ],
+    "driven": {
+     "mate": "spin",
+     "value": 0
+    }
+   },
+   "driven_value": 90,
+   "expect": {
+    "poses": {
+     "motor": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "shaft": {
+      "rotation": [
+       [
+        0,
+        -1,
+        0
+       ],
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "blade": {
+      "rotation": [
+       [
+        0,
+        -1,
+        0
+       ],
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "frame resolves on the parent part",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "base",
+      "position": [
+       0,
+       0,
+       0
+      ],
+      "frames": {
+       "pin": {
+        "origin": [
+         0,
+         0,
+         0
+        ],
+        "axis": [
+         0,
+         1,
+         0
+        ]
+       }
+      }
+     },
+     {
+      "slug": "arm",
+      "position": [
+       0.1,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "mid",
+      "position": [
+       0.2,
+       0,
+       0
+      ],
+      "frames": {
+       "pin": {
+        "origin": [
+         0.1,
+         0,
+         0
+        ],
+        "axis": [
+         0,
+         1,
+         0
+        ]
+       }
+      }
+     }
+    ],
+    "mates": [
+     {
+      "id": "r1",
+      "kind": "revolute",
+      "parts": [
+       "base",
+       "arm"
+      ],
+      "frame": "pin"
+     },
+     {
+      "id": "r2",
+      "kind": "revolute",
+      "parts": [
+       "arm",
+       "mid"
+      ],
+      "frame": "pin"
+     }
+    ],
+    "driven": {
+     "mate": "r1",
+     "value": 0
+    }
+   },
+   "expect": {
+    "reasons": [
+     "mate 'r2': frame 'pin' not on part 'arm'"
+    ]
+   }
+  },
+  {
+   "name": "unknown part",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "a",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "m",
+      "kind": "fixed",
+      "parts": [
+       "a",
+       "b"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "reasons": [
+     "mate 'm': unknown part 'b'"
+    ]
+   }
+  },
+  {
+   "name": "two mates move the same part",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "a",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "b",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "c",
+      "position": [
+       0.1,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "m1",
+      "kind": "fixed",
+      "parts": [
+       "a",
+       "c"
+      ]
+     },
+     {
+      "id": "m2",
+      "kind": "revolute",
+      "parts": [
+       "b",
+       "c"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       0,
+       0,
+       0
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "reasons": [
+     "part 'c' is moved by mates 'm1' and 'm2'"
+    ]
+   }
+  },
+  {
+   "name": "duplicate mate id",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "a",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "b",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "c",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "m",
+      "kind": "fixed",
+      "parts": [
+       "a",
+       "b"
+      ]
+     },
+     {
+      "id": "m",
+      "kind": "fixed",
+      "parts": [
+       "a",
+       "c"
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "reasons": [
+     "mate 'm': duplicate id"
+    ]
+   }
+  },
+  {
+   "name": "gear ratio does not match tooth counts",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "frame",
+      "position": [
+       0,
+       -0.007,
+       0
+      ]
+     },
+     {
+      "slug": "gear-in",
+      "position": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "gear-out",
+      "position": [
+       0.015,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "turn-in",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-in"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "turn-out",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-out"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "mesh",
+      "kind": "gear",
+      "mates": [
+       "turn-in",
+       "turn-out"
+      ],
+      "teeth": [
+       20,
+       40
+      ],
+      "ratio": 2
+     }
+    ],
+    "driven": {
+     "mate": "turn-in",
+     "value": 0
+    }
+   },
+   "expect": {
+    "reasons": [
+     "mate 'mesh': ratio 2 does not match teeth 20/40"
+    ]
+   }
+  },
+  {
+   "name": "gear mate on a slider",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "rail",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "car",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "wheel",
+      "position": [
+       0.1,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "slide",
+      "kind": "slider",
+      "parts": [
+       "rail",
+       "car"
+      ],
+      "axis": [
+       1,
+       0,
+       0
+      ],
+      "range": [
+       -1,
+       1
+      ]
+     },
+     {
+      "id": "turn",
+      "kind": "revolute",
+      "parts": [
+       "rail",
+       "wheel"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       0.1,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "g",
+      "kind": "gear",
+      "mates": [
+       "slide",
+       "turn"
+      ],
+      "ratio": 1
+     }
+    ],
+    "driven": {
+     "mate": "slide",
+     "value": 0
+    }
+   },
+   "expect": {
+    "reasons": [
+     "mate 'g': mate 'slide' is not revolute"
+    ]
+   }
+  },
+  {
+   "name": "two gears drive the same revolute",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "f",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "a",
+      "position": [
+       -0.03,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "b",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "c",
+      "position": [
+       0.03,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "ra",
+      "kind": "revolute",
+      "parts": [
+       "f",
+       "a"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       -0.03,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "rb",
+      "kind": "revolute",
+      "parts": [
+       "f",
+       "b"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "rc",
+      "kind": "revolute",
+      "parts": [
+       "f",
+       "c"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       0.03,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "g1",
+      "kind": "gear",
+      "mates": [
+       "ra",
+       "rb"
+      ],
+      "ratio": 1
+     },
+     {
+      "id": "g2",
+      "kind": "gear",
+      "mates": [
+       "rc",
+       "rb"
+      ],
+      "ratio": 1
+     }
+    ],
+    "driven": {
+     "mate": "ra",
+     "value": 0
+    }
+   },
+   "expect": {
+    "reasons": [
+     "mates 'g1' and 'g2' both drive mate 'rb'"
+    ]
+   }
+  },
+  {
+   "name": "mates form a loop",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "a",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "b",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "m1",
+      "kind": "fixed",
+      "parts": [
+       "a",
+       "b"
+      ]
+     },
+     {
+      "id": "m2",
+      "kind": "fixed",
+      "parts": [
+       "b",
+       "a"
+      ]
+     }
+    ],
+    "driven": null
+   },
+   "expect": {
+    "reasons": [
+     "mates form a loop through part 'a'"
+    ]
+   }
+  },
+  {
+   "name": "driven mate unknown",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "base",
+      "position": [
+       0,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "door",
+      "position": [
+       0.5,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "hinge",
+      "kind": "revolute",
+      "parts": [
+       "base",
+       "door"
+      ],
+      "axis": [
+       0,
+       0,
+       1
+      ],
+      "anchor": [
+       0,
+       0,
+       0
+      ],
+      "range": [
+       -90,
+       90
+      ]
+     }
+    ],
+    "driven": {
+     "mate": "latch",
+     "value": 0
+    }
+   },
+   "expect": {
+    "reasons": [
+     "driven: unknown mate 'latch'"
+    ]
+   }
+  },
+  {
+   "name": "edit: swap to a 30/30 pair re-solves",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "frame",
+      "position": [
+       0,
+       -0.007,
+       0
+      ]
+     },
+     {
+      "slug": "gear-in",
+      "position": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "gear-out",
+      "position": [
+       0.015,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "turn-in",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-in"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "turn-out",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-out"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "mesh",
+      "kind": "gear",
+      "mates": [
+       "turn-in",
+       "turn-out"
+      ],
+      "teeth": [
+       20,
+       40
+      ]
+     }
+    ],
+    "driven": {
+     "mate": "turn-in",
+     "value": 0
+    }
+   },
+   "driven_value": 180,
+   "edit": {
+    "mate": "mesh",
+    "set": {
+     "teeth": [
+      30,
+      30
+     ]
+    }
+   },
+   "expect": {
+    "edit": {
+     "ok": true,
+     "reason": "Edit applied."
+    },
+    "poses": {
+     "frame": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "gear-in": {
+      "rotation": [
+       [
+        -1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        -1
+       ]
+      ],
+      "translation": [
+       -0.03,
+       0,
+       0
+      ]
+     },
+     "gear-out": {
+      "rotation": [
+       [
+        -1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        -1
+       ]
+      ],
+      "translation": [
+       0.03,
+       0,
+       0
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "edit: refused ratio keeps the record",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "frame",
+      "position": [
+       0,
+       -0.007,
+       0
+      ]
+     },
+     {
+      "slug": "gear-in",
+      "position": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "gear-out",
+      "position": [
+       0.015,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "turn-in",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-in"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "turn-out",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-out"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "mesh",
+      "kind": "gear",
+      "mates": [
+       "turn-in",
+       "turn-out"
+      ],
+      "teeth": [
+       20,
+       40
+      ]
+     }
+    ],
+    "driven": {
+     "mate": "turn-in",
+     "value": 0
+    }
+   },
+   "driven_value": 360,
+   "edit": {
+    "mate": "mesh",
+    "set": {
+     "ratio": 3
+    }
+   },
+   "expect": {
+    "edit": {
+     "ok": false,
+     "reason": "mate 'mesh': ratio 3 does not match teeth 20/40"
+    },
+    "poses": {
+     "frame": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "gear-in": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "gear-out": {
+      "rotation": [
+       [
+        -1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        -1
+       ]
+      ],
+      "translation": [
+       0.03,
+       0,
+       0
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "edit: unknown mate",
+   "assembly": {
+    "parts": [
+     {
+      "slug": "frame",
+      "position": [
+       0,
+       -0.007,
+       0
+      ]
+     },
+     {
+      "slug": "gear-in",
+      "position": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "slug": "gear-out",
+      "position": [
+       0.015,
+       0,
+       0
+      ]
+     }
+    ],
+    "mates": [
+     {
+      "id": "turn-in",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-in"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       -0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "turn-out",
+      "kind": "revolute",
+      "parts": [
+       "frame",
+       "gear-out"
+      ],
+      "axis": [
+       0,
+       1,
+       0
+      ],
+      "anchor": [
+       0.015,
+       0,
+       0
+      ]
+     },
+     {
+      "id": "mesh",
+      "kind": "gear",
+      "mates": [
+       "turn-in",
+       "turn-out"
+      ],
+      "teeth": [
+       20,
+       40
+      ]
+     }
+    ],
+    "driven": {
+     "mate": "turn-in",
+     "value": 0
+    }
+   },
+   "edit": {
+    "mate": "nope",
+    "set": {
+     "ratio": 1
+    }
+   },
+   "expect": {
+    "edit": {
+     "ok": false,
+     "reason": "edit: unknown mate 'nope'"
+    },
+    "poses": {
+     "frame": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "gear-in": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     },
+     "gear-out": {
+      "rotation": [
+       [
+        1,
+        0,
+        0
+       ],
+       [
+        0,
+        1,
+        0
+       ],
+       [
+        0,
+        0,
+        1
+       ]
+      ],
+      "translation": [
+       0,
+       0,
+       0
+      ]
+     }
+    }
+   }
+  }
+ ]
+}

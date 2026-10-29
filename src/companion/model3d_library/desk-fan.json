@@ -1,0 +1,1524 @@
+{
+  "slug": "desk-fan",
+  "title": "Desk fan",
+  "aliases": [
+    "fan",
+    "desk fan",
+    "table fan",
+    "electric fan",
+    "oscillating fan",
+    "pedestal fan head"
+  ],
+  "summary": "An AC induction motor spins a three-blade rotor behind a wire guard. A worm on the back of the motor shaft drives slow gears and a crank that swings the head side to side on a pivot above the tilt joint.",
+  "approximate": true,
+  "disclaimer": "Researched typical design, not a specific product; simplified shapes.",
+  "units": "m",
+  "sources": [
+    {
+      "title": "What Are the 9 Key Parts of an Electric Fan? (SF Fan)",
+      "url": "https://sffanfactory.com/what-are-the-parts-of-an-electric-fan-and-their-definition/"
+    }
+  ],
+  "parts": [
+    {
+      "slug": "front-grille-rim",
+      "label": "Front grille rim",
+      "group": "guard",
+      "does": "Holds the front guard wires together and clips to the rear guard.",
+      "shape": "torus",
+      "params": {
+        "major": 0.18,
+        "minor": 0.004
+      },
+      "position": [
+        0,
+        0.32,
+        0.11
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.55,
+        0.55,
+        0.58,
+        1
+      ],
+      "metallic": 0.6,
+      "roughness": 0.4,
+      "explode": [
+        0,
+        0,
+        1
+      ],
+      "explode_distance": 0.45
+    },
+    {
+      "slug": "front-grille-badge",
+      "label": "Front grille badge",
+      "group": "guard",
+      "does": "Centre disc that ties the front guard spokes together.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.035,
+        "height": 0.006
+      },
+      "position": [
+        0,
+        0.32,
+        0.115
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.92,
+        0.92,
+        0.94,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        0,
+        1
+      ],
+      "explode_distance": 0.5
+    },
+    {
+      "slug": "front-grille-spoke",
+      "label": "Front grille spoke",
+      "group": "guard",
+      "does": "Radial wire that keeps fingers away from the spinning blades.",
+      "shape": "box",
+      "params": {
+        "sx": 0.003,
+        "sy": 0.145,
+        "sz": 0.003
+      },
+      "position": [
+        0,
+        0.4275,
+        0.11
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.55,
+        0.55,
+        0.58,
+        1
+      ],
+      "metallic": 0.6,
+      "roughness": 0.4,
+      "explode": [
+        0,
+        0,
+        1
+      ],
+      "explode_distance": 0.45,
+      "repeat": {
+        "count": 12,
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "angle_deg": 30,
+        "offset": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "slug": "rear-grille-rim",
+      "label": "Rear grille rim",
+      "group": "guard",
+      "does": "Outer ring of the rear guard, mounted on the motor housing.",
+      "shape": "torus",
+      "params": {
+        "major": 0.18,
+        "minor": 0.004
+      },
+      "position": [
+        0,
+        0.32,
+        0.02
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.55,
+        0.55,
+        0.58,
+        1
+      ],
+      "metallic": 0.6,
+      "roughness": 0.4,
+      "explode": [
+        0,
+        0.3,
+        1
+      ],
+      "explode_distance": 0.2
+    },
+    {
+      "slug": "rear-grille-ring",
+      "label": "Rear grille inner ring",
+      "group": "guard",
+      "does": "Mid ring that stiffens the rear guard wires.",
+      "shape": "torus",
+      "params": {
+        "major": 0.11,
+        "minor": 0.0025
+      },
+      "position": [
+        0,
+        0.32,
+        0.015
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.55,
+        0.55,
+        0.58,
+        1
+      ],
+      "metallic": 0.6,
+      "roughness": 0.4,
+      "explode": [
+        0,
+        0.3,
+        1
+      ],
+      "explode_distance": 0.2
+    },
+    {
+      "slug": "guard-clip",
+      "label": "Guard clip",
+      "group": "guard",
+      "does": "Snaps the front guard to the rear guard rim.",
+      "shape": "box",
+      "params": {
+        "sx": 0.02,
+        "sy": 0.012,
+        "sz": 0.02
+      },
+      "position": [
+        0,
+        0.14,
+        0.065
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.6,
+        0.6,
+        0.62,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        -1,
+        0.5
+      ],
+      "explode_distance": 0.35
+    },
+    {
+      "slug": "spinner-cap",
+      "label": "Spinner cap",
+      "group": "rotor",
+      "does": "Screws onto the shaft to hold the blade hub in place.",
+      "shape": "sphere",
+      "params": {
+        "radius": 0.022
+      },
+      "position": [
+        0,
+        0.32,
+        0.085
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.92,
+        0.92,
+        0.94,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        0,
+        1
+      ],
+      "explode_distance": 0.4
+    },
+    {
+      "slug": "blade-hub",
+      "label": "Blade hub",
+      "group": "rotor",
+      "does": "Grips the motor shaft and carries the blades.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.035,
+        "height": 0.035
+      },
+      "position": [
+        0,
+        0.32,
+        0.06
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.92,
+        0.92,
+        0.94,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        0,
+        1
+      ],
+      "explode_distance": 0.32
+    },
+    {
+      "slug": "fan-blade",
+      "label": "Fan blade",
+      "group": "rotor",
+      "does": "Pitched blade that pushes air forward as it spins.",
+      "shape": "blade",
+      "params": {
+        "length": 0.14,
+        "root_width": 0.05,
+        "tip_width": 0.09,
+        "thickness": 0.003,
+        "twist_deg": 25,
+        "sweep": 0.02
+      },
+      "position": [
+        0,
+        0.35,
+        0.06
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.7,
+        0.85,
+        0.95,
+        1
+      ],
+      "metallic": 0.0,
+      "roughness": 0.4,
+      "explode": [
+        0,
+        0,
+        1
+      ],
+      "explode_distance": 0.32,
+      "repeat": {
+        "count": 3,
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "angle_deg": 120,
+        "offset": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "slug": "motor-housing-front",
+      "label": "Motor housing front",
+      "group": "motor",
+      "does": "Front shell of the motor that carries the front bearing.",
+      "shape": "revolve",
+      "params": {
+        "profile": [
+          [
+            0.02,
+            0
+          ],
+          [
+            0.07,
+            0
+          ],
+          [
+            0.075,
+            0.04
+          ]
+        ],
+        "shell_thickness": 0.003
+      },
+      "position": [
+        0,
+        0.32,
+        0.0
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": [
+        0.92,
+        0.92,
+        0.94,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        0,
+        1
+      ],
+      "explode_distance": 0.2,
+      "frames": {
+        "shaft": {
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        }
+      }
+    },
+    {
+      "slug": "motor-housing-rear",
+      "label": "Motor housing rear",
+      "group": "motor",
+      "does": "Rear shell with cooling vents that covers the motor and gearbox.",
+      "shape": "revolve",
+      "params": {
+        "profile": [
+          [
+            0.075,
+            0
+          ],
+          [
+            0.075,
+            0.07
+          ],
+          [
+            0.05,
+            0.1
+          ],
+          [
+            0,
+            0.11
+          ]
+        ],
+        "shell_thickness": 0.003
+      },
+      "position": [
+        0,
+        0.32,
+        0.0
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.92,
+        0.92,
+        0.94,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        0,
+        -1
+      ],
+      "explode_distance": 0.35
+    },
+    {
+      "slug": "motor-shaft",
+      "label": "Motor shaft",
+      "group": "motor",
+      "does": "Steel shaft that carries the rotor and drives the blades and gearbox.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.004,
+        "height": 0.17
+      },
+      "position": [
+        0,
+        0.32,
+        -0.02
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.55,
+        0.55,
+        0.58,
+        1
+      ],
+      "metallic": 0.9,
+      "roughness": 0.3,
+      "explode": [
+        0,
+        0,
+        1
+      ],
+      "explode_distance": 0.0
+    },
+    {
+      "slug": "front-bearing",
+      "label": "Front bearing",
+      "group": "motor",
+      "does": "Sintered bronze sleeve bearing that supports the shaft at the front.",
+      "shape": "tube",
+      "params": {
+        "outer": 0.009,
+        "inner": 0.004,
+        "height": 0.012
+      },
+      "position": [
+        0,
+        0.32,
+        0.01
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.7,
+        0.55,
+        0.3,
+        1
+      ],
+      "metallic": 0.8,
+      "roughness": 0.3,
+      "explode": [
+        0,
+        0,
+        1
+      ],
+      "explode_distance": 0.12
+    },
+    {
+      "slug": "rear-bearing",
+      "label": "Rear bearing",
+      "group": "motor",
+      "does": "Oil-soaked sleeve bearing that supports the shaft at the back.",
+      "shape": "tube",
+      "params": {
+        "outer": 0.009,
+        "inner": 0.004,
+        "height": 0.012
+      },
+      "position": [
+        0,
+        0.32,
+        -0.075
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.7,
+        0.55,
+        0.3,
+        1
+      ],
+      "metallic": 0.8,
+      "roughness": 0.3,
+      "explode": [
+        0,
+        0,
+        -1
+      ],
+      "explode_distance": 0.12
+    },
+    {
+      "slug": "rotor",
+      "label": "Rotor",
+      "group": "motor",
+      "does": "Squirrel-cage rotor that is pushed round by the stator's magnetic field.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.022,
+        "height": 0.03
+      },
+      "position": [
+        0,
+        0.32,
+        -0.03
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.5,
+        0.5,
+        0.55,
+        1
+      ],
+      "metallic": 0.7,
+      "roughness": 0.4,
+      "explode": [
+        0,
+        0,
+        0.3
+      ],
+      "explode_distance": 0.0
+    },
+    {
+      "slug": "stator-core",
+      "label": "Stator core",
+      "group": "motor",
+      "does": "Stack of steel laminations that guides the magnetic field around the rotor.",
+      "shape": "tube",
+      "params": {
+        "outer": 0.05,
+        "inner": 0.024,
+        "height": 0.03
+      },
+      "position": [
+        0,
+        0.32,
+        -0.03
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.35,
+        0.35,
+        0.38,
+        1
+      ],
+      "metallic": 0.7,
+      "roughness": 0.5,
+      "explode": [
+        0,
+        1,
+        0
+      ],
+      "explode_distance": 0.15
+    },
+    {
+      "slug": "stator-winding",
+      "label": "Stator winding",
+      "group": "motor",
+      "does": "Copper coil that makes the rotating magnetic field from mains AC.",
+      "shape": "torus",
+      "params": {
+        "major": 0.037,
+        "minor": 0.008
+      },
+      "position": [
+        0,
+        0.32,
+        -0.012
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.8,
+        0.45,
+        0.2,
+        1
+      ],
+      "metallic": 0.8,
+      "roughness": 0.35,
+      "explode": [
+        0,
+        1,
+        0.3
+      ],
+      "explode_distance": 0.18,
+      "repeat": {
+        "count": 2,
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "angle_deg": 0,
+        "offset": [
+          0,
+          0,
+          -0.036
+        ]
+      }
+    },
+    {
+      "slug": "motor-mount-bolt",
+      "label": "Motor through-bolt",
+      "group": "motor",
+      "does": "Clamps the stator between the two motor end shells.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.0025,
+        "height": 0.09
+      },
+      "position": [
+        0.058,
+        0.32,
+        -0.035
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.55,
+        0.55,
+        0.58,
+        1
+      ],
+      "metallic": 0.9,
+      "roughness": 0.3,
+      "explode": [
+        0.856,
+        0.0,
+        -0.517
+      ],
+      "explode_distance": 0.15,
+      "repeat": {
+        "count": 4,
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "angle_deg": 90,
+        "offset": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "slug": "run-capacitor",
+      "label": "Run capacitor",
+      "group": "electrics",
+      "does": "Gives the second winding a phase shift so the PSC motor starts and runs smoothly.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.011,
+        "height": 0.035
+      },
+      "position": [
+        0,
+        0.38,
+        -0.07
+      ],
+      "rotation": [
+        0,
+        0,
+        90
+      ],
+      "color": [
+        0.2,
+        0.3,
+        0.6,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        1,
+        -0.3
+      ],
+      "explode_distance": 0.25
+    },
+    {
+      "slug": "gearbox-case",
+      "label": "Gearbox case",
+      "group": "oscillation",
+      "does": "Sealed case at the back of the motor that holds the reduction gears.",
+      "shape": "box",
+      "params": {
+        "sx": 0.05,
+        "sy": 0.04,
+        "sz": 0.03
+      },
+      "position": [
+        0,
+        0.32,
+        -0.1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.6,
+        0.6,
+        0.62,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        0,
+        -1
+      ],
+      "explode_distance": 0.25
+    },
+    {
+      "slug": "worm",
+      "label": "Worm",
+      "group": "oscillation",
+      "does": "Spiral cut on the shaft end that turns the worm gear very slowly.",
+      "shape": "helix",
+      "params": {
+        "radius": 0.004,
+        "pitch": 0.003,
+        "turns": 5,
+        "wire": 0.0015
+      },
+      "position": [
+        0,
+        0.32,
+        -0.1
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.55,
+        0.55,
+        0.58,
+        1
+      ],
+      "metallic": 0.9,
+      "roughness": 0.3,
+      "explode": [
+        0,
+        0,
+        -1
+      ],
+      "explode_distance": 0.25
+    },
+    {
+      "slug": "worm-gear",
+      "label": "Worm gear",
+      "group": "oscillation",
+      "does": "Large gear driven by the worm, cutting speed by about a hundred to one.",
+      "shape": "gear",
+      "params": {
+        "radius": 0.016,
+        "teeth": 30,
+        "thickness": 0.006,
+        "tooth_depth": 0.002,
+        "bore": 0.002
+      },
+      "position": [
+        0.012,
+        0.32,
+        -0.1
+      ],
+      "rotation": [
+        0,
+        0,
+        90
+      ],
+      "color": [
+        0.9,
+        0.9,
+        0.85,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0.3,
+        0,
+        -1
+      ],
+      "explode_distance": 0.3
+    },
+    {
+      "slug": "output-gear",
+      "label": "Output gear",
+      "group": "oscillation",
+      "does": "Second stage gear that turns the crank pin once every few seconds.",
+      "shape": "gear",
+      "params": {
+        "radius": 0.012,
+        "teeth": 24,
+        "thickness": 0.005,
+        "tooth_depth": 0.0015,
+        "bore": 0.002
+      },
+      "position": [
+        0,
+        0.298,
+        -0.1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.9,
+        0.9,
+        0.85,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        -0.4,
+        -1
+      ],
+      "explode_distance": 0.32
+    },
+    {
+      "slug": "oscillation-knob",
+      "label": "Oscillation knob",
+      "group": "oscillation",
+      "does": "Pull or push to engage the clutch and start or stop the side to side sweep.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.01,
+        "height": 0.03
+      },
+      "position": [
+        0,
+        0.355,
+        -0.1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.15,
+        0.15,
+        0.15,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        1,
+        0
+      ],
+      "explode_distance": 0.3
+    },
+    {
+      "slug": "crank-arm",
+      "label": "Crank arm",
+      "group": "oscillation",
+      "does": "Links the output gear to the neck so the head swings left and right.",
+      "shape": "box",
+      "params": {
+        "sx": 0.06,
+        "sy": 0.004,
+        "sz": 0.012
+      },
+      "position": [
+        0.02,
+        0.25,
+        -0.085
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.55,
+        0.55,
+        0.58,
+        1
+      ],
+      "metallic": 0.7,
+      "roughness": 0.4,
+      "explode": [
+        0.3,
+        -1,
+        -0.3
+      ],
+      "explode_distance": 0.3
+    },
+    {
+      "slug": "pivot-spindle",
+      "label": "Pivot spindle",
+      "group": "oscillation",
+      "does": "Vertical pin the motor head turns around while oscillating.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.006,
+        "height": 0.04
+      },
+      "position": [
+        0,
+        0.245,
+        -0.03
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.55,
+        0.55,
+        0.58,
+        1
+      ],
+      "metallic": 0.9,
+      "roughness": 0.3,
+      "explode": [
+        0,
+        -1,
+        0
+      ],
+      "explode_distance": 0.2
+    },
+    {
+      "slug": "tilt-joint",
+      "label": "Tilt joint",
+      "group": "stand",
+      "does": "Friction hinge that lets you aim the head up or down.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.018,
+        "height": 0.05
+      },
+      "position": [
+        0,
+        0.22,
+        -0.03
+      ],
+      "rotation": [
+        0,
+        0,
+        90
+      ],
+      "color": [
+        0.6,
+        0.6,
+        0.62,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        -1,
+        0
+      ],
+      "explode_distance": 0.25
+    },
+    {
+      "slug": "tilt-knob",
+      "label": "Tilt lock knob",
+      "group": "stand",
+      "does": "Tightens the tilt hinge so the head stays at the chosen angle.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.014,
+        "height": 0.012
+      },
+      "position": [
+        0.032,
+        0.22,
+        -0.03
+      ],
+      "rotation": [
+        0,
+        0,
+        90
+      ],
+      "color": [
+        0.15,
+        0.15,
+        0.15,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        1,
+        -0.3,
+        0
+      ],
+      "explode_distance": 0.3
+    },
+    {
+      "slug": "neck",
+      "label": "Neck",
+      "group": "stand",
+      "does": "Short yoke joining the tilt hinge to the stand pole.",
+      "shape": "box",
+      "params": {
+        "sx": 0.03,
+        "sy": 0.04,
+        "sz": 0.03
+      },
+      "position": [
+        0,
+        0.185,
+        -0.03
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.92,
+        0.92,
+        0.94,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        -1,
+        0
+      ],
+      "explode_distance": 0.3
+    },
+    {
+      "slug": "stand-pole",
+      "label": "Stand pole",
+      "group": "stand",
+      "does": "Hollow column that holds the head up and carries the wires.",
+      "shape": "tube",
+      "params": {
+        "outer": 0.015,
+        "inner": 0.011,
+        "height": 0.12
+      },
+      "position": [
+        0,
+        0.11,
+        -0.03
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.92,
+        0.92,
+        0.94,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        -1,
+        0
+      ],
+      "explode_distance": 0.35
+    },
+    {
+      "slug": "internal-wiring",
+      "label": "Internal wiring",
+      "group": "electrics",
+      "does": "Insulated wires running from the switch up the pole to the motor.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.003,
+        "height": 0.13
+      },
+      "position": [
+        0,
+        0.11,
+        -0.03
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.85,
+        0.2,
+        0.2,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0.4,
+        -1,
+        0
+      ],
+      "explode_distance": 0.35
+    },
+    {
+      "slug": "base",
+      "label": "Base",
+      "group": "stand",
+      "does": "Weighted round base that keeps the fan from tipping.",
+      "shape": "revolve",
+      "params": {
+        "profile": [
+          [
+            0,
+            0
+          ],
+          [
+            0.13,
+            0
+          ],
+          [
+            0.12,
+            0.04
+          ],
+          [
+            0.02,
+            0.05
+          ],
+          [
+            0,
+            0.05
+          ]
+        ],
+        "shell_thickness": 0.003
+      },
+      "position": [
+        0,
+        0,
+        -0.03
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.92,
+        0.92,
+        0.94,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        -1,
+        0
+      ],
+      "explode_distance": 0.45
+    },
+    {
+      "slug": "base-weight",
+      "label": "Base weight",
+      "group": "stand",
+      "does": "Steel plate inside the base that lowers the centre of gravity.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.1,
+        "height": 0.008
+      },
+      "position": [
+        0,
+        0.01,
+        -0.03
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "color": [
+        0.15,
+        0.15,
+        0.15,
+        1
+      ],
+      "metallic": 0.8,
+      "roughness": 0.5,
+      "explode": [
+        0,
+        -1,
+        0
+      ],
+      "explode_distance": 0.5
+    },
+    {
+      "slug": "speed-switch",
+      "label": "Speed switch",
+      "group": "electrics",
+      "does": "Push buttons that pick off, low, medium or high by choosing winding taps.",
+      "shape": "box",
+      "params": {
+        "sx": 0.07,
+        "sy": 0.015,
+        "sz": 0.025
+      },
+      "position": [
+        0,
+        0.05,
+        0.07
+      ],
+      "rotation": [
+        -20,
+        0,
+        0
+      ],
+      "color": [
+        0.6,
+        0.6,
+        0.62,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        -0.6,
+        1
+      ],
+      "explode_distance": 0.45
+    },
+    {
+      "slug": "switch-button",
+      "label": "Switch button",
+      "group": "electrics",
+      "does": "Button you press to choose a speed.",
+      "shape": "box",
+      "params": {
+        "sx": 0.014,
+        "sy": 0.008,
+        "sz": 0.014
+      },
+      "position": [
+        -0.025,
+        0.06,
+        0.075
+      ],
+      "rotation": [
+        -20,
+        0,
+        0
+      ],
+      "color": [
+        0.15,
+        0.15,
+        0.15,
+        1
+      ],
+      "metallic": 0.0,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        -0.3,
+        1
+      ],
+      "explode_distance": 0.5,
+      "repeat": {
+        "count": 4,
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "angle_deg": 0,
+        "offset": [
+          0.0167,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "slug": "power-cord",
+      "label": "Power cord",
+      "group": "electrics",
+      "does": "Carries mains power from the wall socket to the switch.",
+      "shape": "cylinder",
+      "params": {
+        "radius": 0.003,
+        "height": 0.15
+      },
+      "position": [
+        0,
+        0.012,
+        -0.2
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "color": [
+        0.15,
+        0.15,
+        0.15,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        -0.3,
+        -1
+      ],
+      "explode_distance": 0.3
+    },
+    {
+      "slug": "cord-strain-relief",
+      "label": "Cord strain relief",
+      "group": "electrics",
+      "does": "Rubber sleeve that stops the cord pulling loose where it enters the base.",
+      "shape": "cone",
+      "params": {
+        "radius_bottom": 0.007,
+        "radius_top": 0.004,
+        "height": 0.025
+      },
+      "position": [
+        0,
+        0.012,
+        -0.135
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "color": [
+        0.15,
+        0.15,
+        0.15,
+        1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [
+        0,
+        -0.3,
+        -1
+      ],
+      "explode_distance": 0.32
+    }
+  ],
+  "mates": [
+    {
+      "id": "spin",
+      "kind": "revolute",
+      "parts": [
+        "motor-housing-front",
+        "motor-shaft"
+      ],
+      "frame": "shaft"
+    },
+    {
+      "id": "rotor-on-shaft",
+      "kind": "fixed",
+      "parts": [
+        "motor-shaft",
+        "rotor"
+      ]
+    },
+    {
+      "id": "hub-on-shaft",
+      "kind": "fixed",
+      "parts": [
+        "motor-shaft",
+        "blade-hub"
+      ]
+    },
+    {
+      "id": "blades-on-hub",
+      "kind": "fixed",
+      "parts": [
+        "blade-hub",
+        "fan-blade"
+      ]
+    },
+    {
+      "id": "cap-on-hub",
+      "kind": "fixed",
+      "parts": [
+        "blade-hub",
+        "spinner-cap"
+      ]
+    }
+  ],
+  "driven": {
+    "mate": "spin",
+    "value": 0
+  }
+}

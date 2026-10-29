@@ -1,0 +1,10 @@
+three.js 0.186.1 (MIT, see LICENSE), vendored 2026-10-01 for web/model3d.*
+Files are jsDelivr's Terser builds of the npm package, unmodified, renamed only to keep their relative imports:
+  three.module.js                    <- https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.min.js
+  three.core.js                      <- https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.core.min.js
+  addons/loaders/GLTFLoader.js       <- https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/loaders/GLTFLoader.min.js
+  addons/controls/OrbitControls.js   <- https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/controls/OrbitControls.min.js
+  addons/utils/BufferGeometryUtils.js <- https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/utils/BufferGeometryUtils.min.js
+  addons/utils/SkeletonUtils.js      <- https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/utils/SkeletonUtils.min.js
+The page maps the bare specifier "three" to three.module.js with an import map. The upstream build/ directory is not
+used because .gitignore ignores build/.

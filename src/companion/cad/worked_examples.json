@@ -1,0 +1,834 @@
+{
+ "frozen_sets": {
+  "cad_m4_heldout.json": "2889355341e4b34f",
+  "cad_m4_fresh.json": "d608f9d81de08052"
+ },
+ "examples": {
+  "flange": {
+   "seed": 1,
+   "brief": "please model a round flange, 60 mm diameter and 5 mm thick, with a 16 mm centre bore and 8 4 mm bolt holes evenly spaced around it.",
+   "reply": {
+    "assumptions": [
+     "centred on the origin",
+     "bolt circle = (60 + 16) / 2 = 38 mm across, halfway between the bore and the rim",
+     "first bolt hole at x = 38 / 2 = 19, y = 0, then 8 holes spread over 360 degrees about the origin"
+    ],
+    "questions": [],
+    "dimension_sources": {
+     "c1": "brief",
+     "c2": "brief",
+     "ex1.distance": "brief",
+     "h1.diameter": "brief",
+     "h1.center": "assumed",
+     "p1.count": "brief"
+    },
+    "spec": {
+     "version": 1,
+     "units": "mm",
+     "name": "flange",
+     "features": [
+      {
+       "id": "sk1",
+       "kind": "sketch",
+       "plane": "XY",
+       "offset": 0,
+       "entities": [
+        {
+         "id": "c1",
+         "kind": "circle",
+         "center": [
+          0,
+          0
+         ],
+         "radius": 30
+        },
+        {
+         "id": "c2",
+         "kind": "circle",
+         "center": [
+          0,
+          0
+         ],
+         "radius": 8
+        }
+       ]
+      },
+      {
+       "id": "ex1",
+       "kind": "extrude",
+       "sketch": "sk1",
+       "distance": 5,
+       "mode": "add"
+      },
+      {
+       "id": "h1",
+       "kind": "hole",
+       "face_hint": "top",
+       "center": [
+        19,
+        0
+       ],
+       "diameter": 4,
+       "depth": "through"
+      },
+      {
+       "id": "p1",
+       "kind": "pattern_circular",
+       "feature": "h1",
+       "count": 8,
+       "center": [
+        0,
+        0
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "hex_standoff": {
+   "seed": 1,
+   "brief": "I want a hex standoff 10 mm across flats, 26 mm long, with a 2 mm hole through the middle",
+   "reply": {
+    "assumptions": [
+     "centred on the origin",
+     "flats 10 gives circumradius 5.7735 mm; corners at 0, 60, 120, 180, 240, 300 degrees on the X axis",
+     "corner radius R = across flats / sqrt(3) = 10 / 1.7321 = 5.7735 mm; half the flats = 5; R / 2 = 2.8868",
+     "corners in order: (R, 0) (R/2, h) (-R/2, h) (-R, 0) (-R/2, -h) (R/2, -h)"
+    ],
+    "questions": [],
+    "dimension_sources": {
+     "sk1": "brief",
+     "ex1.distance": "brief",
+     "h1.diameter": "brief"
+    },
+    "spec": {
+     "version": 1,
+     "units": "mm",
+     "name": "hex standoff",
+     "features": [
+      {
+       "id": "sk1",
+       "kind": "sketch",
+       "plane": "XY",
+       "offset": 0,
+       "entities": [
+        {
+         "id": "l1",
+         "kind": "line",
+         "start": [
+          5.7735,
+          0
+         ],
+         "end": [
+          2.8868,
+          5
+         ]
+        },
+        {
+         "id": "l2",
+         "kind": "line",
+         "start": [
+          2.8868,
+          5
+         ],
+         "end": [
+          -2.8868,
+          5
+         ]
+        },
+        {
+         "id": "l3",
+         "kind": "line",
+         "start": [
+          -2.8868,
+          5
+         ],
+         "end": [
+          -5.7735,
+          0
+         ]
+        },
+        {
+         "id": "l4",
+         "kind": "line",
+         "start": [
+          -5.7735,
+          0
+         ],
+         "end": [
+          -2.8868,
+          -5
+         ]
+        },
+        {
+         "id": "l5",
+         "kind": "line",
+         "start": [
+          -2.8868,
+          -5
+         ],
+         "end": [
+          2.8868,
+          -5
+         ]
+        },
+        {
+         "id": "l6",
+         "kind": "line",
+         "start": [
+          2.8868,
+          -5
+         ],
+         "end": [
+          5.7735,
+          0
+         ]
+        }
+       ]
+      },
+      {
+       "id": "ex1",
+       "kind": "extrude",
+       "sketch": "sk1",
+       "distance": 26,
+       "mode": "add"
+      },
+      {
+       "id": "h1",
+       "kind": "hole",
+       "face_hint": "top",
+       "center": [
+        0,
+        0
+       ],
+       "diameter": 2,
+       "depth": "through"
+      }
+     ]
+    }
+   }
+  },
+  "washer": {
+   "seed": 1,
+   "brief": "please model a flat ring with a 22 mm outer diameter and a 6 mm hole, 5 mm thick.",
+   "reply": {
+    "assumptions": [
+     "centred on the origin",
+     "outside radius = 22 / 2 = 11 mm; inside radius = 6 / 2 = 3 mm",
+     "both circles share the centre, so the ring is the 11 mm disc minus the 3 mm hole",
+     "extrude distance = the thickness = 5 mm"
+    ],
+    "questions": [],
+    "dimension_sources": {
+     "c1": "brief",
+     "c2": "brief",
+     "ex1.distance": "brief"
+    },
+    "spec": {
+     "version": 1,
+     "units": "mm",
+     "name": "washer",
+     "features": [
+      {
+       "id": "sk1",
+       "kind": "sketch",
+       "plane": "XY",
+       "offset": 0,
+       "entities": [
+        {
+         "id": "c1",
+         "kind": "circle",
+         "center": [
+          0,
+          0
+         ],
+         "radius": 11
+        },
+        {
+         "id": "c2",
+         "kind": "circle",
+         "center": [
+          0,
+          0
+         ],
+         "radius": 3
+        }
+       ]
+      },
+      {
+       "id": "ex1",
+       "kind": "extrude",
+       "sketch": "sk1",
+       "distance": 5,
+       "mode": "add"
+      }
+     ]
+    }
+   }
+  },
+  "l_angle": {
+   "seed": 1,
+   "brief": "please model an angle bracket 35 mm long; one leg 30 mm, the other 20 mm, material 4 mm thick.",
+   "reply": {
+    "assumptions": [
+     "the legs are 30 (along X) and 20 (along Y); the length 35 is the extrusion",
+     "profile corners in order: (0,0) (30,0) (30,4) (4,4) (4,20) (0,20)",
+     "the outside corner is at the origin",
+     "outer corners (0,0) (30,0) and (0,20); inner corner = (4,4); the legs run to (30,4) and (4,20), thickness 4 mm"
+    ],
+    "questions": [],
+    "dimension_sources": {
+     "l1": "brief",
+     "l5": "brief",
+     "l2": "brief",
+     "ex1.distance": "brief"
+    },
+    "spec": {
+     "version": 1,
+     "units": "mm",
+     "name": "l angle",
+     "features": [
+      {
+       "id": "sk1",
+       "kind": "sketch",
+       "plane": "XY",
+       "offset": 0,
+       "entities": [
+        {
+         "id": "l1",
+         "kind": "line",
+         "start": [
+          0,
+          0
+         ],
+         "end": [
+          30,
+          0
+         ]
+        },
+        {
+         "id": "l2",
+         "kind": "line",
+         "start": [
+          30,
+          0
+         ],
+         "end": [
+          30,
+          4
+         ]
+        },
+        {
+         "id": "l3",
+         "kind": "line",
+         "start": [
+          30,
+          4
+         ],
+         "end": [
+          4,
+          4
+         ]
+        },
+        {
+         "id": "l4",
+         "kind": "line",
+         "start": [
+          4,
+          4
+         ],
+         "end": [
+          4,
+          20
+         ]
+        },
+        {
+         "id": "l5",
+         "kind": "line",
+         "start": [
+          4,
+          20
+         ],
+         "end": [
+          0,
+          20
+         ]
+        },
+        {
+         "id": "l6",
+         "kind": "line",
+         "start": [
+          0,
+          20
+         ],
+         "end": [
+          0,
+          0
+         ]
+        }
+       ]
+      },
+      {
+       "id": "ex1",
+       "kind": "extrude",
+       "sketch": "sk1",
+       "distance": 35,
+       "mode": "add"
+      }
+     ]
+    }
+   }
+  },
+  "u_channel": {
+   "seed": 1,
+   "brief": "I want a U channel 30 mm wide and 35 mm tall with 2 mm walls, 80 mm long",
+   "reply": {
+    "assumptions": [
+     "width 30, height 35, wall 2, length 80 is the extrusion",
+     "profile corners in order: (0,0) (30,0) (30,35) (28,35) (28,2) (2,2) (2,35) (0,35)",
+     "open at the top",
+     "wall 2: inside x runs 2 to 30 - 2 = 28; the floor top is y = 2; the walls rise to 35"
+    ],
+    "questions": [],
+    "dimension_sources": {
+     "l2": "brief",
+     "l3": "brief",
+     "l4": "brief",
+     "ex1.distance": "brief"
+    },
+    "spec": {
+     "version": 1,
+     "units": "mm",
+     "name": "u channel",
+     "features": [
+      {
+       "id": "sk1",
+       "kind": "sketch",
+       "plane": "XY",
+       "offset": 0,
+       "entities": [
+        {
+         "id": "l1",
+         "kind": "line",
+         "start": [
+          0,
+          0
+         ],
+         "end": [
+          30,
+          0
+         ]
+        },
+        {
+         "id": "l2",
+         "kind": "line",
+         "start": [
+          30,
+          0
+         ],
+         "end": [
+          30,
+          35
+         ]
+        },
+        {
+         "id": "l3",
+         "kind": "line",
+         "start": [
+          30,
+          35
+         ],
+         "end": [
+          28,
+          35
+         ]
+        },
+        {
+         "id": "l4",
+         "kind": "line",
+         "start": [
+          28,
+          35
+         ],
+         "end": [
+          28,
+          2
+         ]
+        },
+        {
+         "id": "l5",
+         "kind": "line",
+         "start": [
+          28,
+          2
+         ],
+         "end": [
+          2,
+          2
+         ]
+        },
+        {
+         "id": "l6",
+         "kind": "line",
+         "start": [
+          2,
+          2
+         ],
+         "end": [
+          2,
+          35
+         ]
+        },
+        {
+         "id": "l7",
+         "kind": "line",
+         "start": [
+          2,
+          35
+         ],
+         "end": [
+          0,
+          35
+         ]
+        },
+        {
+         "id": "l8",
+         "kind": "line",
+         "start": [
+          0,
+          35
+         ],
+         "end": [
+          0,
+          0
+         ]
+        }
+       ]
+      },
+      {
+       "id": "ex1",
+       "kind": "extrude",
+       "sketch": "sk1",
+       "distance": 80,
+       "mode": "add"
+      }
+     ]
+    }
+   }
+  },
+  "grooved_pulley": {
+   "seed": 1,
+   "brief": "I want a grooved pulley wheel 50 mm in diameter and 30 mm wide with a 6 mm bore and a rectangular groove 6 mm wide and 3 mm deep around the rim",
+   "reply": {
+    "assumptions": [
+     "centred on the origin",
+     "the groove is centred on the width, cut by revolving a rectangle about Z",
+     "rim radius = 50 / 2 = 25 mm; the disc is extruded the width, 30 mm",
+     "groove depth 3 mm, so the groove rectangle spans radius 22 to 25 mm and its centre sits at 25 - 3 / 2 = 23.5 mm",
+     "groove centre along the width = 30 / 2 = 15 mm; the groove is 6 mm wide"
+    ],
+    "questions": [],
+    "dimension_sources": {
+     "c1": "brief",
+     "ex1.distance": "brief",
+     "h1.diameter": "brief",
+     "r2": "brief"
+    },
+    "spec": {
+     "version": 1,
+     "units": "mm",
+     "name": "grooved pulley",
+     "features": [
+      {
+       "id": "sk1",
+       "kind": "sketch",
+       "plane": "XY",
+       "offset": 0,
+       "entities": [
+        {
+         "id": "c1",
+         "kind": "circle",
+         "center": [
+          0,
+          0
+         ],
+         "radius": 25
+        }
+       ]
+      },
+      {
+       "id": "ex1",
+       "kind": "extrude",
+       "sketch": "sk1",
+       "distance": 30,
+       "mode": "add"
+      },
+      {
+       "id": "h1",
+       "kind": "hole",
+       "face_hint": "top",
+       "center": [
+        0,
+        0
+       ],
+       "diameter": 6,
+       "depth": "through"
+      },
+      {
+       "id": "sk2",
+       "kind": "sketch",
+       "plane": "XZ",
+       "offset": 0,
+       "entities": [
+        {
+         "id": "r2",
+         "kind": "rect",
+         "center": [
+          23.5,
+          15
+         ],
+         "width": 3,
+         "height": 6
+        }
+       ]
+      },
+      {
+       "id": "rv1",
+       "kind": "revolve",
+       "sketch": "sk2",
+       "axis": "Y",
+       "angle": 360,
+       "mode": "cut"
+      }
+     ]
+    }
+   }
+  },
+  "plate_holes": {
+   "seed": 1,
+   "brief": "I need a plate 60 mm x 75 mm x 4 mm with four 5 mm holes one near each corner.",
+   "reply": {
+    "assumptions": [
+     "centred on the origin",
+     "holes at x = +-(60 / 2 - 10) = +-20, y = +-(75 / 2 - 10) = +-27.5"
+    ],
+    "questions": [],
+    "dimension_sources": {
+     "r1": "brief",
+     "ex1.distance": "brief",
+     "h1.diameter": "brief",
+     "h2.diameter": "brief",
+     "h3.diameter": "brief",
+     "h4.diameter": "brief",
+     "h1.center": "assumed",
+     "h2.center": "assumed",
+     "h3.center": "assumed",
+     "h4.center": "assumed"
+    },
+    "spec": {
+     "version": 1,
+     "units": "mm",
+     "name": "plate with holes",
+     "features": [
+      {
+       "id": "sk1",
+       "kind": "sketch",
+       "plane": "XY",
+       "offset": 0,
+       "entities": [
+        {
+         "id": "r1",
+         "kind": "rect",
+         "center": [
+          0,
+          0
+         ],
+         "width": 60,
+         "height": 75
+        }
+       ]
+      },
+      {
+       "id": "ex1",
+       "kind": "extrude",
+       "sketch": "sk1",
+       "distance": 4,
+       "mode": "add"
+      },
+      {
+       "id": "h1",
+       "kind": "hole",
+       "face_hint": "top",
+       "center": [
+        -20,
+        -27.5
+       ],
+       "diameter": 5,
+       "depth": "through"
+      },
+      {
+       "id": "h2",
+       "kind": "hole",
+       "face_hint": "top",
+       "center": [
+        -20,
+        27.5
+       ],
+       "diameter": 5,
+       "depth": "through"
+      },
+      {
+       "id": "h3",
+       "kind": "hole",
+       "face_hint": "top",
+       "center": [
+        20,
+        -27.5
+       ],
+       "diameter": 5,
+       "depth": "through"
+      },
+      {
+       "id": "h4",
+       "kind": "hole",
+       "face_hint": "top",
+       "center": [
+        20,
+        27.5
+       ],
+       "diameter": 5,
+       "depth": "through"
+      }
+     ]
+    }
+   }
+  },
+  "open_box": {
+   "seed": 1,
+   "brief": "I want a hollow box open at the top, 40 mm by 70 mm by 20 mm high, with 3 mm walls",
+   "reply": {
+    "assumptions": [
+     "centred on the origin",
+     "shell removes the top face, walls 3 mm, floor 3 mm; the extrusion is the full 20 mm height",
+     "inside cavity = 40 - 2 * 3 = 34 by 70 - 2 * 3 = 64, depth 20 - 3 = 17 mm"
+    ],
+    "questions": [],
+    "dimension_sources": {
+     "r1": "brief",
+     "ex1.distance": "brief",
+     "sh1.thickness": "brief"
+    },
+    "spec": {
+     "version": 1,
+     "units": "mm",
+     "name": "open box",
+     "features": [
+      {
+       "id": "sk1",
+       "kind": "sketch",
+       "plane": "XY",
+       "offset": 0,
+       "entities": [
+        {
+         "id": "r1",
+         "kind": "rect",
+         "center": [
+          0,
+          0
+         ],
+         "width": 40,
+         "height": 70
+        }
+       ]
+      },
+      {
+       "id": "ex1",
+       "kind": "extrude",
+       "sketch": "sk1",
+       "distance": 20,
+       "mode": "add"
+      },
+      {
+       "id": "sh1",
+       "kind": "shell",
+       "thickness": 3
+      }
+     ]
+    }
+   }
+  },
+  "hole_row": {
+   "seed": 1,
+   "brief": "I want a bar 105 mm long, 15 mm wide and 5 mm thick with 4 3 mm holes in a row along the length, evenly spaced and centred",
+   "reply": {
+    "assumptions": [
+     "centred on the origin",
+     "the holes are 21 mm apart, with 21 mm from the end holes to each end",
+     "4 holes make 3 gaps; pitch = 105 / (4 + 1) = 21 mm",
+     "first hole x = -21 * (4 - 1) / 2 = -31.5 mm; the pattern steps 21 mm to the right"
+    ],
+    "questions": [],
+    "dimension_sources": {
+     "r1": "brief",
+     "ex1.distance": "brief",
+     "h1.diameter": "brief",
+     "p1.count": "brief",
+     "p1.spacing": "assumed"
+    },
+    "spec": {
+     "version": 1,
+     "units": "mm",
+     "name": "hole row",
+     "features": [
+      {
+       "id": "sk1",
+       "kind": "sketch",
+       "plane": "XY",
+       "offset": 0,
+       "entities": [
+        {
+         "id": "r1",
+         "kind": "rect",
+         "center": [
+          0,
+          0
+         ],
+         "width": 105,
+         "height": 15
+        }
+       ]
+      },
+      {
+       "id": "ex1",
+       "kind": "extrude",
+       "sketch": "sk1",
+       "distance": 5,
+       "mode": "add"
+      },
+      {
+       "id": "h1",
+       "kind": "hole",
+       "face_hint": "top",
+       "center": [
+        -31.5,
+        0
+       ],
+       "diameter": 3,
+       "depth": "through"
+      },
+      {
+       "id": "p1",
+       "kind": "pattern_linear",
+       "feature": "h1",
+       "count": 4,
+       "spacing": [
+        21,
+        0
+       ]
+      }
+     ]
+    }
+   }
+  }
+ }
+}

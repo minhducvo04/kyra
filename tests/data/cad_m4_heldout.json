@@ -1,0 +1,16 @@
+{
+  "note": "Frozen Studio M4 held-out set (2026-10-06). Briefs plus independent hand-computed checks. Used only by scripts/cad_propose_eval.py; never prompt examples or training data. bbox_sorted is the part's extents sorted ascending, mm; volume in mm3.",
+  "parts": [
+    {"id": "plate", "brief": "a flat plate 80 mm by 40 mm, 6 mm thick", "bbox_sorted": [6, 40, 80], "volume": [19000, 19400]},
+    {"id": "washer", "brief": "a washer, 24 mm outer diameter, 13 mm inner diameter, 2.5 mm thick", "bbox_sorted": [2.5, 24, 24], "volume": [790, 808]},
+    {"id": "stepped_block", "brief": "a stepped block: a 50 by 30 by 10 mm base with a 25 by 30 by 10 mm step on top flush with one 30 mm end", "bbox_sorted": [20, 30, 50], "volume": [22300, 22700]},
+    {"id": "bracket_profile", "brief": "extrude 10 mm a four-line profile through (0,0), (60,0), (60,30), (20,30) in mm", "bbox_sorted": [10, 30, 60], "volume": [14850, 15150]},
+    {"id": "shaft", "brief": "a round shaft 10 mm in diameter and 80 mm long, made by revolving a profile", "bbox_sorted": [10, 10, 80], "volume": [6200, 6360]},
+    {"id": "chamfered_plate", "brief": "a 100 by 60 by 8 mm mounting plate with a 1 mm chamfer on the top edges and four 6 mm through holes at x = plus or minus 40 and y = plus or minus 20 from the centre", "bbox_sorted": [8, 60, 100], "volume": [46700, 47100]},
+    {"id": "open_box", "brief": "an open-top box 60 by 40 by 30 mm outside with 2 mm walls and floor", "bbox_sorted": [30, 40, 60], "volume": [15300, 15800]},
+    {"id": "hole_row", "brief": "a 100 by 20 by 5 mm strip with five 4 mm through holes in a row, 20 mm apart, centred", "bbox_sorted": [5, 20, 100], "volume": [9600, 9770]},
+    {"id": "flange", "brief": "a circular flange 80 mm diameter, 10 mm thick, 30 mm centre bore, six 8 mm bolt holes on a 60 mm bolt circle", "bbox_sorted": [10, 80, 80], "volume": [39800, 40560]},
+    {"id": "l_bracket", "brief": "an L bracket 20 mm wide with legs 40 mm and 30 mm long, 5 mm thick, with 2 mm fillets on the vertical edges", "bbox_sorted": [20, 30, 40], "volume": [6300, 6520]},
+    {"id": "plate_no_scale", "brief": "a plate with a hole in it", "expect_question": true}
+  ]
+}

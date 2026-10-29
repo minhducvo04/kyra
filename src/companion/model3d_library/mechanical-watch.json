@@ -1,0 +1,2344 @@
+{
+ "slug": "mechanical-watch",
+ "title": "Mechanical watch",
+ "aliases": [
+  "watch",
+  "mechanical watch",
+  "wristwatch",
+  "watch movement",
+  "clockwork",
+  "hand-wound watch"
+ ],
+ "summary": "A wound mainspring turns a gear train whose speed is released one tooth at a time by the pallet fork, timed by the swinging balance and hairspring; the centre and motion works turn the hands. Shown about 20 times real size (a 30 mm movement becomes about 0.6 m).",
+ "approximate": true,
+ "disclaimer": "Researched typical design, not a specific product; simplified shapes, motion works and keyless counts are typical, not measured.",
+ "units": "m",
+ "sources": [
+  {
+   "title": "Movement (clockwork), Wikipedia",
+   "url": "https://en.wikipedia.org/wiki/Movement_(clockwork)"
+  },
+  {
+   "title": "Wheel train, Wikipedia",
+   "url": "https://en.wikipedia.org/wiki/Wheel_train"
+  },
+  {
+   "title": "About watch movements: technical details",
+   "url": "https://www.vintagewatchstraps.com/watchmovement2.php"
+  },
+  {
+   "title": "Watch train mechanism explained",
+   "url": "https://www.firgelliauto.com/blogs/mechanisms/watch-train"
+  }
+ ],
+ "parts": [
+  {
+   "slug": "case-middle",
+   "label": "Case middle",
+   "group": "case",
+   "does": "Holds the movement and protects it from knocks and dust.",
+   "shape": "tube",
+   "params": {
+    "outer": 0.31,
+    "inner": 0.275,
+    "height": 0.12,
+    "segments": 64
+   },
+   "position": [
+    0,
+    0,
+    0
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.9,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    0
+   ],
+   "explode_distance": 0
+  },
+  {
+   "slug": "bezel",
+   "label": "Bezel",
+   "group": "case",
+   "does": "Clamps the crystal onto the front of the case.",
+   "shape": "torus",
+   "params": {
+    "major": 0.29,
+    "minor": 0.018
+   },
+   "position": [
+    0,
+    0,
+    0.062
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.9
+  },
+  {
+   "slug": "crystal",
+   "label": "Crystal",
+   "group": "case",
+   "does": "Clear cover that lets you read the dial while keeping dust out.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.285,
+    "height": 0.008,
+    "segments": 64
+   },
+   "position": [
+    0,
+    0,
+    0.066
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.8,
+    0.9,
+    1,
+    0.35
+   ],
+   "metallic": 0,
+   "roughness": 0.05,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "caseback",
+   "label": "Caseback",
+   "group": "case",
+   "does": "Closes the back of the case and can be unscrewed for service.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.295,
+    "height": 0.012,
+    "segments": 64
+   },
+   "position": [
+    0,
+    0,
+    -0.066
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    -1
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "lug-1",
+   "label": "Lug",
+   "group": "case",
+   "does": "Holds a spring bar that attaches the strap.",
+   "shape": "box",
+   "params": {
+    "sx": 0.05,
+    "sy": 0.12,
+    "sz": 0.05
+   },
+   "position": [
+    0.13,
+    0.33,
+    0
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.3
+  },
+  {
+   "slug": "lug-2",
+   "label": "Lug",
+   "group": "case",
+   "does": "Holds a spring bar that attaches the strap.",
+   "shape": "box",
+   "params": {
+    "sx": 0.05,
+    "sy": 0.12,
+    "sz": 0.05
+   },
+   "position": [
+    -0.13,
+    0.33,
+    0
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    1,
+    0
+   ],
+   "explode_distance": 0.3
+  },
+  {
+   "slug": "lug-3",
+   "label": "Lug",
+   "group": "case",
+   "does": "Holds a spring bar that attaches the strap.",
+   "shape": "box",
+   "params": {
+    "sx": 0.05,
+    "sy": 0.12,
+    "sz": 0.05
+   },
+   "position": [
+    0.13,
+    -0.33,
+    0
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    -1,
+    0
+   ],
+   "explode_distance": 0.3
+  },
+  {
+   "slug": "lug-4",
+   "label": "Lug",
+   "group": "case",
+   "does": "Holds a spring bar that attaches the strap.",
+   "shape": "box",
+   "params": {
+    "sx": 0.05,
+    "sy": 0.12,
+    "sz": 0.05
+   },
+   "position": [
+    -0.13,
+    -0.33,
+    0
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    -1,
+    0
+   ],
+   "explode_distance": 0.3
+  },
+  {
+   "slug": "crown",
+   "label": "Crown",
+   "group": "keyless works",
+   "does": "Knob you turn to wind the mainspring or, pulled out, to set the hands.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.035,
+    "height": 0.04,
+    "segments": 24
+   },
+   "position": [
+    0.345,
+    0,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    1,
+    0,
+    0
+   ],
+   "explode_distance": 0.35
+  },
+  {
+   "slug": "winding-stem",
+   "label": "Winding stem",
+   "group": "keyless works",
+   "does": "Rod that carries the crown's turning into the movement.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.008,
+    "height": 0.12,
+    "segments": 12
+   },
+   "position": [
+    0.27,
+    0,
+    0
+   ],
+   "rotation": [
+    0,
+    0,
+    90
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    1,
+    0,
+    0
+   ],
+   "explode_distance": 0.25
+  },
+  {
+   "slug": "dial",
+   "label": "Dial",
+   "group": "dial",
+   "does": "Printed face with hour markers that the hands point to.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.272,
+    "height": 0.006,
+    "segments": 64
+   },
+   "position": [
+    0,
+    0,
+    0.042
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.96,
+    0.95,
+    0.9,
+    1
+   ],
+   "metallic": 0,
+   "roughness": 0.6,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-marker-1",
+   "label": "Hour marker",
+   "group": "dial",
+   "does": "Shows one hour position on the dial.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.04,
+    "sz": 0.004
+   },
+   "position": [
+    0.0,
+    0.235,
+    0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.2,
+    0.2,
+    0.22,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-marker-2",
+   "label": "Hour marker",
+   "group": "dial",
+   "does": "Shows one hour position on the dial.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.04,
+    "sz": 0.004
+   },
+   "position": [
+    0.1175,
+    0.20352,
+    0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    -30
+   ],
+   "color": [
+    0.2,
+    0.2,
+    0.22,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-marker-3",
+   "label": "Hour marker",
+   "group": "dial",
+   "does": "Shows one hour position on the dial.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.04,
+    "sz": 0.004
+   },
+   "position": [
+    0.20352,
+    0.1175,
+    0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    -60
+   ],
+   "color": [
+    0.2,
+    0.2,
+    0.22,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-marker-4",
+   "label": "Hour marker",
+   "group": "dial",
+   "does": "Shows one hour position on the dial.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.04,
+    "sz": 0.004
+   },
+   "position": [
+    0.235,
+    0.0,
+    0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    -90
+   ],
+   "color": [
+    0.2,
+    0.2,
+    0.22,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-marker-5",
+   "label": "Hour marker",
+   "group": "dial",
+   "does": "Shows one hour position on the dial.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.04,
+    "sz": 0.004
+   },
+   "position": [
+    0.20352,
+    -0.1175,
+    0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    -120
+   ],
+   "color": [
+    0.2,
+    0.2,
+    0.22,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-marker-6",
+   "label": "Hour marker",
+   "group": "dial",
+   "does": "Shows one hour position on the dial.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.04,
+    "sz": 0.004
+   },
+   "position": [
+    0.1175,
+    -0.20352,
+    0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    -150
+   ],
+   "color": [
+    0.2,
+    0.2,
+    0.22,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-marker-7",
+   "label": "Hour marker",
+   "group": "dial",
+   "does": "Shows one hour position on the dial.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.04,
+    "sz": 0.004
+   },
+   "position": [
+    0.0,
+    -0.235,
+    0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    -180
+   ],
+   "color": [
+    0.2,
+    0.2,
+    0.22,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-marker-8",
+   "label": "Hour marker",
+   "group": "dial",
+   "does": "Shows one hour position on the dial.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.04,
+    "sz": 0.004
+   },
+   "position": [
+    -0.1175,
+    -0.20352,
+    0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    -210
+   ],
+   "color": [
+    0.2,
+    0.2,
+    0.22,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-marker-9",
+   "label": "Hour marker",
+   "group": "dial",
+   "does": "Shows one hour position on the dial.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.04,
+    "sz": 0.004
+   },
+   "position": [
+    -0.20352,
+    -0.1175,
+    0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    -240
+   ],
+   "color": [
+    0.2,
+    0.2,
+    0.22,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-marker-10",
+   "label": "Hour marker",
+   "group": "dial",
+   "does": "Shows one hour position on the dial.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.04,
+    "sz": 0.004
+   },
+   "position": [
+    -0.235,
+    -0.0,
+    0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    -270
+   ],
+   "color": [
+    0.2,
+    0.2,
+    0.22,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-marker-11",
+   "label": "Hour marker",
+   "group": "dial",
+   "does": "Shows one hour position on the dial.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.04,
+    "sz": 0.004
+   },
+   "position": [
+    -0.20352,
+    0.1175,
+    0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    -300
+   ],
+   "color": [
+    0.2,
+    0.2,
+    0.22,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-marker-12",
+   "label": "Hour marker",
+   "group": "dial",
+   "does": "Shows one hour position on the dial.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.04,
+    "sz": 0.004
+   },
+   "position": [
+    -0.1175,
+    0.20352,
+    0.047
+   ],
+   "rotation": [
+    0,
+    0,
+    -330
+   ],
+   "color": [
+    0.2,
+    0.2,
+    0.22,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.6
+  },
+  {
+   "slug": "hour-hand",
+   "label": "Hour hand",
+   "group": "hands",
+   "does": "Points to the hour; turns once every 12 hours.",
+   "shape": "box",
+   "params": {
+    "sx": 0.016,
+    "sy": 0.15,
+    "sz": 0.003
+   },
+   "position": [
+    -0.0491,
+    0.0344,
+    0.052
+   ],
+   "rotation": [
+    0,
+    0,
+    -305.0
+   ],
+   "color": [
+    0.15,
+    0.2,
+    0.55,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.75
+  },
+  {
+   "slug": "minute-hand",
+   "label": "Minute hand",
+   "group": "hands",
+   "does": "Points to the minute; turns once an hour.",
+   "shape": "box",
+   "params": {
+    "sx": 0.011,
+    "sy": 0.22,
+    "sz": 0.003
+   },
+   "position": [
+    0.0846,
+    0.0431,
+    0.056
+   ],
+   "rotation": [
+    0,
+    0,
+    -63.0
+   ],
+   "color": [
+    0.15,
+    0.2,
+    0.55,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.8
+  },
+  {
+   "slug": "seconds-hand",
+   "label": "Seconds hand",
+   "group": "hands",
+   "does": "Sweeps once a minute so you can see the watch running.",
+   "shape": "box",
+   "params": {
+    "sx": 0.005,
+    "sy": 0.24,
+    "sz": 0.002
+   },
+   "position": [
+    0.0,
+    -0.1,
+    0.06
+   ],
+   "rotation": [
+    0,
+    0,
+    -180
+   ],
+   "color": [
+    0.75,
+    0.1,
+    0.1,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.85
+  },
+  {
+   "slug": "hand-pinion",
+   "label": "Central hand post",
+   "group": "hands",
+   "does": "Shared centre where the hands are pressed onto their arbors.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.01,
+    "height": 0.02,
+    "segments": 16
+   },
+   "position": [
+    0,
+    0,
+    0.05
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.7
+  },
+  {
+   "slug": "cannon-pinion",
+   "label": "Cannon pinion",
+   "group": "motion works",
+   "does": "Rides on the centre wheel arbor and carries the minute hand.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.022,
+    "teeth": 12,
+    "thickness": 0.012,
+    "tooth_depth": 0.006,
+    "bore": 0.006
+   },
+   "position": [
+    0,
+    0,
+    0.03
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.18
+  },
+  {
+   "slug": "minute-wheel",
+   "label": "Minute wheel",
+   "group": "motion works",
+   "does": "Steps the cannon pinion's speed down toward the hour wheel.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.06,
+    "teeth": 36,
+    "thickness": 0.006,
+    "tooth_depth": 0.006,
+    "bore": 0.008
+   },
+   "position": [
+    0.08,
+    0,
+    0.028
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.85,
+    0.68,
+    0.32,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.15
+  },
+  {
+   "slug": "hour-wheel",
+   "label": "Hour wheel",
+   "group": "motion works",
+   "does": "Turns once in 12 hours and carries the hour hand.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.062,
+    "teeth": 40,
+    "thickness": 0.006,
+    "tooth_depth": 0.006,
+    "bore": 0.02
+   },
+   "position": [
+    0,
+    0,
+    0.036
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.85,
+    0.68,
+    0.32,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.22
+  },
+  {
+   "slug": "setting-wheel",
+   "label": "Setting wheel",
+   "group": "keyless works",
+   "does": "Links the stem to the minute wheel when you set the time.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.026,
+    "teeth": 18,
+    "thickness": 0.006,
+    "tooth_depth": 0.005,
+    "bore": 0.005
+   },
+   "position": [
+    0.17,
+    0.02,
+    0.028
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0,
+    0,
+    1
+   ],
+   "explode_distance": 0.12
+  },
+  {
+   "slug": "mainplate",
+   "label": "Mainplate",
+   "group": "plates",
+   "does": "Base plate that all wheels and bridges are mounted on.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.268,
+    "height": 0.012,
+    "segments": 64
+   },
+   "position": [
+    0,
+    0,
+    0.016
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.82,
+    0.82,
+    0.8,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.5,
+   "explode": [
+    0,
+    0,
+    0
+   ],
+   "explode_distance": 0.0
+  },
+  {
+   "slug": "barrel",
+   "label": "Mainspring barrel",
+   "group": "gear train",
+   "does": "Drum holding the mainspring; its toothed rim drives the centre wheel.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.105,
+    "teeth": 75,
+    "thickness": 0.022,
+    "tooth_depth": 0.008,
+    "bore": 0.006
+   },
+   "position": [
+    -0.11,
+    0.08,
+    -0.004
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.85,
+    0.68,
+    0.32,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    -0.809,
+    0.588,
+    -0.25
+   ],
+   "explode_distance": 0.8
+  },
+  {
+   "slug": "mainspring",
+   "label": "Mainspring",
+   "group": "gear train",
+   "does": "Coiled spring that stores the energy from winding.",
+   "shape": "helix",
+   "params": {
+    "radius": 0.07,
+    "pitch": 0.0015,
+    "turns": 8,
+    "wire": 0.003
+   },
+   "position": [
+    -0.11,
+    0.08,
+    -0.012
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.3,
+    0.3,
+    0.35,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    -0.809,
+    0.588,
+    -0.25
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "ratchet-wheel",
+   "label": "Ratchet wheel",
+   "group": "keyless works",
+   "does": "Winds the mainspring and, held by the click, stops it unwinding.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.07,
+    "teeth": 30,
+    "thickness": 0.006,
+    "tooth_depth": 0.006,
+    "bore": 0.008
+   },
+   "position": [
+    -0.11,
+    0.08,
+    -0.048
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    -0.809,
+    0.588,
+    -0.9
+   ],
+   "explode_distance": 0.95
+  },
+  {
+   "slug": "click",
+   "label": "Click",
+   "group": "keyless works",
+   "does": "Pawl that lets the ratchet wheel turn one way only.",
+   "shape": "box",
+   "params": {
+    "sx": 0.04,
+    "sy": 0.012,
+    "sz": 0.005
+   },
+   "position": [
+    -0.03,
+    0.13,
+    -0.048
+   ],
+   "rotation": [
+    0,
+    0,
+    -30
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    -0.225,
+    0.974,
+    -0.9
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "crown-wheel",
+   "label": "Crown wheel",
+   "group": "keyless works",
+   "does": "Turns the ratchet wheel when the stem is wound.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.035,
+    "teeth": 24,
+    "thickness": 0.006,
+    "tooth_depth": 0.005,
+    "bore": 0.006
+   },
+   "position": [
+    -0.0,
+    0.17,
+    -0.048
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    -0.0,
+    1.0,
+    -0.9
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "centre-wheel",
+   "label": "Centre wheel",
+   "group": "gear train",
+   "does": "Turns once an hour and drives the minute hand through the cannon pinion.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.09,
+    "teeth": 80,
+    "thickness": 0.006,
+    "tooth_depth": 0.008,
+    "bore": 0.006
+   },
+   "position": [
+    0,
+    0,
+    -0.012
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.85,
+    0.68,
+    0.32,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    -0.287,
+    -0.958,
+    -0.25
+   ],
+   "explode_distance": 0.75
+  },
+  {
+   "slug": "third-wheel",
+   "label": "Third wheel",
+   "group": "gear train",
+   "does": "Speeds the motion up between the centre and fourth wheels.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.07,
+    "teeth": 60,
+    "thickness": 0.006,
+    "tooth_depth": 0.008,
+    "bore": 0.006
+   },
+   "position": [
+    0.1,
+    -0.07,
+    -0.004
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.85,
+    0.68,
+    0.32,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.819,
+    -0.573,
+    -0.25
+   ],
+   "explode_distance": 0.75
+  },
+  {
+   "slug": "fourth-wheel",
+   "label": "Fourth wheel",
+   "group": "gear train",
+   "does": "Turns once a minute and carries the seconds hand.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.06,
+    "teeth": 70,
+    "thickness": 0.006,
+    "tooth_depth": 0.0072,
+    "bore": 0.006
+   },
+   "position": [
+    0.0,
+    -0.13,
+    -0.012
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.85,
+    0.68,
+    0.32,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.0,
+    -1.0,
+    -0.25
+   ],
+   "explode_distance": 0.85
+  },
+  {
+   "slug": "escape-wheel",
+   "label": "Escape wheel",
+   "group": "gear train",
+   "does": "Released one tooth at a time by the pallet fork, giving the balance its impulses.",
+   "shape": "gear",
+   "params": {
+    "radius": 0.035,
+    "teeth": 15,
+    "thickness": 0.006,
+    "tooth_depth": 0.0042,
+    "bore": 0.004
+   },
+   "position": [
+    0.08,
+    -0.17,
+    -0.004
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.426,
+    -0.905,
+    -0.25
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "pallet-fork",
+   "label": "Pallet fork",
+   "group": "escapement",
+   "does": "Locks and unlocks the escape wheel and pushes the balance on each swing.",
+   "shape": "box",
+   "params": {
+    "sx": 0.012,
+    "sy": 0.09,
+    "sz": 0.005
+   },
+   "position": [
+    0.13,
+    -0.13,
+    -0.008
+   ],
+   "rotation": [
+    0,
+    0,
+    -40
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.707,
+    -0.707,
+    -0.25
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "pallet-jewel",
+   "label": "Pallet jewel",
+   "group": "escapement",
+   "does": "Ruby faces on the fork that touch the escape wheel teeth.",
+   "shape": "box",
+   "params": {
+    "sx": 0.01,
+    "sy": 0.006,
+    "sz": 0.006
+   },
+   "position": [
+    0.105,
+    -0.16,
+    -0.008
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.8,
+    0.1,
+    0.2,
+    1
+   ],
+   "metallic": 0,
+   "roughness": 0.1,
+   "explode": [
+    0.549,
+    -0.836,
+    -0.25
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "barrel-bridge",
+   "label": "Barrel bridge",
+   "group": "bridges",
+   "does": "Holds the barrel and winding wheels in place.",
+   "shape": "extrude",
+   "params": {
+    "profile": [
+     [
+      -0.22,
+      0.0
+     ],
+     [
+      -0.02,
+      0.0
+     ],
+     [
+      0.03,
+      0.2
+     ],
+     [
+      -0.12,
+      0.22
+     ],
+     [
+      -0.22,
+      0.15
+     ]
+    ],
+    "depth": 0.01
+   },
+   "position": [
+    0,
+    0,
+    -0.035
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.8,
+    0.8,
+    0.78,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    -0.694,
+    0.72,
+    -1.6
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "train-bridge",
+   "label": "Train bridge",
+   "group": "bridges",
+   "does": "Holds the top pivots of the gear train wheels.",
+   "shape": "extrude",
+   "params": {
+    "profile": [
+     [
+      -0.05,
+      0.03
+     ],
+     [
+      0.16,
+      -0.05
+     ],
+     [
+      0.12,
+      -0.2
+     ],
+     [
+      -0.06,
+      -0.17
+     ]
+    ],
+    "depth": 0.01
+   },
+   "position": [
+    0,
+    0,
+    -0.035
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.8,
+    0.8,
+    0.78,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.4,
+    -0.917,
+    -1.6
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "pallet-cock",
+   "label": "Pallet bridge",
+   "group": "bridges",
+   "does": "Small bridge holding the pallet fork's arbor.",
+   "shape": "box",
+   "params": {
+    "sx": 0.05,
+    "sy": 0.03,
+    "sz": 0.008
+   },
+   "position": [
+    0.13,
+    -0.13,
+    -0.03
+   ],
+   "rotation": [
+    0,
+    0,
+    -40
+   ],
+   "color": [
+    0.8,
+    0.8,
+    0.78,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.707,
+    -0.707,
+    -1.2
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "balance-cock",
+   "label": "Balance cock",
+   "group": "bridges",
+   "does": "Bridge holding the balance and hairspring from one side.",
+   "shape": "extrude",
+   "params": {
+    "profile": [
+     [
+      0.12,
+      0.02
+     ],
+     [
+      0.25,
+      -0.02
+     ],
+     [
+      0.26,
+      -0.12
+     ],
+     [
+      0.2,
+      -0.1
+     ],
+     [
+      0.14,
+      -0.04
+     ]
+    ],
+    "depth": 0.008
+   },
+   "position": [
+    0,
+    0,
+    -0.058
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.8,
+    0.8,
+    0.78,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.966,
+    -0.259,
+    -1.6
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "jewel-1",
+   "label": "Jewel bearing",
+   "group": "bridges",
+   "does": "Ruby bearing that lets a pivot turn with very little friction.",
+   "shape": "tube",
+   "params": {
+    "outer": 0.008,
+    "inner": 0.003,
+    "height": 0.004
+   },
+   "position": [
+    0,
+    0,
+    -0.042
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.8,
+    0.1,
+    0.2,
+    1
+   ],
+   "metallic": 0,
+   "roughness": 0.1,
+   "explode": [
+    -0.981,
+    -0.196,
+    -1.3
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "jewel-2",
+   "label": "Jewel bearing",
+   "group": "bridges",
+   "does": "Ruby bearing that lets a pivot turn with very little friction.",
+   "shape": "tube",
+   "params": {
+    "outer": 0.008,
+    "inner": 0.003,
+    "height": 0.004
+   },
+   "position": [
+    0.1,
+    -0.07,
+    -0.042
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.8,
+    0.1,
+    0.2,
+    1
+   ],
+   "metallic": 0,
+   "roughness": 0.1,
+   "explode": [
+    0.819,
+    -0.573,
+    -1.3
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "jewel-3",
+   "label": "Jewel bearing",
+   "group": "bridges",
+   "does": "Ruby bearing that lets a pivot turn with very little friction.",
+   "shape": "tube",
+   "params": {
+    "outer": 0.008,
+    "inner": 0.003,
+    "height": 0.004
+   },
+   "position": [
+    0,
+    -0.13,
+    -0.042
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.8,
+    0.1,
+    0.2,
+    1
+   ],
+   "metallic": 0,
+   "roughness": 0.1,
+   "explode": [
+    0.0,
+    -1.0,
+    -1.3
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "jewel-4",
+   "label": "Jewel bearing",
+   "group": "bridges",
+   "does": "Ruby bearing that lets a pivot turn with very little friction.",
+   "shape": "tube",
+   "params": {
+    "outer": 0.008,
+    "inner": 0.003,
+    "height": 0.004
+   },
+   "position": [
+    0.08,
+    -0.17,
+    -0.042
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.8,
+    0.1,
+    0.2,
+    1
+   ],
+   "metallic": 0,
+   "roughness": 0.1,
+   "explode": [
+    0.426,
+    -0.905,
+    -1.3
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "jewel-5",
+   "label": "Jewel bearing",
+   "group": "bridges",
+   "does": "Ruby bearing that lets a pivot turn with very little friction.",
+   "shape": "tube",
+   "params": {
+    "outer": 0.008,
+    "inner": 0.003,
+    "height": 0.004
+   },
+   "position": [
+    0.13,
+    -0.13,
+    -0.042
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.8,
+    0.1,
+    0.2,
+    1
+   ],
+   "metallic": 0,
+   "roughness": 0.1,
+   "explode": [
+    0.707,
+    -0.707,
+    -1.3
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "jewel-6",
+   "label": "Jewel bearing",
+   "group": "bridges",
+   "does": "Ruby bearing that lets a pivot turn with very little friction.",
+   "shape": "tube",
+   "params": {
+    "outer": 0.008,
+    "inner": 0.003,
+    "height": 0.004
+   },
+   "position": [
+    -0.11,
+    0.08,
+    -0.042
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.8,
+    0.1,
+    0.2,
+    1
+   ],
+   "metallic": 0,
+   "roughness": 0.1,
+   "explode": [
+    -0.809,
+    0.588,
+    -1.3
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "screw-1",
+   "label": "Bridge screw",
+   "group": "bridges",
+   "does": "Fastens a bridge to the mainplate.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.008,
+    "height": 0.006
+   },
+   "position": [
+    -0.18,
+    0.05,
+    -0.042
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.2,
+    0.25,
+    0.6,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    -0.964,
+    0.268,
+    -1.3
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "screw-2",
+   "label": "Bridge screw",
+   "group": "bridges",
+   "does": "Fastens a bridge to the mainplate.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.008,
+    "height": 0.006
+   },
+   "position": [
+    -0.05,
+    0.18,
+    -0.042
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.2,
+    0.25,
+    0.6,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    -0.268,
+    0.964,
+    -1.3
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "screw-3",
+   "label": "Bridge screw",
+   "group": "bridges",
+   "does": "Fastens a bridge to the mainplate.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.008,
+    "height": 0.006
+   },
+   "position": [
+    0.12,
+    -0.04,
+    -0.042
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.2,
+    0.25,
+    0.6,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.949,
+    -0.316,
+    -1.3
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "screw-4",
+   "label": "Bridge screw",
+   "group": "bridges",
+   "does": "Fastens a bridge to the mainplate.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.008,
+    "height": 0.006
+   },
+   "position": [
+    -0.03,
+    -0.15,
+    -0.042
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.2,
+    0.25,
+    0.6,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    -0.196,
+    -0.981,
+    -1.3
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "balance-wheel",
+   "label": "Balance wheel",
+   "group": "balance",
+   "does": "Swings back and forth at a steady rate, timing the whole watch.",
+   "shape": "tube",
+   "params": {
+    "outer": 0.075,
+    "inner": 0.065,
+    "height": 0.006,
+    "segments": 48
+   },
+   "position": [
+    0.17,
+    -0.06,
+    -0.048
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.9,
+    0.75,
+    0.4,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.943,
+    -0.333,
+    -0.25
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "balance-arm",
+   "label": "Balance arm",
+   "group": "balance",
+   "does": "Spoke joining the balance rim to its staff.",
+   "shape": "box",
+   "params": {
+    "sx": 0.14,
+    "sy": 0.008,
+    "sz": 0.004
+   },
+   "position": [
+    0.17,
+    -0.06,
+    -0.048
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": [
+    0.9,
+    0.75,
+    0.4,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.943,
+    -0.333,
+    -0.25
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "balance-staff",
+   "label": "Balance staff",
+   "group": "balance",
+   "does": "Axle of the balance, pivoting in jewels.",
+   "shape": "cylinder",
+   "params": {
+    "radius": 0.004,
+    "height": 0.04
+   },
+   "position": [
+    0.17,
+    -0.06,
+    -0.045
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.943,
+    -0.333,
+    -0.4
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "hairspring",
+   "label": "Hairspring",
+   "group": "balance",
+   "does": "Fine spring that pulls the balance back each swing and sets its rhythm.",
+   "shape": "helix",
+   "params": {
+    "radius": 0.035,
+    "pitch": 0.0006,
+    "turns": 10,
+    "wire": 0.0012
+   },
+   "position": [
+    0.17,
+    -0.06,
+    -0.054
+   ],
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "color": [
+    0.25,
+    0.3,
+    0.6,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.943,
+    -0.333,
+    -0.6
+   ],
+   "explode_distance": 1.0
+  },
+  {
+   "slug": "regulator",
+   "label": "Regulator",
+   "group": "balance",
+   "does": "Lever that shortens or lengthens the hairspring to make the watch run faster or slower.",
+   "shape": "box",
+   "params": {
+    "sx": 0.08,
+    "sy": 0.008,
+    "sz": 0.004
+   },
+   "position": [
+    0.21,
+    -0.05,
+    -0.064
+   ],
+   "rotation": [
+    0,
+    0,
+    20
+   ],
+   "color": [
+    0.78,
+    0.79,
+    0.82,
+    1
+   ],
+   "metallic": 0.8,
+   "roughness": 0.3,
+   "explode": [
+    0.973,
+    -0.232,
+    -1.0
+   ],
+   "explode_distance": 1.0
+  }
+ ]
+}

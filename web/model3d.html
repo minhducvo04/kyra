@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Kyra · 3D</title><link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/tokens.css"><link rel="stylesheet" href="/static/model3d.css">
+  <script type="importmap">{"imports": {"three": "/static/vendor/three/three.module.js",
+    "three/addons/": "/static/vendor/three/addons/"}}</script>
+  <script type="module" src="/static/model3d.js"></script>
+</head>
+<body class="m3d-page">
+<header class="m3d-header">
+  <a class="brand" href="/" aria-label="Kyra home"><span aria-hidden="true">◈</span> KYRA<span class="brand-divider">/</span><span>3d</span></a>
+  <a class="quiet-link" href="/team">Team</a>
+</header>
+<main class="m3d-layout">
+  <aside class="m3d-side" aria-label="Make and choose models">
+    <section class="card library-card" aria-labelledby="library-title">
+      <h2 id="library-title">Explore inside</h2>
+      <p id="library-note" class="muted">Simplified researched models. Local build, no AI generation.</p>
+      <div id="library-models" class="library-models"></div>
+      <p id="library-status" class="muted" role="status">Loading library…</p>
+      <p class="muted library-hint">Open a model → Explode → tap a part → Reset view.</p>
+    </section>
+    <section class="card demos-card" aria-labelledby="demos-title">
+      <h2 id="demos-title">Demos</h2>
+      <p class="muted">Specified examples. No generation.</p>
+      <button id="open-gears" class="quiet" type="button">Try a gear mechanism</button>
+      <button id="open-flow" class="quiet" type="button">Try liquid flow</button>
+      <button id="open-kyra" class="quiet" type="button">Meet Kyra (3D)</button>
+    </section>
+    <form id="create-form" class="card">
+      <h2>New model</h2>
+      <label for="prompt">Describe it</label>
+      <textarea id="prompt" rows="3" maxlength="2000" placeholder="An electric kettle"></textarea>
+      <label for="image">Or start from a photo</label>
+      <input id="image" type="file" accept="image/png,image/jpeg,image/webp">
+      <label for="quality" id="quality-label" hidden>Photo quality</label>
+      <select id="quality" hidden><option value="">Fast photo model (about 10 s)</option></select>
+      <button id="create" type="submit">Generate</button>
+      <button id="guess" type="submit" class="quiet">Guess</button>
+      <p id="create-status" class="muted" role="status"></p>
+    </form>
+    <section class="card" aria-labelledby="jobs-title">
+      <div class="section-heading"><h2 id="jobs-title">Models</h2><button id="refresh-jobs" class="quiet small" type="button">Refresh</button></div>
+      <ul id="jobs" class="job-list"><li class="muted">Loading…</li></ul>
+    </section>
+  </aside>
+  <section class="m3d-stage" aria-label="Model viewer">
+    <div class="stage-head">
+      <h1 id="model-title">No model selected</h1>
+      <span id="demo-badge" class="badge" hidden title="Built by the offline demo provider, not generated from your input">Demo model</span>
+    </div>
+    <p id="model-disclaimer" class="muted model-disclaimer" hidden></p>
+    <div id="notice" class="notice" role="alert" hidden></div>
+    <div id="progress" class="progress" hidden>
+      <span id="stage" class="stage"></span>
+      <progress id="progress-bar" max="100" value="0" aria-labelledby="stage"></progress>
+    </div>
+    <div id="viewport" class="viewport">
+      <canvas id="canvas" aria-label="3D model. Drag to orbit, scroll to zoom."></canvas>
+      <div id="labels" class="labels" aria-hidden="true"></div>
+      <p id="kyra-caption" class="kyra-caption" hidden></p>
+      <p id="empty" class="empty">Choose a model, or describe one to generate it.</p>
+    </div>
+    <div class="controls" aria-label="View controls">
+      <label class="slider" for="explode"><span>Explode</span><input id="explode" type="range" min="0" max="100" value="0"></label>
+      <label class="slider" for="cut"><span>Cut away</span><input id="cut" type="range" min="0" max="100" value="0"></label>
+      <label class="axis" for="cut-axis"><span class="visually-hidden">Cut axis</span>
+        <select id="cut-axis"><option value="x">X</option><option value="y">Y</option><option value="z">Z</option></select></label>
+      <button id="reset" class="quiet small" type="button">Reset view</button>
+    </div>
+    <section id="kyra-controls" class="gear-controls card" aria-label="Kyra character" hidden>
+      <div class="section-heading"><h2>Kyra: four states</h2><button id="kyra-cycle" type="button" aria-pressed="false">Cycle</button></div>
+      <div id="kyra-states" class="lesson-choices" role="group" aria-label="Kyra state">
+        <button type="button" data-kyra-state="idle" aria-pressed="true">Idle</button>
+        <button type="button" data-kyra-state="listening" aria-pressed="false">Listening</button>
+        <button type="button" data-kyra-state="thinking" aria-pressed="false">Thinking</button>
+        <button type="button" data-kyra-state="speaking" aria-pressed="false">Speaking</button>
+      </div>
+      <p id="kyra-readout" role="status" aria-live="polite"></p>
+      <p class="muted">Blender-made bust (scripts/blender/kyra_bust.py). Motion is procedural: no rig, no lip-sync visemes yet; the caption lines are samples.</p>
+    </section>
+    <section id="flow-controls" class="flow-controls card" aria-label="Liquid flow" hidden>
+      <div class="section-heading"><h2>Smaller pipe. Faster flow.</h2><button id="flow-play" type="button" aria-pressed="false">Play</button></div>
+      <label class="slider" for="flow-inflow"><span>Inflow (m/s)</span><input id="flow-inflow" type="range" min="0" max="0.5" step="0.01" value="0.2"></label>
+      <p id="flow-readout" class="gear-readout"></p>
+      <button id="flow-reset" class="quiet" type="button">Reset flow</button>
+      <p class="muted">A₁ × v₁ = A₂ × v₂. Same volume per second through each section. Markers show travel; they are not simulated water. Ideal abrupt joins, no pressure, viscosity or turbulence.</p>
+    </section>
+    <section id="mate-controls" class="gear-controls card" aria-label="Mates demo" hidden>
+      <div class="section-heading"><h2>mates demo: motion by joint rules</h2><button id="mate-play" type="button" aria-pressed="false">Play</button></div>
+      <p id="mate-readout" class="gear-readout"></p>
+      <label class="slider" for="mate-turn"><span id="mate-turn-label">Turn</span><input id="mate-turn" type="range" min="0" max="360" step="1" value="0"></label>
+      <label class="mate-value" for="mate-value"><span>Exact value</span><input id="mate-value" type="number" step="any" value="0"></label>
+      <p id="mate-status" role="status" aria-live="polite"></p>
+      <p class="muted">The joints in the library entry pose the parts; the same solver runs on the server.</p>
+    </section>
+    <section id="lesson" class="gear-controls card" aria-label="Gear lesson" hidden>
+      <div class="section-heading"><h2>Gear lesson <small id="lesson-step"></small></h2><button id="lesson-restart" class="quiet small" type="button">Restart</button></div>
+      <p id="lesson-prompt"></p>
+      <div id="lesson-choices" class="lesson-choices"></div>
+      <p id="lesson-feedback" role="status" aria-live="polite"></p>
+      <div class="gear-edit">
+        <button id="lesson-action" type="button" hidden></button>
+        <button id="lesson-next" type="button">Next</button>
+        <button id="lesson-undo" class="quiet" type="button">Undo</button>
+      </div>
+      <p class="muted">Ideal gears on fixed axles. The answers come from the same checks as the demo; no torque or wear prediction.</p>
+    </section>
+    <section id="gear-controls" class="gear-controls card" aria-label="Gear mechanism" hidden>
+      <div class="section-heading"><h2>Turn it. Change the ratio.</h2><button id="gear-play" type="button" aria-pressed="false">Play</button></div>
+      <p id="gear-readout" class="gear-readout"></p>
+      <label class="slider" for="gear-turn"><span>Input turn</span><input id="gear-turn" type="range" min="0" max="360" step="1" value="0"></label>
+      <label class="slider" for="gear-speed"><span>Speed</span><input id="gear-speed" type="range" min="5" max="30" step="5" value="10"><span id="gear-rpm">10 rpm</span></label>
+      <div class="gear-edit">
+        <label for="gear-swap">Replace gears
+          <select id="gear-swap">
+            <option value="25-35">Pair: 25 / 35 teeth</option>
+            <option value="30-30">Pair: 30 / 30 teeth</option>
+            <option value="too-large">Output: 50 teeth (spacing check)</option>
+            <option value="wrong-module">Output: module 1.5 (tooth fit check)</option>
+            <option value="wrong-bore">Output: 6 mm bore (shaft fit check)</option>
+          </select>
+        </label>
+        <button id="gear-apply" type="button">Try swap</button>
+        <button id="gear-undo" class="quiet" type="button" disabled>Undo swap</button>
+      </div>
+      <p id="gear-status" role="status" aria-live="polite">Fixed axles: 30 mm apart. Hide and explode change only the view.</p>
+      <p class="muted">Specified example, not a scanned object. Schematic teeth; no torque, wear or manufacturing prediction. Undo keeps the last 20 swaps. Changes last until you leave this demo.</p>
+    </section>
+  </section>
+  <aside class="m3d-side" aria-label="Parts">
+    <section class="card">
+      <div class="section-heading"><h2>Parts <small id="parts-kind" class="parts-kind" hidden></small></h2><button id="show-all" class="quiet small" type="button">Show all</button></div>
+      <p id="parts-kind-note" class="muted parts-kind-note" hidden></p>
+      <label class="check" for="show-labels"><input id="show-labels" type="checkbox" checked> Labels</label>
+      <ul id="parts" class="part-list"><li class="muted">No parts yet.</li></ul>
+    </section>
+  </aside>
+</main>
+<noscript><p class="notice">Enable JavaScript to view 3D models.</p></noscript>
+</body>
+</html>

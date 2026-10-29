@@ -1,0 +1,314 @@
+{
+  "slug": "ballpoint-pen",
+  "title": "Ballpoint pen",
+  "aliases": [
+    "ballpoint",
+    "ballpoint pen",
+    "ball pen",
+    "ball-point pen",
+    "biro",
+    "disposable pen",
+    "capped ballpoint"
+  ],
+  "summary": "A typical disposable capped ballpoint about 145 mm long with a 1 mm tungsten-carbide ball in a brass socket. Paste ink in a thin tube feeds the ball by gravity and capillary action. A hexagonal barrel shows the ink level. A polypropylene cap with a safety hole and a pocket clip posts on the barrel end while writing.",
+  "approximate": true,
+  "disclaimer": "Researched typical design (about 145 mm long, 1 mm ball, 6.4 mm barrel), not a specific product; simplified shapes.",
+  "units": "m",
+  "sources": [
+    {
+      "title": "Ballpoint pen (Wikipedia): ball, socket, paste ink and reservoir",
+      "url": "https://en.wikipedia.org/wiki/Ballpoint_pen"
+    },
+    {
+      "title": "Bic Cristal (Wikipedia): 145 mm barrel, 1 mm ball and cap hole",
+      "url": "https://en.wikipedia.org/wiki/Bic_Cristal"
+    },
+    {
+      "title": "Tungsten carbide (Wikipedia): hard ball used in the point",
+      "url": "https://en.wikipedia.org/wiki/Tungsten_carbide"
+    },
+    {
+      "title": "Capillary action (Wikipedia): how paste ink reaches the ball",
+      "url": "https://en.wikipedia.org/wiki/Capillary_action"
+    }
+  ],
+  "parts": [
+    {
+      "slug": "ball",
+      "label": "Writing ball",
+      "group": "point",
+      "does": "1 mm tungsten-carbide sphere that rolls ink onto the paper.",
+      "shape": "sphere",
+      "params": {"radius": 0.0005},
+      "position": [0, 0.0005, 0],
+      "color": [0.55, 0.55, 0.58, 1],
+      "metallic": 0.9,
+      "roughness": 0.2,
+      "explode": [0, -1, 0],
+      "explode_distance": 0.42
+    },
+    {
+      "slug": "socket",
+      "label": "Brass socket",
+      "group": "point",
+      "does": "Brass cup that holds the ball with a tight gap so ink coats it without leaking.",
+      "shape": "cone",
+      "params": {"radius_bottom": 0.0007, "radius_top": 0.0016, "height": 0.006},
+      "position": [0, 0.004, 0],
+      "color": [0.72, 0.58, 0.28, 1],
+      "metallic": 0.8,
+      "roughness": 0.35,
+      "explode": [0, -1, 0],
+      "explode_distance": 0.36
+    },
+    {
+      "slug": "ink-channel",
+      "label": "Ink channel",
+      "group": "point",
+      "does": "Narrow bore that meters paste from the tube onto the back of the ball.",
+      "shape": "tube",
+      "params": {"outer": 0.0007, "inner": 0.00035, "height": 0.005},
+      "position": [0, 0.008, 0],
+      "color": [0.7, 0.56, 0.26, 1],
+      "metallic": 0.75,
+      "roughness": 0.35,
+      "explode": [0, -0.8, 0],
+      "explode_distance": 0.32
+    },
+    {
+      "slug": "point",
+      "label": "Nose cone",
+      "group": "point",
+      "does": "Tapered brass housing that carries the socket and screws into the barrel.",
+      "shape": "cone",
+      "params": {"radius_bottom": 0.0015, "radius_top": 0.0032, "height": 0.012},
+      "position": [0, 0.014, 0],
+      "color": [0.68, 0.55, 0.26, 1],
+      "metallic": 0.8,
+      "roughness": 0.35,
+      "explode": [0, -1, 0],
+      "explode_distance": 0.28
+    },
+    {
+      "slug": "point-collar",
+      "label": "Point collar",
+      "group": "point",
+      "does": "Ring that locks the nose cone onto the open end of the barrel.",
+      "shape": "tube",
+      "params": {"outer": 0.0033, "inner": 0.0024, "height": 0.004},
+      "position": [0, 0.021, 0],
+      "color": [0.65, 0.52, 0.24, 1],
+      "metallic": 0.75,
+      "roughness": 0.4,
+      "explode": [0, -0.6, 0],
+      "explode_distance": 0.24
+    },
+    {
+      "slug": "ink-tube",
+      "label": "Ink reservoir",
+      "group": "ink",
+      "does": "Thin polypropylene tube that stores the paste and feeds it to the point.",
+      "shape": "tube",
+      "params": {"outer": 0.0018, "inner": 0.0014, "height": 0.11},
+      "position": [0, 0.078, 0],
+      "color": [0.85, 0.88, 0.9, 0.55],
+      "metallic": 0.0,
+      "roughness": 0.25,
+      "explode": [1, 0, 0],
+      "explode_distance": 0.22
+    },
+    {
+      "slug": "ink",
+      "label": "Paste ink",
+      "group": "ink",
+      "does": "Viscous oil-based paste (about 25 to 40 percent dye) that the ball lays down.",
+      "shape": "cylinder",
+      "params": {"radius": 0.0013, "height": 0.09},
+      "position": [0, 0.07, 0],
+      "color": [0.12, 0.28, 0.62, 1],
+      "metallic": 0.0,
+      "roughness": 0.45,
+      "explode": [1, 0, 0],
+      "explode_distance": 0.28
+    },
+    {
+      "slug": "follower",
+      "label": "Ink follower",
+      "group": "ink",
+      "does": "Grease plug that rides the ink column and stops the paste drying from the open end.",
+      "shape": "cylinder",
+      "params": {"radius": 0.00125, "height": 0.004},
+      "position": [0, 0.117, 0],
+      "color": [0.75, 0.72, 0.62, 1],
+      "metallic": 0.0,
+      "roughness": 0.7,
+      "explode": [1, 0.3, 0],
+      "explode_distance": 0.3
+    },
+    {
+      "slug": "barrel",
+      "label": "Barrel",
+      "group": "body",
+      "does": "Hex-section polystyrene tube about 6.4 mm across that is the grip and shows the ink.",
+      "shape": "tube",
+      "params": {"outer": 0.0032, "inner": 0.0024, "height": 0.12},
+      "position": [0, 0.082, 0],
+      "color": [0.82, 0.86, 0.9, 0.45],
+      "metallic": 0.0,
+      "roughness": 0.3,
+      "explode": [0, 0, 0],
+      "explode_distance": 0.0,
+      "frames": {
+        "cap-axis": {"origin": [0, 0.06, 0], "axis": [0, 1, 0]}
+      }
+    },
+    {
+      "slug": "air-hole",
+      "label": "Barrel vent",
+      "group": "body",
+      "does": "Small hole that keeps air pressure inside the barrel equal to the room.",
+      "shape": "cylinder",
+      "params": {"radius": 0.00035, "height": 0.0016},
+      "position": [0.0032, 0.055, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.7, 0.74, 0.78, 1],
+      "metallic": 0.0,
+      "roughness": 0.35,
+      "explode": [1, 0, 0],
+      "explode_distance": 0.16
+    },
+    {
+      "slug": "grip-flat",
+      "label": "Hex grip ridge",
+      "group": "body",
+      "does": "One of six shallow ridges that stop the round tube rolling and give three finger seats.",
+      "shape": "box",
+      "params": {"sx": 0.0006, "sy": 0.08, "sz": 0.0004},
+      "position": [0.0033, 0.07, 0],
+      "color": [0.78, 0.82, 0.86, 0.7],
+      "metallic": 0.0,
+      "roughness": 0.35,
+      "explode": [1, 0, 0],
+      "explode_distance": 0.12,
+      "repeat": {"count": 6, "axis": [0, 1, 0], "angle_deg": 60, "offset": [0, 0, 0]}
+    },
+    {
+      "slug": "barrel-end",
+      "label": "Barrel end",
+      "group": "body",
+      "does": "Open top of the barrel that the posted cap friction-fits onto.",
+      "shape": "tube",
+      "params": {"outer": 0.0032, "inner": 0.0025, "height": 0.01},
+      "position": [0, 0.147, 0],
+      "color": [0.82, 0.86, 0.9, 0.5],
+      "metallic": 0.0,
+      "roughness": 0.3,
+      "explode": [0, 1, 0],
+      "explode_distance": 0.14
+    },
+    {
+      "slug": "cap",
+      "label": "Cap",
+      "group": "cap",
+      "does": "Polypropylene sleeve about 13 mm across that covers the point or posts on the barrel end.",
+      "shape": "tube",
+      "params": {"outer": 0.0065, "inner": 0.0036, "height": 0.032},
+      "position": [0, 0.162, 0],
+      "color": [0.12, 0.28, 0.62, 1],
+      "metallic": 0.0,
+      "roughness": 0.45,
+      "explode": [0, 1, 0],
+      "explode_distance": 0.32
+    },
+    {
+      "slug": "cap-plug",
+      "label": "Cap plug",
+      "group": "cap",
+      "does": "Closed top of the cap, pierced by the safety hole.",
+      "shape": "cylinder",
+      "params": {"radius": 0.0062, "height": 0.003},
+      "position": [0, 0.1795, 0],
+      "color": [0.12, 0.28, 0.62, 1],
+      "metallic": 0.0,
+      "roughness": 0.45,
+      "explode": [0, 1, 0],
+      "explode_distance": 0.36
+    },
+    {
+      "slug": "cap-vent",
+      "label": "Cap safety hole",
+      "group": "cap",
+      "does": "Hole through the cap top so air can pass if a child inhales the cap.",
+      "shape": "cylinder",
+      "params": {"radius": 0.001, "height": 0.004},
+      "position": [0, 0.181, 0],
+      "color": [0.1, 0.22, 0.5, 1],
+      "metallic": 0.0,
+      "roughness": 0.5,
+      "explode": [0, 1, 0],
+      "explode_distance": 0.4
+    },
+    {
+      "slug": "clip",
+      "label": "Pocket clip",
+      "group": "cap",
+      "does": "Spring plastic clip that holds the cap in a pocket.",
+      "shape": "box",
+      "params": {"sx": 0.004, "sy": 0.026, "sz": 0.0012},
+      "position": [0, 0.162, 0.0074],
+      "color": [0.12, 0.28, 0.62, 1],
+      "metallic": 0.0,
+      "roughness": 0.45,
+      "explode": [0, 0.3, 1],
+      "explode_distance": 0.28
+    },
+    {
+      "slug": "clip-rivet",
+      "label": "Clip rivet",
+      "group": "cap",
+      "does": "Pin that fixes the clip to the cap near the plug.",
+      "shape": "cylinder",
+      "params": {"radius": 0.0008, "height": 0.003},
+      "position": [0, 0.174, 0.0055],
+      "rotation": [90, 0, 0],
+      "color": [0.55, 0.55, 0.58, 1],
+      "metallic": 0.85,
+      "roughness": 0.3,
+      "explode": [0, 0.4, 1],
+      "explode_distance": 0.3
+    }
+  ],
+  "mates": [
+    {
+      "id": "cap-post",
+      "kind": "slider",
+      "parts": ["barrel", "cap"],
+      "axis": [0, 1, 0],
+      "range": [0, 0.04]
+    },
+    {
+      "id": "plug-on-cap",
+      "kind": "fixed",
+      "parts": ["cap", "cap-plug"]
+    },
+    {
+      "id": "vent-on-cap",
+      "kind": "fixed",
+      "parts": ["cap", "cap-vent"]
+    },
+    {
+      "id": "clip-on-cap",
+      "kind": "fixed",
+      "parts": ["cap", "clip"]
+    },
+    {
+      "id": "rivet-on-cap",
+      "kind": "fixed",
+      "parts": ["cap", "clip-rivet"]
+    }
+  ],
+  "driven": {
+    "mate": "cap-post",
+    "value": 0
+  }
+}

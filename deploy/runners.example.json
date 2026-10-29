@@ -1,0 +1,10 @@
+{
+  "runners": [
+    {"name": "mac", "os": "macos", "cores": 18, "ram_gb": 36, "gpu_vram_gb": 0, "browsers": ["chromium"],
+     "reach": "local", "may_see_real_data": true, "speed": 1.0},
+    {"name": "m1", "os": "macos", "cores": 8, "ram_gb": 16, "browsers": ["chromium"],
+     "reach": "ssh", "host": "runner@m1.example.invalid", "key": "~/.ssh/example_runner_key", "speed": 0.6},
+    {"name": "windows-wsl", "os": "linux-wsl2", "cores": 16, "ram_gb": 64, "gpu_vram_gb": 24,
+     "reach": "ssh", "host": "runner@pc.example.invalid", "key": "~/.ssh/example_runner_key", "enabled": false}
+  ]
+}

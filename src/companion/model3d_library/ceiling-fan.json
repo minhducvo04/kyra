@@ -1,0 +1,385 @@
+{
+  "slug": "ceiling-fan",
+  "title": "Ceiling fan",
+  "aliases": [
+    "ceiling fan",
+    "overhead fan",
+    "paddle fan",
+    "hugger fan",
+    "ceiling paddle fan",
+    "room ceiling fan"
+  ],
+  "summary": "A typical 52-inch five-blade ceiling fan. A canopy and short downrod hang a PSC motor from the ceiling. The rotor turns a hub and five blade irons. A capacitor in the switch housing starts the motor. A pull chain picks speed; a glass shade under the motor holds a light.",
+  "approximate": true,
+  "disclaimer": "Researched typical design (52-inch span, five blades, short downrod, PSC motor), not a specific product; simplified shapes.",
+  "units": "m",
+  "sources": [
+    {
+      "title": "Ceiling fan (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Ceiling_fan"
+    },
+    {
+      "title": "How to install a ceiling fan (This Old House)",
+      "url": "https://www.thisoldhouse.com/lighting-and-ceiling-fans/21015185/how-to-install-a-ceiling-fan"
+    },
+    {
+      "title": "Permanent-split capacitor motor (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/AC_motor#Permanent-split_capacitor_motor"
+    }
+  ],
+  "parts": [
+    {
+      "slug": "mounting-bracket",
+      "label": "Mounting bracket",
+      "group": "mount",
+      "does": "Steel plate that screws to the ceiling box and carries the downrod ball.",
+      "shape": "box",
+      "params": {"sx": 0.12, "sy": 0.012, "sz": 0.08},
+      "position": [0, 0.255, 0],
+      "color": [0.55, 0.55, 0.58, 1],
+      "metallic": 0.8,
+      "roughness": 0.35,
+      "explode": [0, 1, 0],
+      "explode_distance": 0.22
+    },
+    {
+      "slug": "canopy",
+      "label": "Canopy",
+      "group": "mount",
+      "does": "Cover that hides the ceiling box and the bracket screws.",
+      "shape": "revolve",
+      "params": {
+        "profile": [[0.02, 0], [0.09, 0], [0.09, 0.012], [0.04, 0.035], [0.02, 0.04]],
+        "shell_thickness": 0.003
+      },
+      "position": [0, 0.215, 0],
+      "color": [0.82, 0.78, 0.7, 1],
+      "metallic": 0.35,
+      "roughness": 0.45,
+      "explode": [0, 1, 0],
+      "explode_distance": 0.16
+    },
+    {
+      "slug": "canopy-screw",
+      "label": "Canopy screw",
+      "group": "mount",
+      "does": "Machine screw that pins the canopy to the mounting bracket.",
+      "shape": "cylinder",
+      "params": {"radius": 0.003, "height": 0.012},
+      "position": [0.05, 0.232, 0],
+      "color": [0.55, 0.55, 0.58, 1],
+      "metallic": 0.9,
+      "roughness": 0.3,
+      "explode": [0.6, 1, 0],
+      "explode_distance": 0.2,
+      "repeat": {"count": 2, "axis": [0, 1, 0], "angle_deg": 180, "offset": [0, 0, 0]}
+    },
+    {
+      "slug": "downrod",
+      "label": "Downrod",
+      "group": "mount",
+      "does": "Hollow pipe that hangs the motor and carries the supply wires.",
+      "shape": "tube",
+      "params": {"outer": 0.012, "inner": 0.009, "height": 0.14},
+      "position": [0, 0.155, 0],
+      "color": [0.82, 0.78, 0.7, 1],
+      "metallic": 0.4,
+      "roughness": 0.4,
+      "explode": [0, 1, 0],
+      "explode_distance": 0.12
+    },
+    {
+      "slug": "yoke",
+      "label": "Yoke",
+      "group": "mount",
+      "does": "Fork that clamps the downrod to the top of the motor housing.",
+      "shape": "box",
+      "params": {"sx": 0.05, "sy": 0.03, "sz": 0.04},
+      "position": [0, 0.07, 0],
+      "color": [0.82, 0.78, 0.7, 1],
+      "metallic": 0.35,
+      "roughness": 0.45,
+      "explode": [0, 0.6, 0],
+      "explode_distance": 0.1
+    },
+    {
+      "slug": "motor-housing",
+      "label": "Motor housing",
+      "group": "motor",
+      "does": "Outer bell that holds the stator and the shaft bearings.",
+      "shape": "revolve",
+      "params": {
+        "profile": [[0.025, -0.035], [0.09, -0.03], [0.09, 0.03], [0.04, 0.04], [0.02, 0.04]],
+        "shell_thickness": 0.003
+      },
+      "position": [0, 0, 0],
+      "color": [0.82, 0.78, 0.7, 1],
+      "metallic": 0.35,
+      "roughness": 0.45,
+      "explode": [0, 0, 0],
+      "explode_distance": 0.0,
+      "frames": {
+        "shaft": {"origin": [0, 0, 0], "axis": [0, 1, 0]}
+      }
+    },
+    {
+      "slug": "stator-core",
+      "label": "Stator core",
+      "group": "motor",
+      "does": "Stack of steel laminations that guides the field around the rotor.",
+      "shape": "tube",
+      "params": {"outer": 0.07, "inner": 0.036, "height": 0.028},
+      "position": [0, 0, 0],
+      "color": [0.35, 0.35, 0.38, 1],
+      "metallic": 0.7,
+      "roughness": 0.5,
+      "explode": [1, 0, 0],
+      "explode_distance": 0.14
+    },
+    {
+      "slug": "stator-winding",
+      "label": "Stator winding",
+      "group": "motor",
+      "does": "Copper coil that makes the rotating field from mains AC.",
+      "shape": "torus",
+      "params": {"major": 0.052, "minor": 0.008},
+      "position": [0, 0.016, 0],
+      "color": [0.8, 0.45, 0.2, 1],
+      "metallic": 0.8,
+      "roughness": 0.35,
+      "explode": [1, 0.3, 0],
+      "explode_distance": 0.16,
+      "repeat": {"count": 2, "axis": [0, 1, 0], "angle_deg": 0, "offset": [0, -0.032, 0]}
+    },
+    {
+      "slug": "rotor",
+      "label": "Rotor",
+      "group": "motor",
+      "does": "Squirrel-cage rotor that the stator field pushes around.",
+      "shape": "cylinder",
+      "params": {"radius": 0.032, "height": 0.026},
+      "position": [0, 0, 0],
+      "color": [0.5, 0.5, 0.55, 1],
+      "metallic": 0.7,
+      "roughness": 0.4,
+      "explode": [0, 0, 0],
+      "explode_distance": 0.0
+    },
+    {
+      "slug": "motor-shaft",
+      "label": "Motor shaft",
+      "group": "motor",
+      "does": "Steel shaft that carries the rotor and the blade hub.",
+      "shape": "cylinder",
+      "params": {"radius": 0.006, "height": 0.09},
+      "position": [0, 0, 0],
+      "color": [0.55, 0.55, 0.58, 1],
+      "metallic": 0.9,
+      "roughness": 0.3,
+      "explode": [0, 0, 0],
+      "explode_distance": 0.0
+    },
+    {
+      "slug": "upper-bearing",
+      "label": "Upper bearing",
+      "group": "motor",
+      "does": "Sleeve bearing that supports the shaft at the top of the housing.",
+      "shape": "tube",
+      "params": {"outer": 0.012, "inner": 0.006, "height": 0.01},
+      "position": [0, 0.032, 0],
+      "color": [0.7, 0.55, 0.3, 1],
+      "metallic": 0.8,
+      "roughness": 0.3,
+      "explode": [0, 1, 0],
+      "explode_distance": 0.1
+    },
+    {
+      "slug": "lower-bearing",
+      "label": "Lower bearing",
+      "group": "motor",
+      "does": "Sleeve bearing that supports the shaft at the bottom of the housing.",
+      "shape": "tube",
+      "params": {"outer": 0.012, "inner": 0.006, "height": 0.01},
+      "position": [0, -0.032, 0],
+      "color": [0.7, 0.55, 0.3, 1],
+      "metallic": 0.8,
+      "roughness": 0.3,
+      "explode": [0, -1, 0],
+      "explode_distance": 0.1
+    },
+    {
+      "slug": "capacitor",
+      "label": "Run capacitor",
+      "group": "electrics",
+      "does": "Gives the start winding a phase shift so the PSC motor runs smoothly.",
+      "shape": "cylinder",
+      "params": {"radius": 0.012, "height": 0.04},
+      "position": [0.02, -0.07, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.2, 0.3, 0.6, 1],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "explode": [1, -0.4, 0],
+      "explode_distance": 0.2
+    },
+    {
+      "slug": "blade-hub",
+      "label": "Blade hub",
+      "group": "rotor",
+      "does": "Disc on the shaft that the five blade irons bolt to.",
+      "shape": "cylinder",
+      "params": {"radius": 0.055, "height": 0.016},
+      "position": [0, -0.012, 0],
+      "color": [0.82, 0.78, 0.7, 1],
+      "metallic": 0.35,
+      "roughness": 0.45,
+      "explode": [0, -0.3, 0],
+      "explode_distance": 0.08
+    },
+    {
+      "slug": "blade-iron",
+      "label": "Blade iron",
+      "group": "rotor",
+      "does": "Stamped arm that bolts a wooden blade to the hub.",
+      "shape": "box",
+      "params": {"sx": 0.1, "sy": 0.006, "sz": 0.028},
+      "position": [0.09, -0.012, 0],
+      "color": [0.55, 0.55, 0.58, 1],
+      "metallic": 0.7,
+      "roughness": 0.4,
+      "explode": [0.4, -0.2, 0],
+      "explode_distance": 0.18,
+      "repeat": {"count": 5, "axis": [0, 1, 0], "angle_deg": 72, "offset": [0, 0, 0]}
+    },
+    {
+      "slug": "fan-blade",
+      "label": "Fan blade",
+      "group": "rotor",
+      "does": "Pitched paddle that pushes air down as the hub turns.",
+      "shape": "blade",
+      "params": {
+        "length": 0.52,
+        "root_width": 0.12,
+        "tip_width": 0.15,
+        "thickness": 0.006,
+        "twist_deg": 12,
+        "sweep": 0.02
+      },
+      "position": [0.14, -0.012, 0],
+      "color": [0.55, 0.38, 0.22, 1],
+      "metallic": 0.05,
+      "roughness": 0.65,
+      "explode": [0.6, -0.2, 0],
+      "explode_distance": 0.28,
+      "repeat": {"count": 5, "axis": [0, 1, 0], "angle_deg": 72, "offset": [0, 0, 0]}
+    },
+    {
+      "slug": "switch-housing",
+      "label": "Switch housing",
+      "group": "electrics",
+      "does": "Cup under the motor that holds the capacitor and the speed switch.",
+      "shape": "cylinder",
+      "params": {"radius": 0.055, "height": 0.04},
+      "position": [0, -0.065, 0],
+      "color": [0.82, 0.78, 0.7, 1],
+      "metallic": 0.35,
+      "roughness": 0.45,
+      "explode": [0, -1, 0],
+      "explode_distance": 0.16
+    },
+    {
+      "slug": "pull-chain",
+      "label": "Pull chain",
+      "group": "electrics",
+      "does": "Beaded chain you pull to step the motor through off, low, medium and high.",
+      "shape": "helix",
+      "params": {"radius": 0.003, "pitch": 0.004, "turns": 8, "wire": 0.0012},
+      "position": [0.04, -0.1, 0],
+      "color": [0.72, 0.7, 0.62, 1],
+      "metallic": 0.85,
+      "roughness": 0.3,
+      "explode": [0.5, -1, 0],
+      "explode_distance": 0.22
+    },
+    {
+      "slug": "light-pan",
+      "label": "Light pan",
+      "group": "light",
+      "does": "Dish under the switch housing that holds the shade and the lamp.",
+      "shape": "revolve",
+      "params": {
+        "profile": [[0.015, 0], [0.07, 0], [0.075, -0.008], [0.03, -0.012], [0.015, -0.012]],
+        "shell_thickness": 0.002
+      },
+      "position": [0, -0.088, 0],
+      "color": [0.82, 0.78, 0.7, 1],
+      "metallic": 0.4,
+      "roughness": 0.4,
+      "explode": [0, -1, 0],
+      "explode_distance": 0.22
+    },
+    {
+      "slug": "glass-shade",
+      "label": "Glass shade",
+      "group": "light",
+      "does": "Bowl that spreads the lamp light and hides the bulb.",
+      "shape": "revolve",
+      "params": {
+        "profile": [[0.02, 0], [0.06, -0.008], [0.075, -0.04], [0.04, -0.07], [0, -0.072]],
+        "shell_thickness": 0.003
+      },
+      "position": [0, -0.1, 0],
+      "color": [0.85, 0.88, 0.9, 0.55],
+      "metallic": 0.05,
+      "roughness": 0.2,
+      "explode": [0, -1, 0],
+      "explode_distance": 0.3
+    },
+    {
+      "slug": "bulb",
+      "label": "Lamp",
+      "group": "light",
+      "does": "Bulb in the light pan that lights the room below the fan.",
+      "shape": "sphere",
+      "params": {"radius": 0.022},
+      "position": [0, -0.125, 0],
+      "color": [0.95, 0.93, 0.85, 1],
+      "metallic": 0.05,
+      "roughness": 0.3,
+      "explode": [0, -1, 0],
+      "explode_distance": 0.34
+    }
+  ],
+  "mates": [
+    {
+      "id": "spin",
+      "kind": "revolute",
+      "parts": ["motor-housing", "motor-shaft"],
+      "frame": "shaft"
+    },
+    {
+      "id": "rotor-on-shaft",
+      "kind": "fixed",
+      "parts": ["motor-shaft", "rotor"]
+    },
+    {
+      "id": "hub-on-shaft",
+      "kind": "fixed",
+      "parts": ["motor-shaft", "blade-hub"]
+    },
+    {
+      "id": "irons-on-hub",
+      "kind": "fixed",
+      "parts": ["blade-hub", "blade-iron"]
+    },
+    {
+      "id": "blades-on-irons",
+      "kind": "fixed",
+      "parts": ["blade-iron", "fan-blade"]
+    }
+  ],
+  "driven": {
+    "mate": "spin",
+    "value": 0
+  }
+}

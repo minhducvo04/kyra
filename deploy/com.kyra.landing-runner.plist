@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: replace __KYRA_ROOT__ with the absolute main checkout path before installing as
+     the user LaunchAgents folder/com.kyra.landing-runner.plist. Runs scripts/landing_runner.py for good (KeepAlive); a second
+     instance exits at once on the runner.lock flock. Queue and logs live in __KYRA_ROOT__/data/team/landing/. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.kyra.landing-runner</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__KYRA_ROOT__/.venv/bin/python</string>
+        <string>__KYRA_ROOT__/scripts/landing_runner.py</string>
+    </array>
+    <key>WorkingDirectory</key><string>__KYRA_ROOT__</string>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>Umask</key><integer>63</integer>
+    <key>ThrottleInterval</key><integer>60</integer>
+    <key>EnvironmentVariables</key>
+    <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+    <key>StandardOutPath</key><string>__KYRA_ROOT__/data/team/landing/launchd.log</string>
+    <key>StandardErrorPath</key><string>__KYRA_ROOT__/data/team/landing/launchd.err</string>
+</dict>
+</plist>

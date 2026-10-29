@@ -1,0 +1,312 @@
+{
+  "slug": "garden-hose-nozzle",
+  "title": "Garden hose nozzle",
+  "aliases": [
+    "garden hose nozzle",
+    "hose nozzle",
+    "pistol nozzle",
+    "garden sprayer",
+    "hose spray gun",
+    "watering nozzle"
+  ],
+  "summary": "A typical pistol garden-hose nozzle with a 3/4-inch GHT inlet. Squeezing the trigger lifts a stem off a seat so water runs through the barrel. A spring closes the valve. A rubber washer seals the hose; a twist collar at the tip picks stream or spray.",
+  "approximate": true,
+  "disclaimer": "Researched typical pistol nozzle (3/4-inch GHT inlet, spring-closed stem valve), not a specific product; simplified shapes.",
+  "units": "m",
+  "sources": [
+    {
+      "title": "Garden hose (Wikipedia): fittings and nozzles",
+      "url": "https://en.wikipedia.org/wiki/Garden_hose"
+    },
+    {
+      "title": "Nozzle (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Nozzle"
+    },
+    {
+      "title": "Hose coupling (Wikipedia): GHT thread used on garden hoses",
+      "url": "https://en.wikipedia.org/wiki/Hose_coupling"
+    }
+  ],
+  "parts": [
+    {
+      "slug": "inlet-coupling",
+      "label": "Inlet coupling",
+      "group": "inlet",
+      "does": "Threaded 3/4-inch GHT collar that screws onto the hose end.",
+      "shape": "tube",
+      "params": {"outer": 0.016, "inner": 0.012, "height": 0.022},
+      "position": [-0.07, 0.01, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.55, 0.58, 0.6, 1],
+      "metallic": 0.85,
+      "roughness": 0.3,
+      "explode": [-1, 0, 0],
+      "explode_distance": 0.22
+    },
+    {
+      "slug": "hose-washer",
+      "label": "Hose washer",
+      "group": "inlet",
+      "does": "Rubber ring that seals the hose face against the coupling.",
+      "shape": "torus",
+      "params": {"major": 0.01, "minor": 0.002},
+      "position": [-0.082, 0.01, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.12, 0.12, 0.13, 1],
+      "metallic": 0.0,
+      "roughness": 0.9,
+      "explode": [-1, 0, 0],
+      "explode_distance": 0.28
+    },
+    {
+      "slug": "inlet-filter",
+      "label": "Inlet filter",
+      "group": "inlet",
+      "does": "Mesh disc that catches grit before it reaches the valve seat.",
+      "shape": "cylinder",
+      "params": {"radius": 0.009, "height": 0.003},
+      "position": [-0.058, 0.01, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.7, 0.72, 0.75, 1],
+      "metallic": 0.6,
+      "roughness": 0.4,
+      "explode": [-0.8, 0.3, 0],
+      "explode_distance": 0.2
+    },
+    {
+      "slug": "body",
+      "label": "Body",
+      "group": "body",
+      "does": "Cast housing that holds the valve, barrel and handle in one piece.",
+      "shape": "box",
+      "params": {"sx": 0.07, "sy": 0.032, "sz": 0.028},
+      "position": [-0.02, 0.01, 0],
+      "color": [0.15, 0.45, 0.28, 1],
+      "metallic": 0.1,
+      "roughness": 0.55,
+      "explode": [0, 0, 0],
+      "explode_distance": 0.0,
+      "frames": {
+        "bore": {"origin": [0.02, 0, 0], "axis": [1, 0, 0]}
+      }
+    },
+    {
+      "slug": "handle",
+      "label": "Handle",
+      "group": "body",
+      "does": "Grip you hold; the trigger pivots at its top.",
+      "shape": "box",
+      "params": {"sx": 0.022, "sy": 0.07, "sz": 0.02},
+      "position": [-0.028, -0.04, 0],
+      "color": [0.15, 0.45, 0.28, 1],
+      "metallic": 0.1,
+      "roughness": 0.55,
+      "explode": [0, -1, 0],
+      "explode_distance": 0.16,
+      "frames": {
+        "pivot": {"origin": [0.012, 0.03, 0], "axis": [0, 0, 1]}
+      }
+    },
+    {
+      "slug": "trigger",
+      "label": "Trigger",
+      "group": "valve",
+      "does": "Lever you squeeze to lift the stem off the seat.",
+      "shape": "box",
+      "params": {"sx": 0.012, "sy": 0.055, "sz": 0.014},
+      "position": [0.0, -0.028, 0],
+      "color": [0.12, 0.12, 0.13, 1],
+      "metallic": 0.05,
+      "roughness": 0.6,
+      "explode": [0.4, -0.6, 0],
+      "explode_distance": 0.18
+    },
+    {
+      "slug": "pivot-pin",
+      "label": "Pivot pin",
+      "group": "valve",
+      "does": "Steel pin the trigger turns on, through the handle.",
+      "shape": "cylinder",
+      "params": {"radius": 0.0025, "height": 0.024},
+      "position": [-0.016, -0.01, 0],
+      "rotation": [90, 0, 0],
+      "color": [0.55, 0.55, 0.58, 1],
+      "metallic": 0.9,
+      "roughness": 0.3,
+      "explode": [0, 0, 1],
+      "explode_distance": 0.16
+    },
+    {
+      "slug": "lock-clip",
+      "label": "Lock clip",
+      "group": "valve",
+      "does": "Catch that holds the trigger open for a steady spray.",
+      "shape": "box",
+      "params": {"sx": 0.01, "sy": 0.006, "sz": 0.012},
+      "position": [-0.018, -0.062, 0],
+      "color": [0.12, 0.12, 0.13, 1],
+      "metallic": 0.05,
+      "roughness": 0.6,
+      "explode": [-0.3, -1, 0],
+      "explode_distance": 0.2
+    },
+    {
+      "slug": "valve-stem",
+      "label": "Valve stem",
+      "group": "valve",
+      "does": "Rod the trigger lifts so water can pass the seat.",
+      "shape": "cylinder",
+      "params": {"radius": 0.0035, "height": 0.04},
+      "position": [0.01, 0.01, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.55, 0.55, 0.58, 1],
+      "metallic": 0.85,
+      "roughness": 0.3,
+      "explode": [0.4, 0.4, 0],
+      "explode_distance": 0.16
+    },
+    {
+      "slug": "valve-seal",
+      "label": "Valve seal",
+      "group": "valve",
+      "does": "Rubber face on the stem that shuts against the seat.",
+      "shape": "torus",
+      "params": {"major": 0.005, "minor": 0.0015},
+      "position": [0.028, 0.01, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.12, 0.12, 0.13, 1],
+      "metallic": 0.0,
+      "roughness": 0.9,
+      "explode": [0.5, 0.4, 0],
+      "explode_distance": 0.18
+    },
+    {
+      "slug": "valve-seat",
+      "label": "Valve seat",
+      "group": "valve",
+      "does": "Ring in the body the seal presses against to stop flow.",
+      "shape": "tube",
+      "params": {"outer": 0.008, "inner": 0.0045, "height": 0.006},
+      "position": [0.032, 0.01, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.72, 0.62, 0.35, 1],
+      "metallic": 0.8,
+      "roughness": 0.3,
+      "explode": [0.3, 0.6, 0],
+      "explode_distance": 0.14
+    },
+    {
+      "slug": "return-spring",
+      "label": "Return spring",
+      "group": "valve",
+      "does": "Coil that pushes the stem shut when you let go of the trigger.",
+      "shape": "helix",
+      "params": {"radius": 0.005, "pitch": 0.003, "turns": 5, "wire": 0.001},
+      "position": [-0.008, 0.01, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.7, 0.72, 0.75, 1],
+      "metallic": 0.9,
+      "roughness": 0.25,
+      "explode": [0, 1, 0],
+      "explode_distance": 0.16
+    },
+    {
+      "slug": "body-o-ring",
+      "label": "Body O-ring",
+      "group": "valve",
+      "does": "Ring that stops water leaking around the stem to the trigger.",
+      "shape": "torus",
+      "params": {"major": 0.006, "minor": 0.0012},
+      "position": [-0.002, 0.01, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.12, 0.12, 0.13, 1],
+      "metallic": 0.0,
+      "roughness": 0.9,
+      "explode": [0, 0.8, 0],
+      "explode_distance": 0.14
+    },
+    {
+      "slug": "barrel",
+      "label": "Barrel",
+      "group": "outlet",
+      "does": "Front tube that carries water from the seat to the tip.",
+      "shape": "tube",
+      "params": {"outer": 0.014, "inner": 0.01, "height": 0.045},
+      "position": [0.05, 0.01, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.15, 0.45, 0.28, 1],
+      "metallic": 0.1,
+      "roughness": 0.55,
+      "explode": [1, 0, 0],
+      "explode_distance": 0.16
+    },
+    {
+      "slug": "pattern-collar",
+      "label": "Pattern collar",
+      "group": "outlet",
+      "does": "Twist ring that picks a stream or a spray at the tip.",
+      "shape": "tube",
+      "params": {"outer": 0.018, "inner": 0.012, "height": 0.016},
+      "position": [0.072, 0.01, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.12, 0.12, 0.13, 1],
+      "metallic": 0.05,
+      "roughness": 0.6,
+      "explode": [1, 0.3, 0],
+      "explode_distance": 0.2
+    },
+    {
+      "slug": "nozzle-tip",
+      "label": "Nozzle tip",
+      "group": "outlet",
+      "does": "Tapered mouth that speeds the jet as the opening shrinks.",
+      "shape": "cone",
+      "params": {"radius_bottom": 0.012, "radius_top": 0.004, "height": 0.018},
+      "position": [0.09, 0.01, 0],
+      "rotation": [0, 0, -90],
+      "color": [0.55, 0.58, 0.6, 1],
+      "metallic": 0.7,
+      "roughness": 0.35,
+      "explode": [1, 0, 0],
+      "explode_distance": 0.24
+    },
+    {
+      "slug": "spray-orifice",
+      "label": "Spray orifice",
+      "group": "outlet",
+      "does": "Small opening at the tip that sets the jet size.",
+      "shape": "cylinder",
+      "params": {"radius": 0.003, "height": 0.004},
+      "position": [0.1, 0.01, 0],
+      "rotation": [0, 0, 90],
+      "color": [0.45, 0.48, 0.5, 1],
+      "metallic": 0.6,
+      "roughness": 0.4,
+      "explode": [1, 0, 0],
+      "explode_distance": 0.28
+    }
+  ],
+  "mates": [
+    {
+      "id": "squeeze",
+      "kind": "revolute",
+      "parts": ["handle", "trigger"],
+      "frame": "pivot",
+      "range": [0, 25]
+    },
+    {
+      "id": "stem-on-trigger",
+      "kind": "fixed",
+      "parts": ["trigger", "valve-stem"]
+    },
+    {
+      "id": "seal-on-stem",
+      "kind": "fixed",
+      "parts": ["valve-stem", "valve-seal"]
+    }
+  ],
+  "driven": {
+    "mate": "squeeze",
+    "value": 0
+  }
+}

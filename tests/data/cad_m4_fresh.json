@@ -1,0 +1,185 @@
+{
+ "note": "Fresh Studio M4 briefs written 2026-10-06 without reading the frozen held-out set; expected values computed by hand (calc field). Never tune prompts or examples against these.",
+ "parts": [
+  {
+   "id": "spacer",
+   "brief": "a round spacer, 12 mm outside diameter, 6 mm bore, 10 mm long",
+   "bbox_sorted": [
+    10,
+    12,
+    12
+   ],
+   "volume": [
+    839.7,
+    856.7
+   ],
+   "calc": "ring: pi*(6^2-3^2)*10 = 270*pi = 848.2 mm3; bbox 12 x 12 x 10"
+  },
+  {
+   "id": "mount_plate",
+   "brief": "a mounting plate 80 mm by 50 mm and 5 mm thick, with four 6 mm holes, each 8 mm in from the two nearest edges",
+   "bbox_sorted": [
+    5,
+    50,
+    80
+   ],
+   "volume": [
+    19240.2,
+    19628.9
+   ],
+   "calc": "80*50*5 = 20000; four holes 4*pi*3^2*5 = 180*pi = 565.5; V = 19434.5 mm3 (holes sit at +-32, +-17, clear of the edges); bbox 80 x 50 x 5"
+  },
+  {
+   "id": "u_channel",
+   "brief": "a U-channel 60 mm long with a 30 mm wide, 20 mm tall cross-section, open at the top, with 3 mm thick walls and base",
+   "bbox_sorted": [
+    20,
+    30,
+    60
+   ],
+   "volume": [
+    11404.8,
+    11635.2
+   ],
+   "calc": "section = 30*20 - inner 24*17 = 600 - 408 = 192 mm2; V = 192*60 = 11520 mm3; bbox 30 x 20 x 60"
+  },
+  {
+   "id": "pulley_blank",
+   "brief": "a pulley blank made by revolving a profile: 40 mm outside diameter, 10 mm wide, with an 8 mm bore",
+   "bbox_sorted": [
+    10,
+    40,
+    40
+   ],
+   "volume": [
+    11943.1,
+    12184.4
+   ],
+   "calc": "ring: pi*(20^2-4^2)*10 = 3840*pi = 12063.7 mm3; bbox 40 x 40 x 10"
+  },
+  {
+   "id": "pipe_flange",
+   "brief": "a pipe flange 100 mm in diameter and 12 mm thick, with a 40 mm center bore and four 10 mm bolt holes on a 70 mm bolt circle",
+   "bbox_sorted": [
+    12,
+    100,
+    100
+   ],
+   "volume": [
+    74644.2,
+    76152.2
+   ],
+   "calc": "pi*(50^2-20^2)*12 = 25200*pi = 79168; four holes 4*pi*5^2*12 = 1200*pi = 3769.9; V = 75398.2 mm3 (holes at radius 35 span 30..40, clear of bore r20 and rim r50); bbox 100 x 100 x 12"
+  },
+  {
+   "id": "hex_standoff",
+   "brief": "a hexagonal standoff blank, 10 mm across the flats, 25 mm long, with a 3 mm hole through its length",
+   "bbox_sorted": [
+    10,
+    11.547,
+    25
+   ],
+   "volume": [
+    1968.5,
+    2008.2
+   ],
+   "calc": "hex area = (sqrt3/2)*10^2 = 86.60; hole pi*1.5^2 = 7.07; V = (86.60-7.07)*25 = 1988.4 mm3; across corners 10/cos30 = 11.547 so bbox 10 x 11.547 x 25 either orientation"
+  },
+  {
+   "id": "l_angle",
+   "brief": "an L-angle bracket with outside legs of 50 mm and 40 mm, 4 mm thick, 30 mm wide",
+   "bbox_sorted": [
+    30,
+    40,
+    50
+   ],
+   "volume": [
+    10216.8,
+    10423.2
+   ],
+   "calc": "section = 50*4 + (40-4)*4 = 200 + 144 = 344 mm2; V = 344*30 = 10320 mm3; bbox 50 x 40 x 30"
+  },
+  {
+   "id": "shell_tray",
+   "brief": "an open-top tray 100 mm long, 60 mm wide and 25 mm deep, with 2 mm thick walls and floor",
+   "bbox_sorted": [
+    25,
+    60,
+    100
+   ],
+   "volume": [
+    26088.5,
+    26615.5
+   ],
+   "calc": "solid 100*60*25 = 150000; cavity 96*56*23 = 123648; V = 26352 mm3; bbox 100 x 60 x 25"
+  },
+  {
+   "id": "slotted_plate",
+   "brief": "a plate 70 mm by 30 mm by 4 mm with one slot cut through the centre, 40 mm long overall and 8 mm wide, with round ends",
+   "bbox_sorted": [
+    4,
+    30,
+    70
+   ],
+   "volume": [
+    7139.1,
+    7210.8
+   ],
+   "calc": "slot area = 8*(40-8) + pi*4^2 = 256 + 50.27 = 306.27; plate 70*30 = 2100; V = (2100-306.27)*4 = 7174.9 mm3 (a square-ended slot would give 7120, outside the +-0.5% range); bbox 70 x 30 x 4"
+  },
+  {
+   "id": "washer",
+   "brief": "a single flat washer, 16 mm outside diameter, 8.4 mm hole, 1.6 mm thick",
+   "bbox_sorted": [
+    1.6,
+    16,
+    16
+   ],
+   "volume": [
+    230.7,
+    235.4
+   ],
+   "calc": "pi*(8^2-4.2^2)*1.6 = pi*46.36*1.6 = 74.176*pi = 233.03 mm3; bbox 16 x 16 x 1.6"
+  },
+  {
+   "id": "stepped_shaft",
+   "brief": "a stepped shaft: a 20 mm diameter section 30 mm long, then a 12 mm diameter section 40 mm long, on the same axis",
+   "bbox_sorted": [
+    20,
+    20,
+    70
+   ],
+   "volume": [
+    13809.2,
+    14088.2
+   ],
+   "calc": "pi*10^2*30 + pi*6^2*40 = 3000*pi + 1440*pi = 4440*pi = 13949.1 mm3; bbox 20 x 20 x 70"
+  },
+  {
+   "id": "chamfered_block",
+   "brief": "a block 40 mm long, 30 mm wide and 20 mm tall, with a 3 mm chamfer around all four top edges",
+   "bbox_sorted": [
+    20,
+    30,
+    40
+   ],
+   "volume": [
+    23289.0,
+    23523.0
+   ],
+   "calc": "lower part 40*30*17 = 20400; chamfered 3 mm band: integral of (34+2s)(24+2s) ds, s=0..3 = 816*3 + 58*9 + 4/3*27 = 2448+522+36 = 3006; V = 23406 mm3 (check: removed 24000-23406 = 594 = 4.5*140 edge prisms - 4*9 corner overlaps); bbox 40 x 30 x 20"
+  },
+  {
+   "id": "ask_no_size",
+   "brief": "make me a bracket to hold up a shelf",
+   "expect_question": true,
+   "calc": "no number and no unit, so a question is required"
+  },
+  {
+   "id": "ask_unitless",
+   "brief": "a plate 100 by 60 with four holes near the corners",
+   "expect_question": true,
+   "calc": "numbers without any length unit give no scale, so a question is required"
+  }
+ ]
+}
