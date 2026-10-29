@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kyra-memory"
+version = "0.1.0"
+description = "A scoped, versioned SQLite memory store with budgeted context packs."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+numpy = ["numpy"]
+postgres = ["psycopg"]
+
+[tool.setuptools.packages.find]
+where = ["../../src"]
+include = ["kyra_memory*"]
+
+[tool.setuptools.package-data]
+kyra_memory = ["*.sql"]

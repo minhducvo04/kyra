@@ -1,109 +1,85 @@
-# Kyra
+# Kyra Memory
 
-A personal AI companion, built to learn the whole AI pipeline by shipping one: persona-driven
-dialogue, long-term memory over retrieval, agentic tools, local and hosted models side by side,
-and voice in and out.
+**What it is.** A memory store for AI agents: it decides what to keep, lets memories fade by use instead of deleting them, finds them by keyword, full text or vector, keeps each tenant in its own file, and erases on request with an audit log that never holds the text.
 
-It runs on a laptop. Text chat, a voice loop, a browser HUD, and a visionOS client all talk to the
-same conversation core. Design rationale is in [docs/design.md](docs/design.md).
+**Why it matters.** Agent memory is user data. Stale facts mislead agents, and one tenant's rows must never reach another tenant's prompt. A delete that leaves copies in an index, a log or a WAL file leaves the data on disk. This package puts those rules in code and tests.
 
-## What is worth looking at
+**Proof.** `pytest` on the tree below: **244 passed, 26 skipped** (the skips need PostgreSQL). The [quickstart](#quickstart) runs in a fresh virtual environment with no dependencies and prints the isolation and erasure checks shown below.
 
-Each of these was measured rather than assumed, and the write-ups keep the numbers that did not
-flatter the decision.
-
-| Piece | Where | The short version |
-|---|---|---|
-| Per-turn router | [src/companion/router.py](src/companion/router.py) | Decides tool vs text, and local vs hosted, on every turn. A fine-tuned 1.5B classifier replaced a few-shot 3B prompt: 91.7% against 73.8%, on 122 prompt tokens instead of 2,051. [docs/router-finetune.md](docs/router-finetune.md) |
-| Hybrid search | [src/companion/search.py](src/companion/search.py) | SQLite FTS5 and Chroma over the same chunks, fused by reciprocal rank. Vector-only scored 69.2% recall against lexical 88.5%, because embeddings miss identifiers. [docs/search-eval.md](docs/search-eval.md) |
-| One-page resume fitting | [src/companion/job_applications.py](src/companion/job_applications.py) | A real compile, measure, iterate loop. It shells out to LaTeX, reads the page count back from the PDF, and feeds the measured overflow into the next pass, because a model editing LaTeX cannot know what it renders to. |
-| Tool-calling distillation | [docs/tool-calling-distill.md](docs/tool-calling-distill.md) | Trained a local 7B to take over tool calls, measured 80.0% against the teacher's 90.0%, and did not ship it. The negative result is the point. |
-| Two memory layers | [memory.py](src/companion/memory.py), [memory_notes.py](src/companion/memory_notes.py) | Retrieval over every exchange, plus a small curated set of facts loaded in full on every turn. Top-k retrieval misses a durable fact on an off-topic turn, so the two layers do different jobs. |
-| Voice latency | [docs/voice-latency.md](docs/voice-latency.md) | Measured end to end, then shortened by speaking the first sentence while the rest is still being written. First word at 3.61s against 4.45s. |
-
-Everything follows one shape on purpose: a small interface, a swappable concrete backend. Memory,
-speech, listening, models, tools, job boards, search and job queues are each an abstract base class
-with a real implementation behind it, so "how would you extend this" always has an answer that is
-not a rewrite. The engineering log (one file per subsystem, recording the bugs and the reversals as
-carefully as the wins), the dated plans and the instruction files for coding agents are kept in a
-private working repository; this repository is an export of the code and the measured write-ups.
-
-## Running it
-
-Tested on macOS with Apple silicon. The local model and voice paths use MLX and want that hardware.
-Text chat against the hosted model works anywhere Python does.
-
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env      # then put a real Anthropic API key in it
-python3 scripts/smoke_test.py
+```mermaid
+flowchart LR
+    A["Agents"] -->|"append one JSON line"| I["Team inbox"]
+    O["Owner"] -->|"rules, pinned facts"| S
+    I -->|"merge in one transaction"| S[("Tenant store<br/>rules, pinned, facts,<br/>faults, recipes<br/>superseded, never overwritten")]
+    S -->|"retier"| T["Activation tiers<br/>near, far, deep"]
+    S -->|"review"| R["Proposals<br/>owner applies"]
+    R --> S
+    T --> P["Context pack<br/>within max_chars"]
+    S --> Q["Search<br/>FTS5, LIKE, vectors"]
+    S -->|"forget, delete_tenant"| E["Erase rows, index copies,<br/>inbox lines, WAL"]
+    E --> L["Audit log<br/>ids and counts only"]
 ```
 
-The install includes the voice stack, so it pulls a few hundred megabytes once. If the smoke test
-fails, `python3 scripts/debug_api_key.py` prints the API's own error instead of a generic one.
+## Quickstart
 
-Then pick a front door:
+Python 3.11 or newer. From the repository root:
 
-```bash
-python3 scripts/chat.py      # text
-python3 scripts/web_ui.py    # browser HUD at http://127.0.0.1:8420
-python3 scripts/voice_chat.py
+```sh
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install ./packages/kyra-memory
+python packages/kyra-memory/examples/quickstart.py
 ```
 
-The first run downloads a small embedding model for memory search. Conversations persist in
-`data/memory_db`, which is gitignored along with the rest of `data/`.
+Output (the first line is a temporary directory that changes per run):
 
-### Voice
-
-```bash
-python3 scripts/setup_voice_models.py     # one time, ~350MB of Kokoro TTS
-python3 scripts/test_voice_roundtrip.py   # no microphone needed
-python3 scripts/voice_chat.py             # hands-free; --mode ptt for push-to-talk
+```text
+store: <temporary directory>
+acme added id=1
+globex added id=1
+acme search spare key: 1
+globex search spare key: 0
+globex search weekly visit: 1
+acme search weekly visit: 0
+acme forget id=1 rows=1
+acme search spare key: 0
+globex search weekly visit: 1
 ```
 
-Speech to text is faster-whisper, speech out is Kokoro, both local. No per-turn cost, and audio
-never leaves the machine. The first roundtrip also pulls the Whisper model, about 500MB.
+Two synthetic tenants each add one fact. Each finds its own fact and not the other's. After `acme` forgets its fact, the search returns nothing and `globex` is untouched. Two more examples:
 
-macOS asks for microphone permission the first time. If nothing is picked up and no prompt appeared,
-check System Settings, then Privacy and Security, then Microphone. On a `PortAudio library not
-found` error, `brew install portaudio`.
-
-## Tests and lint
-
-```bash
-pip install -r requirements-dev.txt
-python3 -m pytest          # about 1,300 tests, under a minute
-ruff check src scripts tests
+```sh
+python packages/kyra-memory/examples/forget_and_audit.py   # ends with "audit holds body text: 0"
+python packages/kyra-memory/examples/search_many.py        # 50 synthetic rows, five searches
 ```
 
-The suite is hermetic. `tests/conftest.py` repoints the data directory at a temp path before any
-import, so a test run can never touch real conversations, resumes or databases. Tests that need a
-LaTeX toolchain skip cleanly when one is absent.
+Tests:
 
-## Layout
-
-```
-src/companion/   the library: models, memory, voice, router, tools, search, job pipeline
-scripts/         one thin CLI per entry point, each over a module in src/
-web/             the browser HUD
-apple/           visionOS client (SwiftUI, hand-written xcodeproj)
-docs/            design rationale, benchmarks and evaluations
-deploy/          Terraform for the container shape on AWS, never applied
-tests/           about 1,300 tests plus the handwritten held-out sets the evals score against
-data/            gitignored: conversations, resumes, profile, databases, model weights
+```sh
+python -m pip install pytest numpy
+PYTHONPATH=src python -m pytest -q tests
 ```
 
-## Boundaries that are deliberate
+## Key design ideas
 
-Some things are missing by decision rather than by backlog:
+1. **Agents never write the store.** An agent appends one line to its team inbox; a background merger applies new lines and saves its byte offset in the same transaction, so after a crash no line is lost or applied twice. [`inbox.py`](src/kyra_memory/inbox.py)
+2. **History is kept, with two clocks.** A correction supersedes the old row instead of overwriting it; `event_time` says when something was true and `knowledge_time` when the store learned it, so `as_of` answers "what did we believe at time T". [`store.py`](src/kyra_memory/store.py)
+3. **Activation ranks; it never deletes.** The score is a pure function of how recently and often the owner recalled an item (agent inclusions count zero) and its links; rules and pinned facts stay in the near tier, and a discard is only a proposal with a 30 day hold. [`activation.py`](src/kyra_memory/activation.py), [`tiers.py`](src/kyra_memory/tiers.py)
+4. **Review proposes, the owner decides.** Periodic reviews write proposals and change nothing until `apply()`; a downgrade of protected memory needs `owner_confirmed=True`. [`review.py`](src/kyra_memory/review.py)
+5. **Outcomes move fact weights slowly.** A fact that keeps misleading ranks lower: weights stay in 0.7 to 1.3, need 5 outcomes, and move at most 0.05 per run. [`reweight.py`](src/kyra_memory/reweight.py)
+6. **Context packs fit a size budget.** Rules, pinned facts, the team's often used items, facts, faults and one recipe go in that order; a row that does not fit is skipped whole rather than cut, and the final length is checked in code. Rows above a release policy's label are left out. [`assembler.py`](src/kyra_memory/assembler.py)
+7. **Tenant isolation is structural.** SQLite keeps one file per tenant; the id is validated before any path is built, symlinks are refused and `ATTACH` is denied. The PostgreSQL backend uses row level security and refuses to run as a superuser or `BYPASSRLS` role. [`tenancy.py`](src/kyra_memory/tenancy.py), [`pg_backend.py`](src/kyra_memory/pg_backend.py)
+8. **Erasure removes the bytes.** `forget` deletes the whole supersede chain, scrubs vector, inbox and hot file copies first, then uses `secure_delete`, `VACUUM` and a WAL truncate; a test checks that a marker string is gone from every database file. [`sqlite_backend.py`](src/kyra_memory/sqlite_backend.py), [`purge.py`](src/kyra_memory/purge.py), [test](tests/kyra_memory/test_kyra_memory_contract.py)
+9. **Audit without the data.** A wrapper around any backend logs every call with ids and counts, never body text, and withholds or refuses rows above a tenant's privacy label. Per tenant quotas cap rows, bytes, writes per minute and age. [`audit.py`](src/kyra_memory/audit.py), [`policy.py`](src/kyra_memory/policy.py)
 
-- Job application autofill fills a form and stops. A human reviews and submits.
-- Nothing automates LinkedIn. Its terms forbid it, so outreach drafting hands over a clipboard.
-- Voice is local and open source, not a cloud speech API.
-- Generated resume text runs through a check that flags any number, link or proper noun absent from
-  the sources the model was given.
+Every backend implements one [storage interface](src/kyra_memory/backend.py), and the same contract tests run against each.
+
+## What is next
+
+- Run the PostgreSQL contract tests against a live database. The backend and its tests exist; this release reports no PostgreSQL result.
+- Publish load and vector search numbers from the included harnesses ([`bench/load.py`](src/kyra_memory/bench/load.py), [`bench/vectors.py`](src/kyra_memory/bench/vectors.py)) with the machine and method stated. No numbers are claimed here yet.
+- Add an approximate nearest neighbor index; vector similarity today is computed exactly for every candidate row.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+[MIT](LICENSE)
