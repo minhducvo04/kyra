@@ -1,0 +1,326 @@
+{
+  "kinds": {
+    "team": {
+      "name": "Team flow",
+      "light": "#1f63c0",
+      "dark": "#4a90e8"
+    },
+    "memory": {
+      "name": "Memory",
+      "light": "#b0471a",
+      "dark": "#e0662f"
+    },
+    "models": {
+      "name": "Models",
+      "light": "#0b7a53",
+      "dark": "#1fa87a"
+    },
+    "other": {
+      "name": "Other parts",
+      "light": "#57606a",
+      "dark": "#9da7b3"
+    }
+  },
+  "boundaries": {
+    "private": "Private, on the owner's machines",
+    "outside": "Outside: hosted APIs",
+    "public": "This public repository"
+  },
+  "nodes": {
+    "owner": {
+      "kind": "other",
+      "group": "owner",
+      "title": "Owner",
+      "lines": [],
+      "info": "The one person Kyra works for. They talk to it, ask for features and open models."
+    },
+    "data": {
+      "kind": "other",
+      "group": "owner",
+      "title": "Personal data",
+      "lines": [
+        "not in this repo"
+      ],
+      "info": "The owner's data, settings, keys and private documents. None of it is in this repository."
+    },
+    "private": {
+      "kind": "other",
+      "group": "owner",
+      "title": "Private code",
+      "lines": [
+        "not in this repo"
+      ],
+      "info": "The web app backend, the dispatcher loop that runs the agent team and the release policy stay in the private repository."
+    },
+    "hosted": {
+      "kind": "models",
+      "group": "talk",
+      "title": "Hosted models",
+      "lines": [
+        "cloud model APIs"
+      ],
+      "info": "Each hosted send needs a release label and passes a gate, and background calls stop at the daily spend cap. In this repository the default gate refuses every send.",
+      "readme": "parts/models/README.md"
+    },
+    "voice": {
+      "kind": "other",
+      "group": "talk",
+      "title": "Voice or text",
+      "lines": [
+        "local STT and TTS"
+      ],
+      "info": "Push to talk on a key or Silero VAD capture. faster-whisper turns speech into text and Kokoro speaks the reply, both on the machine.",
+      "readme": "parts/voice/README.md"
+    },
+    "router": {
+      "kind": "models",
+      "group": "talk",
+      "title": "Turn router",
+      "lines": [
+        "logs choices"
+      ],
+      "info": "Layered from cheapest to least certain: an explicit override, the session mode, greetings, then a small local classifier. Tool calls go to the hosted model, and every decision is logged with its reason.",
+      "readme": "parts/models/README.md"
+    },
+    "local": {
+      "kind": "models",
+      "group": "talk",
+      "title": "Local models",
+      "lines": [
+        "offline",
+        "8 GB cap"
+      ],
+      "info": "A roster of local specialists served over a Unix socket. The loader forces offline mode, so it never downloads, and a resident model is capped at 8 GB.",
+      "readme": "parts/models/README.md"
+    },
+    "memory": {
+      "kind": "memory",
+      "group": "memory",
+      "title": "Memory",
+      "lines": [
+        "isolated, versioned, erasable"
+      ],
+      "info": "Tenant-isolated stores where facts are superseded, never overwritten. Context packs fit a character budget. Forgetting erases rows, index copies, inbox lines and the WAL, and the audit log keeps only ids and counts.",
+      "readme": "packages/kyra-memory/README.md"
+    },
+    "plan": {
+      "kind": "team",
+      "group": "build",
+      "title": "Plan",
+      "lines": [
+        "Board, planners",
+        "make a DAG"
+      ],
+      "info": "The Board and planners turn a request into a feature DAG. The DAG loader rejects cycles and names the path.",
+      "readme": "parts/agent-team/README.md"
+    },
+    "build": {
+      "kind": "team",
+      "group": "build",
+      "title": "Build",
+      "lines": [
+        "Codex, Claude,",
+        "Cursor, Grok,",
+        "local Qwen"
+      ],
+      "info": "The picker ranks lanes from rollback rate and the model fit table. lane_send.py sends each brief to Codex, Cursor, Claude, Grok or a local worker CLI, with an ownership claim and file leases.",
+      "readme": "parts/agent-team/README.md"
+    },
+    "land": {
+      "kind": "team",
+      "group": "build",
+      "title": "Test and land",
+      "lines": [
+        "train: guards,",
+        "ruff, tests,",
+        "fast-forward"
+      ],
+      "info": "The queue takes a branch only with a review PASS on its own sha. A train merges branches, runs the privacy guards, ruff and the tests the change affects. workflow_land.py is the only code that pushes, and only as a fast-forward of fresh master.",
+      "readme": "parts/landing/README.md"
+    },
+    "landed": {
+      "kind": "outcome",
+      "group": "build",
+      "title": "landed on",
+      "lines": [
+        "master"
+      ],
+      "info": "The change is on master. The keeper then runs the full suite on the new sha; if master is red it holds the queue, dispatches a fix and races a revert.",
+      "readme": "parts/landing/README.md"
+    },
+    "refused": {
+      "kind": "outcome",
+      "group": "build",
+      "title": "refused,",
+      "lines": [
+        "nothing merged"
+      ],
+      "info": "A failed guard, a red test, a moved master or a branch that is not a fast-forward stops the train. Nothing is pushed; a red batch is split in halves and transient refusals retry with a back-off.",
+      "readme": "parts/landing/README.md",
+      "muted": true
+    },
+    "cad": {
+      "kind": "other",
+      "group": "make",
+      "title": "CAD kernel",
+      "lines": [
+        "JSON spec, build123d"
+      ],
+      "info": "A part is a JSON spec, validated without a kernel. A 2D sketch solver places the geometry and build123d builds it to GLB and STEP.",
+      "readme": "parts/cad/README.md"
+    },
+    "viewer": {
+      "kind": "other",
+      "group": "make",
+      "title": "3D viewer",
+      "lines": [
+        "three.js, mates"
+      ],
+      "info": "A three.js viewer for GLB files with named parts. The mate solver runs in Python and in JavaScript against the same test vectors.",
+      "readme": "parts/3d/README.md"
+    }
+  },
+  "edges": {
+    "talks": {
+      "from": "owner",
+      "to": "voice",
+      "label": "talks",
+      "flow": [
+        0.02,
+        0.1
+      ]
+    },
+    "text": {
+      "from": "voice",
+      "to": "router",
+      "label": "text",
+      "flow": [
+        0.1,
+        0.16
+      ]
+    },
+    "tolocal": {
+      "from": "router",
+      "to": "local",
+      "label": "local",
+      "flow": [
+        0.16,
+        0.22
+      ]
+    },
+    "tohosted": {
+      "from": "router",
+      "to": "hosted",
+      "label": "release label only",
+      "flow": [
+        0.23,
+        0.31
+      ]
+    },
+    "packrouter": {
+      "from": "memory",
+      "to": "router",
+      "label": "context pack",
+      "flow": [
+        0.07,
+        0.13
+      ],
+      "kind": "memory"
+    },
+    "asks": {
+      "from": "owner",
+      "to": "plan",
+      "label": "asks",
+      "flow": [
+        0.32,
+        0.4
+      ]
+    },
+    "nodes": {
+      "from": "plan",
+      "to": "build",
+      "label": "nodes",
+      "flow": [
+        0.4,
+        0.46
+      ],
+      "kind": "team"
+    },
+    "packbuild": {
+      "from": "memory",
+      "to": "build",
+      "label": "context pack",
+      "flow": [
+        0.38,
+        0.45
+      ],
+      "kind": "memory"
+    },
+    "inbox": {
+      "from": "build",
+      "to": "memory",
+      "label": "inbox lines",
+      "flow": [
+        0.47,
+        0.54
+      ],
+      "kind": "memory"
+    },
+    "branch": {
+      "from": "build",
+      "to": "land",
+      "label": "branch",
+      "flow": [
+        0.47,
+        0.54
+      ],
+      "kind": "team"
+    },
+    "pass": {
+      "from": "land",
+      "to": "landed",
+      "label": "pass",
+      "flow": [
+        0.55,
+        0.61
+      ],
+      "kind": "team"
+    },
+    "fail": {
+      "from": "land",
+      "to": "refused",
+      "label": "fail",
+      "flow": [
+        0.62,
+        0.68
+      ],
+      "kind": "team"
+    },
+    "glb": {
+      "from": "cad",
+      "to": "viewer",
+      "label": "GLB",
+      "flow": [
+        0.72,
+        0.79
+      ]
+    },
+    "opens": {
+      "from": "owner",
+      "to": "viewer",
+      "label": "opens",
+      "flow": [
+        0.78,
+        0.92
+      ]
+    }
+  },
+  "groups": {
+    "owner": "Owner side",
+    "talk": "Talk",
+    "memory": "Memory",
+    "build": "Build and land",
+    "make": "Make models"
+  },
+  "label": "How Kyra fits together. A private box holds the owner, their data and the private code; none of it is in this repository. The owner talks through voice or text to a turn router that answers with local models, and with hosted models outside only when a release label allows it. A feature request is planned, built by agent lanes, then tested and landed: it is either landed on master or refused with nothing merged. Memory gives the router and the lanes context packs and takes inbox lines back. The CAD kernel builds GLB files that the owner opens in the 3D viewer."
+}

@@ -9,10 +9,10 @@ This repository holds the parts of Kyra that carry no personal data, with their 
   <source media="(max-width: 600px)" srcset="docs/img/architecture-narrow-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/architecture-wide-dark.svg">
   <source srcset="docs/img/architecture-wide-light.svg">
-  <img src="docs/img/architecture.png" width="960" alt="How Kyra fits together. The owner talks through voice or text to a turn router that picks a local model or a hosted one behind a labelled gate with a daily spend cap. A feature request goes through Plan, Build, Test and Land to master, and the keeper holds the queue when master is red. Memory gives the router and the agent lanes context packs and takes inbox lines back. The CAD kernel builds GLB files for the 3D viewer.">
+  <img src="docs/img/architecture.png" width="960" alt="How Kyra fits together. A private box holds the owner, their data and the private code; none of it is in this repository. The owner talks through voice or text to a turn router that answers with local models, and with hosted models outside only when a release label allows it. A feature request is planned, built by agent lanes, then tested and landed: it is either landed on master or refused with nothing merged. Memory gives the router and the lanes context packs and takes inbox lines back. The CAD kernel builds GLB files that the owner opens in the 3D viewer.">
 </picture>
 
-<sub>Diagram source: [docs/img/architecture.py](docs/img/architecture.py) writes the four SVG files (wide and narrow, light and dark).</sub>
+<sub>Dots move along the arrows in the order a request travels. The interactive version, where choosing a group or a box lights up its connections, is [docs/arch.html](docs/arch.html): download it and open it in a browser. All five drawings come from [docs/img/architecture.json](docs/img/architecture.json) through [docs/img/architecture.py](docs/img/architecture.py).</sub>
 
 | Part | What it does | README |
 |---|---|---|
