@@ -1,5 +1,7 @@
 # Landing gate
 
+**Proof.** From a fresh install, the test command below gives **448 passed**. The gate tests run against real temporary Git repositories: the gate lands a tested fast-forward, and it refuses a merge that is not a fast-forward, a master that moved while the suite ran, and a privacy guard that failed or was skipped.
+
 **What it does.** Takes reviewed agent branches from a queue, merges them in batches called trains, runs the tests each change affects plus the privacy guards and ruff, and pushes to master only as a fast-forward. A keeper process watches master and holds the queue while master is red.
 
 **Key idea.** A queue line pins each branch to the sha that was reviewed; if the branch has moved, the line is refused. One script, `workflow_land.py`, is the only code that pushes, and it refuses unless every check passed on a clean worktree and master did not move during the run.
@@ -30,6 +32,8 @@
 | [`src/companion/landing/queue.py`](../../src/companion/landing/queue.py) | Review-gated merge queue |
 
 ## Tests
+
+From the repository root, after the install in the [top README](../../README.md#tests):
 
 ```sh
 PYTHONPATH=src python -m pytest -q tests/test_landing_*.py tests/test_workflow_land.py tests/test_master_keeper.py tests/test_test_shards.py tests/test_train_pool.py tests/test_gate_lock.py tests/test_remote_test.py tests/test_train*.py

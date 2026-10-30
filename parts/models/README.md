@@ -1,5 +1,7 @@
 # Models and routing
 
+**Proof.** From a fresh install, the test command below gives **182 passed, 1 skipped**. When the hosted gate refuses a turn, the tests expect a local answer that says why, and a turn carrying a configured secret gets no answer and leaves no record. A decision gate with no calibration abstains without calling its backend.
+
 **What it does.** Decides which model answers each turn, wraps hosted calls in a labelled and audited request gate, caps spend on calls no human asked for, and runs local models offline under a memory budget.
 
 **Key idea.** Routing is layered from cheapest and most certain to least: an explicit override, then the session mode, then simple greetings, then a small local classifier. The router logs every decision with its reason, and a hosted request needs a release label and a gate before it can be sent.
@@ -29,6 +31,8 @@ In this package the default gate refuses every hosted send, because the private 
 | [`decide.py`](../../src/companion/decide.py) | Model-free closed-question decisions |
 
 ## Tests
+
+From the repository root, after the install in the [top README](../../README.md#tests):
 
 ```sh
 python -m pytest -q tests/test_router*.py tests/test_local_models.py tests/test_models_dir.py tests/test_decide.py tests/test_model_sandbox.py tests/test_keep_local_on_refusal.py tests/test_run_usage.py

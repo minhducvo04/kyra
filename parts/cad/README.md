@@ -1,5 +1,7 @@
 # CAD
 
+**Proof.** From a fresh install with the `cad` extra, the test command below gives **278 passed**, and the tests build real solids with build123d. They include a STEP export whose reimported volume is within 0.1% of the built part, and refusals for conflicting sketch constraints, hostile variable expressions and sheet metal that cannot be made.
+
 **What it does.** A small parametric CAD kernel. A part is a JSON spec of sketches and features; the kernel validates it, solves its sketches, builds it with build123d (OpenCascade B-rep) and exports GLB and STEP. Assemblies, mates, drawings, sheet metal and mass properties sit on top of that.
 
 **Key idea.** Validation and building are separate. The spec checks import no kernel, so a spec can be checked where build123d is not installed, and every problem comes back as a reason tied to a feature id. A model may propose a spec from words, but only the validator and the kernel decide whether it builds.

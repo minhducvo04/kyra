@@ -4,7 +4,9 @@
 
 **Why it matters.** Agent memory is user data. Stale facts mislead agents, and one tenant's rows must never reach another tenant's prompt. A delete that leaves copies in an index, a log or a WAL file leaves the data on disk. This package puts those rules in code and tests.
 
-**Proof.** `pytest` on the memory tests in a fresh virtual environment with pytest and numpy: **244 passed, 26 skipped** (the skips need PostgreSQL). The [quickstart](#quickstart) runs in a fresh virtual environment with no dependencies and prints the isolation and erasure checks shown below.
+**Proof.** From a fresh clone and a new virtual environment, the memory tests give **244 passed, 26 skipped** (the skips need PostgreSQL). The [quickstart](#quickstart) needs nothing installed except this package, and it prints the isolation and erasure checks below.
+
+<img src="../../docs/img/memory-quickstart.png" width="520" alt="Terminal output of the memory quickstart: two tenants each find only their own fact, and a forgotten fact no longer turns up in search">
 
 ```mermaid
 flowchart LR
@@ -53,11 +55,11 @@ python packages/kyra-memory/examples/forget_and_audit.py   # ends with "audit ho
 python packages/kyra-memory/examples/search_many.py        # 50 synthetic rows, five searches
 ```
 
-Tests:
+Tests use the repository's shared test setup, so they need the repository install:
 
 ```sh
-python -m pip install pytest numpy
-PYTHONPATH=src python -m pytest -q tests/kyra_memory tests/test_kyra_memory_*.py
+python -m pip install -e '.[test]'
+python -m pytest -q tests/kyra_memory tests/test_kyra_memory_*.py
 ```
 
 ## Key design ideas

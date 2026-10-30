@@ -1,5 +1,9 @@
 # 3D
 
+<img src="../../docs/img/kyra-bust.png" width="560" alt="The 3D viewer showing Kyra's bust in the speaking state, with a sample caption and the four state buttons">
+
+**Proof.** From a fresh install with Node on the path, the test command below gives **27 passed**. The mate solver runs 20 shared vectors in Python and again in JavaScript under Node; poses must agree within 1e-6 and refusals must match word for word. The image above is a headless Chromium render of `web/model3d.html#kyra` served from this repository, with the private model API answered by empty lists. A [short loop](../../docs/img/kyra-states.gif) shows all four states moving.
+
 **What it does.** A three.js viewer for assemblies made of named parts, a mate solver that moves those parts by rules, two guided lessons (a gear pair and a pipe flow), a library of researched assemblies that become GLB files, and an animated bust of Kyra built in Blender.
 
 **Key idea.** The mate solver exists twice, in Python and in JavaScript, and both run the same JSON test vectors: poses must agree within the stated tolerance and refusal messages must match exactly, so the server and the browser move the test assemblies the same way.
@@ -33,6 +37,8 @@ blender -b --factory-startup -P scripts/blender/kyra_bust.py -- --glb web/models
 | [`scripts/blender/kyra_bust.py`](../../scripts/blender/kyra_bust.py) | Blender build of the bust |
 
 ## Tests
+
+From the repository root, after the install in the [top README](../../README.md#tests):
 
 ```sh
 python -m pytest -q tests/test_model3d_mates.py

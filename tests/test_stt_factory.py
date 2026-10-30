@@ -84,7 +84,9 @@ def test_offline_cache_and_partial_api(monkeypatch, tmp_path, cache_number):
 
     monkeypatch.setattr(voice, "_stt_caches", lambda: caches)
     monkeypatch.setattr(huggingface_hub, "snapshot_download", resolve)
-    monkeypatch.setitem(sys.modules, "mlx.core", SimpleNamespace(array=np.asarray))
+    mlx_core = SimpleNamespace(array=np.asarray)
+    monkeypatch.setitem(sys.modules, "mlx", SimpleNamespace(core=mlx_core))  # `import mlx.core` loads the parent too
+    monkeypatch.setitem(sys.modules, "mlx.core", mlx_core)
     monkeypatch.setitem(sys.modules, "mlx_audio.stt.utils", SimpleNamespace(load=load))
     monkeypatch.setenv("KYRA_STT", "parakeet")
     monkeypatch.setenv("KYRA_STT_LANGUAGE", "en")

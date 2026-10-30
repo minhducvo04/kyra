@@ -1,5 +1,7 @@
 # Voice
 
+**Proof.** From a fresh install, the test command below gives **29 passed**. In those tests a long reply is cut to two sentences plus a cue that the rest is on screen, one endless sentence is cut at a word boundary, and markdown never reaches the voice. The written reply stays as it was.
+
 **What it does.** The local pieces of a spoken turn: capture speech with push to talk or voice activity detection, transcribe it on the machine, and turn the reply into short spoken text for a local voice.
 
 **Key idea.** Speech to text and text to speech both run on the machine, with no network call per use. `voice_text.py` cuts a reply read aloud to two short sentences and 25 words in total, and the written reply stays on screen in full.
@@ -24,6 +26,8 @@ This package has the interfaces, listeners and text handling with their tests. T
 | [`src/companion/voice_prefetch.py`](../../src/companion/voice_prefetch.py) | Optional prompt cache warm up |
 
 ## Tests
+
+From the repository root, after the install in the [top README](../../README.md#tests):
 
 ```sh
 python -m pytest -q tests/test_voice_model.py tests/test_voice_text_spoken.py tests/test_spoken_budget.py tests/test_stt_factory.py

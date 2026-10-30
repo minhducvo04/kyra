@@ -1,5 +1,7 @@
 # Agent team
 
+**Proof.** From a fresh install, the test command below gives **881 passed, 2 skipped**. In those tests `Dag` refuses a cycle and names its path. The audit store scrubs secrets before it writes, and `verify_chain` reports the first tampered line and catches a torn or deleted last line.
+
 **What it does.** These are the building blocks of Kyra's agent team. A feature is a graph of nodes, a picker ranks the AI coding agents that run as CLI processes ("lanes"), a courier sends each lane its brief, and anything the team cannot settle goes to the Board inbox. A separate audit layer records what agents did, as metadata only.
 
 **Key idea.** Each handoff passes a schema check and has a named owner. `contract` validates briefs, results and events, a file lease or a claim records who holds each piece of work, and work still needs a Board review before it can land.
@@ -30,6 +32,8 @@ This package has the components and their tests. The dispatcher loop that drives
 | [`agent_control/store.py`](../../src/companion/agent_control/store.py) | Hash-chained audit store |
 
 ## Tests
+
+From the repository root, after the install in the [top README](../../README.md#tests):
 
 ```sh
 python -m pytest -q tests/test_feature_team_*.py tests/test_lane_send*.py tests/test_claims.py tests/test_qc_*.py tests/test_agent_control_*.py tests/test_worker_sandbox.py tests/test_runner_exec*.py
