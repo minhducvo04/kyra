@@ -12,7 +12,7 @@ This repository holds the parts of Kyra that carry no personal data, with their 
   <img src="docs/img/architecture.png" width="960" alt="How Kyra fits together. A private box holds the owner, their data and the private code; none of it is in this repository. The owner talks through voice or text to a turn router that answers with local models, and with hosted models outside only when a release label allows it. A feature request is planned, built by agent lanes, then tested and landed: it is either landed on master or refused with nothing merged. Memory gives the router and the lanes context packs and takes inbox lines back. The CAD kernel builds GLB files that the owner opens in the 3D viewer.">
 </picture>
 
-<sub>Dots move along the arrows in the order a request travels. The interactive version, where choosing a group or a box lights up its connections, is [docs/arch.html](docs/arch.html): download it and open it in a browser. All five drawings come from [docs/img/architecture.json](docs/img/architecture.json) through [docs/img/architecture.py](docs/img/architecture.py).</sub>
+<sub>Dots move along the arrows in the order a request travels. In the [interactive version](https://minhducvo04.github.io/kyra/arch.html), choosing a group or a box lights it up with its connections. All five drawings come from [docs/img/architecture.json](docs/img/architecture.json) through [docs/img/architecture.py](docs/img/architecture.py).</sub>
 
 | Part | What it does | README |
 |---|---|---|
