@@ -32,9 +32,9 @@ def test_queries_and_isolation(tmp_path):
         dag.node("missing")
 
 
-def test_load_accepts_top_level_duc_said(tmp_path):
+def test_load_accepts_top_level_owner_said(tmp_path):
     path = tmp_path / "dag.json"
-    path.write_text(json.dumps({"duc_said": "Keep the widget simple.", "nodes": [node("a")]}))
+    path.write_text(json.dumps({"owner_said": "Keep the widget simple.", "nodes": [node("a")]}))
     assert load(path).start_nodes() == ["a"]
 
 
@@ -102,7 +102,7 @@ def test_an_acceptance_command_fused_with_prose_is_refused_on_strict_load_and_pr
 
 
 def test_real_engine():
-    path = Path(os.environ.get("FEATURE_TEAM_DAG", "data/private_docs/board/feature-teams/engine.dag.json"))
+    path = Path(os.environ.get("FEATURE_TEAM_DAG", "data/team/feature-teams/engine.dag.json"))
     if not path.is_file():
         pytest.skip("Private acceptance file not present; set FEATURE_TEAM_DAG")
     assert load(path).start_nodes() == ["E1", "C1", "M1"]

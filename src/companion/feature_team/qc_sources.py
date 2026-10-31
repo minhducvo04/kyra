@@ -1436,7 +1436,7 @@ def collect(config, cursor):
 
     _read_ledger(tick, ledger)
     _read_runs(tick, root / "team" / "loop" / "runs")
-    _read_features(tick, root / "team" / "features", root / "private_docs" / "board" / "feature-teams")
+    _read_features(tick, root / "team" / "features", root / "team" / "feature-teams")
     _read_review(tick, root / "team" / "loop" / "ready-to-board.jsonl")
     _read_queue(tick, landing / "queue.txt")
     _read_landing_log(tick, landing / "queue.log")

@@ -1,5 +1,5 @@
 """Acceptance tests for scripts/deploy_local.py, written from the planner's contract alone
-(data/private_docs/team-flow-v2/deploy-contract-claude.md) before the script exists.
+(a private design note) before the script exists.
 
 ASSUMED INTERFACE. The contract says only "one injectable runner", so what follows is a guess. Reconcile it in the
 block marked "the seam" below (`_kind`, `FakeRunner`, and `run()` inside the `deploy` fixture), and nowhere else.

@@ -77,7 +77,7 @@ def _fixture(tmp_path: Path) -> Path:
     ]))
     _write(root / "team/loop/runs/r1.json", run)
     _write(root / "team/features/feat-a/completion.json", completion)
-    _write(root / "private_docs/board/feature-teams/feat-a.dag.json", _dag("feat-a"))
+    _write(root / "team/feature-teams/feat-a.dag.json", _dag("feat-a"))
     _write(root / "team/landing/queue.txt", f"alpha system {PIN}\n")
     _write(root / "team/landing/queue.log", "12:00:01 alpha REFUSED: headroom refused\n")
     _write(
@@ -246,7 +246,7 @@ def test_group_filter_is_exact_and_withholds_unassigned(tmp_path):
     _write(root / "team/features/feat-b/completion.json", json.dumps({
         "nodes": {"N1": {"status": "queued"}},
     }))
-    _write(root / "private_docs/board/feature-teams/feat-b.dag.json", _dag("feat-b"))
+    _write(root / "team/feature-teams/feat-b.dag.json", _dag("feat-b"))
     with (root / "context/packages.jsonl").open("a", encoding="utf-8") as handle:
         handle.write(json.dumps({"id": "pkg-b", "team": "feat-b", "sent_at": "2026-10-21T02:00:00"}) + "\n")
         handle.write(json.dumps({"id": "pkg-x", "sent_at": "2026-10-21T02:01:00", "model": "grok"}) + "\n")

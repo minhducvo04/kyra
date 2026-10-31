@@ -91,7 +91,7 @@ def for_feature(data, feature):
         if isinstance(entry, dict) and entry.get("name") == feature and entry.get("repo"):
             return resolve(entry["repo"])
     try:
-        dag = json.loads(live_path(data / "private_docs/board/feature-teams", feature).read_text())
+        dag = json.loads(live_path(data / "team/feature-teams", feature).read_text())
     except (OSError, ValueError):
         dag = {}
     return resolve(dag.get("repo") if isinstance(dag, dict) else None)

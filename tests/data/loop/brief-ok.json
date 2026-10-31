@@ -1,0 +1,18 @@
+{
+  "run_id": "demo-X1-20260101T000000-a1b2c3",
+  "feature": "demo",
+  "node": "X1",
+  "title": "Demo node: one module with a validator and a fixture",
+  "channel": "codex:1",
+  "model": "codex-astra",
+  "effort": "medium",
+  "base": "master",
+  "worktree": "/work/demo-x1",
+  "files": ["NEW src/companion/demo.py", "NEW tests/test_demo.py"],
+  "inputs": [{"node": "X0", "result": "/work/data/team/loop/runs/demo-X0-20260101T000000-000000.json"}],
+  "acceptance": [".venv/bin/python -m pytest tests/test_demo.py", "ruff check src/companion/demo.py"],
+  "deny": ["no pushes", "no model loads", "no .env reads", "no personal data in tracked files"],
+  "deadline": 1767229200.0,
+  "result": "/work/data/team/loop/runs/demo-X1-20260101T000000-a1b2c3.json",
+  "rules": "AGENTS.md"
+}

@@ -215,3 +215,53 @@ def _no_release_label_left_behind():
     if leaked is not provider._UNSET:
         provider._label.set(provider._UNSET)
         pytest.fail(f"this test left a release label in the ambient context: {leaked}")
+
+
+@pytest.fixture
+def legacy_lane_workspaces(monkeypatch):
+    """Old controller tests model dispatch, not git; retain their fake lane directory.
+
+    Task directory creation and authority are covered with real git repositories in
+    test_team_builders_d2.py and test_team_workspace.py, which do not use this fixture.
+    """
+    from pathlib import Path
+
+    from companion import team_chat
+
+    monkeypatch.setattr(team_chat, '_task_workspace', lambda run_id, binding: Path(binding['workspace']))
+
+
+@pytest.fixture
+def isolated_app_dispatch(monkeypatch, tmp_path):
+    """Adapter/voice unit tests isolate controller admission; D2 tests use the real gate."""
+    from companion import team_connected, team_transport
+    original = team_transport.read_config
+    monkeypatch.setattr(team_transport, 'read_config', lambda root: original(root) or {'workspace': str(tmp_path)})
+
+    def run(store, row, cfg, evidence, request, stop, authorized):
+        return team_connected._adapter(row['provider'], cfg).run(request, authorize=authorized,
+            entitlement=evidence, stop_event=stop, on_event=lambda event: store.event(row['id'], event))
+    monkeypatch.setattr(team_connected, '_run_claimed', run)
+
+
+# The node worker hands every worker the repo-root rulebook (AGENTS.md), which the export never ships. These tests
+# run a real node worker; they run once you add your own rulebook.
+_RULEBOOK_TESTS = (
+    "tests/test_dispatcher.py::test_budget_expired_allows_claude",
+    "tests/test_dispatcher.py::test_budget_invalid_warns_and_allows",
+    "tests/test_dispatcher.py::test_finished_run_releases_channel_for_unrelated_work",
+    "tests/test_dispatcher.py::test_mint_requires_original_words_without_holding_slot",
+    "tests/test_dispatcher.py::test_real_worker_adapter_attaches_partial_and_sends_only_once",
+    "tests/test_feature_team_picker_review.py::test_control_unpaused_opus_is_ranked_first_and_launched",
+    "tests/test_launch_silent.py::test_a_live_worker_keeps_its_claim_when_the_attempt_ends",
+    "tests/test_launch_silent.py::test_a_send_refused_before_launch_frees_the_claim",
+    "tests/test_launch_silent.py::test_an_invalid_result_from_an_exited_worker_frees_the_claim_and_logs_a_line",
+    "tests/test_launch_silent.py::test_the_node_worker_logs_before_it_sends",
+    "tests/test_zz_review_ls_probe.py::test_p1_the_worker_log_is_not_empty_when_a_courier_can_start",
+    "tests/test_zz_review_ls_probe.py::test_p6_one_node_worker_process_sends_at_most_once",
+)
+
+
+def pytest_runtest_setup(item):
+    if item.nodeid.startswith(_RULEBOOK_TESTS) and not (Path(__file__).resolve().parents[1] / "AGENTS.md").is_file():
+        pytest.skip("needs an AGENTS.md rulebook at the repo root; the export does not ship one")

@@ -31,7 +31,7 @@ AGENT_MEMBERS = ('claude', 'codex', 'cursor', 'antigravity')  # members an agent
 APP_MEMBERS = ('cursor', 'antigravity')  # reached through team_connected, resumed by session id when possible
 _MENTION = re.compile(r'(?<![\w@])@([A-Za-z]+)\b')
 STATES = ('waiting', 'sent', 'answered', 'failed', 'stopped')
-REASONS = ('reply', 'needs_duc', 'honesty')
+REASONS = ('reply', 'needs_owner', 'honesty')
 _REQUEST = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}')
 _SCHEMA = (
     'CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, kind TEXT NOT NULL, '

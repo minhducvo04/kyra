@@ -157,7 +157,7 @@ def test_dry_run_pushes_nothing(world):
 
 @pytest.mark.parametrize("path", ["AGENTS.md", ".github/workflows/other.yml", "scripts/deploy_local.py",
                                   "src/companion/workflow_pr.py"])
-def test_protected_files_are_left_for_duc(world, path):
+def test_protected_files_are_left_for_owner(world, path):
     to = commit(world["repo"], path, "changed\n")
     with pytest.raises(land_mod.Refused, match=f"protected files need the owner yes: .*git push origin {to}:refs/heads/master"):
         run_land(world, to)

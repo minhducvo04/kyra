@@ -1,7 +1,5 @@
-"""Headroom and travel mode for the owner MacBook: the two standing rules, in code (the owner, 2026-10-15).
-
-    "for this mac specifically, you always need to leave at least a bit of room (10 ish % is fine), i don't want my
-    work or my Brave browser to be freezed, and should not run any tests when I say I am carrying this outside"
+"""Headroom and travel mode for the host Mac: the two standing rules, in code (owner, 2026-10-15).
+Keep about 10% of this Mac free so other work stays responsive, and run no tests while it travels.
 
 1. Headroom, always on. A local heavy job (a pytest run beyond a focused handful, browser tests, the commit gate's
    impacted run, a train's local phase, local model serving or training) starts only while the 1-minute load is at
@@ -231,7 +229,7 @@ def release_keep_awake(run=subprocess.run):
 
 def is_light(args, numprocesses):
     """A focused handful: no xdist and up to LIGHT_MAX_FILES explicit test files or node ids (no directories), none of
-    them a browser test (Chromium beside Brave is heavy at any count, review o-rev66)."""
+    them a browser test (Chromium beside a desktop browser is heavy at any count, review o-rev66)."""
     if numprocesses not in (None, 0, "0"):
         return False
     targets = [a for a in args if not a.startswith("-")]

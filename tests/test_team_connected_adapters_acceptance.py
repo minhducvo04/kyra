@@ -1,6 +1,6 @@
 """Claude's independent acceptance for the Cursor and Antigravity connected adapters (2026-09-29).
 
-Contract: data/private_docs/kyra-headset-rollout-2026-09-28/adapter-acceptance-claude.md. Fake stdio peers written into
+Contract: a private design note. Fake stdio peers written into
 pytest's tmp_path log what they actually received, so "no process started", "the prompt was never sent" and "sent
 exactly once" are observed, not inferred. Nothing here logs in, accepts terms, spends, or starts a real model.
 
@@ -10,7 +10,7 @@ allowlisted environment, never provider keys, the Kyra token or data directory; 
 invented session identity; another session's text never reaches a result; stop mid-turn is cancelled or uncertain and
 the prompt is sent once; a crash is uncertain with one spawn; provenance never claims a desktop or native thread;
 requests are frozen once built. Home's integration (durable claims, dedup, 409, room projection, Stop flag, status
-cache, per-task edit sets) is named for a later review in adapter-tests-claude.md, not faked here.
+cache, per-task edit sets) is named for a later review in a private design note, not faked here.
 """
 import dataclasses
 import json

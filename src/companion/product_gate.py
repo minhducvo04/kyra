@@ -1,7 +1,7 @@
 """Brownfield gate: a brief for an existing product must name its history before dispatch.
 
 the owner 2026-10-22: the site was rebuilt from scratch three times because briefs never read the product's design-state
-file, started from an old main, and skipped the keep-check. The registry (data/private_docs/products.json, or
+file, started from an old main, and skipped the keep-check. The registry (data/config/products.json, or
 KYRA_PRODUCTS_FILE) maps product id -> {"repo", "state_file", "base_branch", "keep_check", "match"}. A brief whose
 worktree is under a product repo, or whose text matches one of the product's patterns, is refused unless its text
 contains the state_file path, the base_branch name and the keep_check command, all literally.
@@ -24,7 +24,7 @@ def registry_path(data_root: Path | None = None) -> Path:
     if env:
         return Path(env).expanduser()
     root = data_root or Path(os.environ.get("KYRA_DATA_DIR") or PROJECT_ROOT / "data")
-    return Path(root) / "private_docs/products.json"
+    return Path(root) / "config/products.json"
 
 
 def load_registry(path: Path) -> dict[str, dict]:

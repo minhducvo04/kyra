@@ -85,7 +85,7 @@ def should_investigate(state: dict, body: str, data: Path, feature: str | None, 
 
 
 def _dag_path(data: Path, feature: str) -> Path:
-    return live_path(data / 'private_docs/board/feature-teams', feature)
+    return live_path(data / 'team/feature-teams', feature)
 
 
 def _completion_path(data: Path, feature: str) -> Path:

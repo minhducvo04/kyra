@@ -29,7 +29,7 @@ def test_missing_rows_git_failure_and_rule(tmp_path):
     folder.mkdir(parents=True)
     (folder / 'completion.json').write_text(json.dumps({'nodes': {
         'E1': {'status': 'failed', 'sha': 'abc1234', 't': 1}}}))
-    dag = tmp_path / 'private_docs/board/feature-teams/demo.dag.json'
+    dag = tmp_path / 'team/feature-teams/demo.dag.json'
     dag.parent.mkdir(parents=True)
     dag.write_text(json.dumps({'nodes': [], 'failure_handling': {'failed': 'retry'}}))
     def fail(*args, **kwargs):

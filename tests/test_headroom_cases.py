@@ -35,7 +35,7 @@ def _module(name, rel):
 def test_defect_a_browser_file_is_never_a_light_run():
     """headroom's docstring lists browser tests as heavy, but is_light admits up to five browser files with no load
     or memory check: a scoped local browser fallback (KYRA_BROWSER_TESTS) or a builder's browser file starts Chromium
-    beside Brave at any load or memory pressure."""
+    beside a desktop browser at any load or memory pressure."""
     assert headroom.is_light(["tests/test_home_browser.py"], None) is False
     assert headroom.is_light(["tests/test_a.py", "tests/test_studio_browser.py::test_x"], None) is False
 

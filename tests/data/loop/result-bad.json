@@ -1,0 +1,16 @@
+{
+  "run_id": "demo-X1-20260101T000000-a1b2c3",
+  "feature": "demo",
+  "node": "X1",
+  "worker": "Sol",
+  "sha": "0123abcd",
+  "branch": "session/2026-01-01-demo-x1",
+  "status": "finished, all good",
+  "artifacts": [],
+  "proof": [],
+  "tests": ["tests/test_demo.py"],
+  "open_questions": [],
+  "tokens": null,
+  "started": 1767225600.0,
+  "finished": 1767227400.0
+}

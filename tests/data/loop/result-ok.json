@@ -1,0 +1,19 @@
+{
+  "run_id": "demo-X1-20260101T000000-a1b2c3",
+  "feature": "demo",
+  "node": "X1",
+  "worker": "Sol",
+  "sha": "0123abcd",
+  "branch": "session/2026-01-01-demo-x1",
+  "status": "done",
+  "artifacts": ["/work/demo-x1/reports/demo-x1.md"],
+  "proof": [
+    {"command": ".venv/bin/python -m pytest tests/test_demo.py", "exit": 0, "log": "/work/logs/demo-x1-pytest.log"},
+    {"command": "ruff check src/companion/demo.py", "exit": 0, "log": "/work/logs/demo-x1-ruff.log"}
+  ],
+  "tests": ["tests/test_demo.py"],
+  "open_questions": [],
+  "tokens": 12345,
+  "started": 1767225600.0,
+  "finished": 1767227400.0
+}

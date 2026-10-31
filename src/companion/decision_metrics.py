@@ -16,7 +16,7 @@ from pathlib import Path
 
 Row = tuple  # (probs: dict[str, float] | None, choice: str | None, truth: str)
 
-# Go bars from data/private_docs/board/decision-model/PLAN.md (c). Only the log-measurable bars live here; rule
+# Go bars from the decision-model plan (c). Only the log-measurable bars live here; rule
 # cases, the health probe and the frozen suites are checked by their own tests.
 BARS = {
     "home_router": {"agreement": 0.90, "coverage": 0.70, "ece": 0.08, "min_decisions": 200},

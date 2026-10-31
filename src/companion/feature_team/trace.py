@@ -45,7 +45,7 @@ def build_trace(feature, node, data, repo, *, now=None, runner=subprocess.run):
     data, repo = Path(data), Path(repo)
     folder = data / 'team/features' / feature
     completion = _json(folder / 'completion.json', {'nodes': {}})['nodes'].get(node, {})
-    dag = _json(live_path(data / 'private_docs/board/feature-teams', feature), {})
+    dag = _json(live_path(data / 'team/feature-teams', feature), {})
     spec = next((r for r in dag.get('nodes', []) if r.get('id') == node), {})
     rows = []
     for source in sorted(folder.glob('*.jsonl')) + [data / 'team/board-inbox.jsonl']:
