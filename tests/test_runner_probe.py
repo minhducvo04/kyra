@@ -266,3 +266,22 @@ def test_real_ssh_failure_with_host_in_stderr_stays_quiet(tmp_path, monkeypatch,
     caplog.set_level(logging.DEBUG)
     assert rp.remote_load(PC, m1_settings=no_m1) is None
     assert HOST not in caplog.text and KEY not in caplog.text
+
+
+def test_wsl_command_preserves_binary_stdin_and_hides_gpu():
+    import shlex
+    command = rp.wsl_command("python3 -c 'import os,sys; assert os.environ[\"CUDA_VISIBLE_DEVICES\"] == \"-1\"; sys.stdout.buffer.write(sys.stdin.buffer.read())'")
+    argv = shlex.split(command)
+    assert argv[:3] == ['wsl.exe', '--exec', 'python3']
+    payload = bytes(range(256)) * 4
+    done = subprocess.run(argv[2:], input=payload, capture_output=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout == payload
+
+
+def test_wsl_probe_uses_linux_lock_and_reserves_cpu():
+    from dataclasses import replace
+    calls = []
+    load = rp.remote_load(replace(PC, os='wsl'), ssh=fake_ssh(out=LINUX_UPTIME + 'KYRA_LOCK=free\n', calls=calls))
+    assert calls[0][0][-1].startswith('wsl.exe --exec python3')
+    assert load == Load(load1=0.25 + PC.cores * rp.RESERVE, busy=False)

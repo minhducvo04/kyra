@@ -23,6 +23,7 @@ def no_real_repo(tmp_path, monkeypatch):
     """Safety: a test (or a mutation of the runner) must never run git against the real repo or a real remote.
     cwd moves into tmp_path, git cannot walk up out of it, and any git call whose -C or cwd is outside tmp_path fails.
     The module snapshot directory is also allowed, because tests that only read the checkout share it."""
+    monkeypatch.setattr(lr, "mac_busy_now", lambda: None)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv('GIT_CEILING_DIRECTORIES', str(tmp_path.parent))
     real_popen = subprocess.Popen
@@ -210,6 +211,10 @@ def test_placement_rules(tmp_path):
     assert lr.placement(cfg, e) == (['--priority', '2', '--where', 'local'], [], 'local')
     assert lr.placement(cfg, lr.parse_line('x web br'))[2] == 'm1'
     assert lr.placement(cfg, lr.parse_line('x web WHERE=local br'))[2] == 'local'
+    cfg.mac_busy = lambda: 'memory pressure is warn (needs normal)'  # mac_guard's gate refuses: the M1 runs it
+    assert lr.placement(cfg, e) == (['--priority', '2'], [], 'm1')
+    assert 'x: tests go to the M1, not this Mac: memory pressure is warn' in (cfg.landing / 'queue.log').read_text()
+    cfg.mac_busy = lambda: None
     cfg.load = lambda: 13.0
     assert lr.placement(cfg, e)[2] == 'm1'
 
@@ -729,7 +734,7 @@ def refusing_in_the_train(tmp_path, monkeypatch, refusal):
 
 
 def test_train_load_refusal_after_precheck_keeps_the_line(tmp_path, monkeypatch):
-    """2026-10-17 04:32: '--where local refused: 1-minute load 12.5 is 12 or more' came from the train itself and the
+    """2026-10-17: '--where local refused: 1-minute load 12.5 is 12 or more' came from the train itself and the
     runner dropped the line, because only precheck refusals were retried."""
     cfg, line = refusing_in_the_train(tmp_path, monkeypatch,
                                       '--where local refused: 1-minute load 12.5 is 12 or more')
@@ -758,15 +763,19 @@ def test_transient_refusal_with_an_existing_train_worktree_resumes_it(tmp_path, 
 
 
 def test_existing_train_worktree_of_another_train_is_not_resumed(tmp_path, monkeypatch):
+    """A0.3: a stale train of the same name is renamed once to x-n1 and processed fresh, never resumed."""
     cfg, line = refusing_in_the_train(tmp_path, monkeypatch, '--where local refused: 1-minute load 12.5 is 12 or more')
     sh(cfg.main, 'worktree', 'add', '-q', '--detach', str(cfg.main / '.claude/worktrees/x'), 'master')
     state = cfg.main / 'data/train-logs'
     state.mkdir(parents=True)
     (state / 'x.state.json').write_text(json.dumps({'branches': [sh(cfg.main, 'rev-parse', 'master')]}))  # not from the pin
     lr.cycle(cfg)
-    assert not (tmp_path / 'argv.jsonl').exists()
-    assert cfg.queue.read_text().strip() == ''
-    assert 'stale train' in (cfg.landing / 'queue.log').read_text()
+    argvs = [json.loads(row) for row in (tmp_path / 'argv.jsonl').read_text().splitlines()]
+    assert argvs and all('--resume' not in a for a in argvs), argvs
+    assert any(a[:1] == ['x-n1'] for a in argvs), argvs
+    assert cfg.queue.read_text().strip() == line.replace('x system', 'x-n1 system', 1)
+    log_text = (cfg.landing / 'queue.log').read_text()
+    assert 'stale train of the same name; renamed once to x-n1' in log_text
 
 
 def test_a_preflight_refused_train_worktree_at_base_is_resumed(tmp_path, monkeypatch):
@@ -908,7 +917,7 @@ def moving_origin(tmp_path, monkeypatch):
 
 
 def test_origin_moved_while_the_suite_ran_keeps_the_line_resumes_remerges_and_lands(tmp_path, monkeypatch):
-    """2026-10-17 20:51 workernode2: the owner pushed to master mid-run; the line was dropped and lane 1 requeued by hand."""
+    """2026-10-17 workernode2: the owner pushed to master mid-run; the line was dropped and lane 1 requeued by hand."""
     cfg, line, b, checks = moving_origin(tmp_path, monkeypatch)
     now = [1_000_000.0]
     monkeypatch.setattr(lr.time, 'time', lambda: now[0])
@@ -1070,3 +1079,91 @@ def test_qc_requeue_cli_uses_a_fixed_argv_and_does_not_start_a_train(tmp_path, m
         assert payload['outcome'] == 'blocked' and payload['reason'] == 'active_train'
         assert not cfg.queue.exists() or cfg.queue.read_text().strip() == ''
         assert json.loads((cfg.landing / 'queue-retry.json').read_text())[line] == {'n': 1, 'after': 1}
+
+
+def test_capacity_pending_does_not_starve_an_independent_train(tmp_path, monkeypatch):
+    cfg = cfg_for(tmp_path)
+    cfg.queue.write_text('busy system PRIORITY=1 WHERE=local br/a\nready system br/b\n')
+    monkeypatch.setattr(lr, 'needs_full', lambda *a: True)
+    seen = []
+    def process(cfg, entry):
+        seen.append(entry.name)
+        return 'capacity-pending' if entry.name == 'busy' else 'failed'
+    cfg.process = process
+    state = {}
+    lr.cycle(cfg, state)
+    lr.cycle(cfg, state)
+    assert seen == ['busy', 'ready']
+    assert cfg.queue.read_text() == 'busy system PRIORITY=1 WHERE=local br/a\n'
+    assert lr.retry_state(cfg) == {}
+
+
+def test_smart_batch_imports_companion_without_shell_pythonpath(tmp_path):
+    """launchd starts a fresh interpreter before configured_machine adds src."""
+    probe = '''import runpy, sys
+runner = runpy.run_path(sys.argv[1])
+entry = runner['parse_line']('demo system FULL=1 br/a')
+assert runner['smart_batch'](None, [entry]) == [entry]
+print('smart_batch startup passed')
+'''
+    result = subprocess.run(
+        [sys.executable, '-I', '-c', probe, str(Path(lr.__file__).resolve())],
+        cwd=tmp_path, capture_output=True, text=True, timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'smart_batch startup passed'
+
+
+# Recorded-log style fixture (synthetic names only, written for A0.3): 25 identical pin-mismatch refusals
+# of one entry, as the live queue.log showed for the refusal loop, one line per pass.
+RECORDED_REFUSAL_LOG = ''.join(
+    f'12:{17 + i // 60:02d}:{i % 60:02d} ALERT: replaydemo refused: feat head deadbeef0000 differs from the '
+    f'reviewed pin; no train started\n' for i in range(25))
+
+
+def test_replay_25_identical_refusals_produce_one_refusal_and_one_park(tmp_path, monkeypatch):
+    cfg, main, a, b, out = repo(tmp_path, monkeypatch)
+    line = f'replaydemo system feat@{a}'  # feat head is b: a pin mismatch every pass
+    recorded = RECORDED_REFUSAL_LOG.splitlines()
+    assert len(recorded) == 25 and all('replaydemo refused' in row for row in recorded)
+    for _row in recorded:  # replay one identical refusing pass per recorded line
+        cfg.queue.write_text(line + '\n')
+        lr.cycle(cfg)
+    assert train_calls(out) == []
+    assert cfg.queue.read_text().strip() == ''
+    assert lr.parked_lines(cfg) == [line]
+    assert (cfg.landing / 'queue-parked.txt').read_text().startswith('# parked: pin-mismatch:')
+    log_text = (cfg.landing / 'queue.log').read_text()
+    assert log_text.count('ALERT') == 1, log_text
+    assert log_text.count('PARKED') == 1, log_text
+    # The same name with a changed pinned sha is no longer parked: it runs.
+    cfg.queue.write_text(f'replaydemo system feat@{b}\n')
+    lr.cycle(cfg)
+    assert train_calls(out), 'a changed sha did not unpark the entry'
+
+
+def test_no_online_runner_is_capacity_pending_not_a_failure(tmp_path, monkeypatch):
+    assert lr.is_capacity('refused: no online runner can take scripts/train.py')
+    assert lr.is_transient('refused: no online runner can take scripts/train.py')
+    cfg, line = refusing_in_the_train(tmp_path, monkeypatch, 'refused: no online runner can take scripts/train.py')
+    lr.cycle(cfg)
+    assert cfg.queue.read_text().strip() == line  # kept, retried later
+    assert lr.retry_state(cfg) == {}  # no retry budget spent
+    assert lr.parked_lines(cfg) == []
+    log_text = (cfg.landing / 'queue.log').read_text()
+    assert 'capacity-pending' in log_text and 'PARKED' not in log_text
+
+
+def test_failed_entry_is_parked_once_until_its_sha_changes(tmp_path):
+    cfg = cfg_for(tmp_path)
+    cfg.process = lambda c, e: 'failed'
+    line = 'parkdemo system br/park@' + 'b' * 40
+    for _ in range(3):
+        cfg.queue.write_text(line + '\n')
+        lr.cycle(cfg)
+    assert cfg.queue.read_text().strip() == ''
+    assert lr.parked_lines(cfg) == [line]
+    assert (cfg.landing / 'queue.log').read_text().count('PARKED') == 1
+    changed = 'parkdemo system br/park@' + 'c' * 40
+    assert not lr.is_parked(cfg, lr.parse_line(changed))
+    assert lr.is_parked(cfg, lr.parse_line(line))

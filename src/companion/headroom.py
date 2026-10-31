@@ -1,4 +1,4 @@
-"""Headroom and travel mode for the owner MacBook: the two standing rules, in code (the owner, 2026-10-15 ~17:35).
+"""Headroom and travel mode for the owner MacBook: the two standing rules, in code (the owner, 2026-10-15).
 
     "for this mac specifically, you always need to leave at least a bit of room (10 ish % is fine), i don't want my
     work or my Brave browser to be freezed, and should not run any tests when I say I am carrying this outside"
@@ -7,7 +7,8 @@
    impacted run, a train's local phase, local model serving or training) starts only while the 1-minute load is at
    or under 0.9 x the core count (16.2 on 18 cores), the memory pressure level is normal and at least 10% of memory
    is free; otherwise it waits, then refuses. The xdist worker count is capped so the projected load (the current
-   load plus one per worker) stays under the line.
+   load plus one per worker) stays under the line. A focused handful ignores the load but still waits out memory
+   pressure warn or critical (2026-10-29). Running tests have hard ceilings too: companion.mac_guard.
 2. Travel mode. data/team/travel-mode.json; scripts/travel_mode.py on|off|status. While it is on, no local tests,
    browser runs, local models or training (tests go to the M1, GPU jobs wait); hosted agents continue. Turning it
    on releases this user's caffeinate keep-awake assertions so the Mac can sleep in the bag. It turns on by itself
@@ -39,6 +40,7 @@ POLL_SECONDS = 15
 UNREADABLE_WAIT = 30  # no readable memory signal at all (a sandbox blocking sysctl and vm_stat): short wait, then fail
 UNREADABLE = "cannot read the free memory percentage"
 LIGHT_MAX_FILES = 5  # "a focused handful": up to five explicit test files or node ids, no xdist
+LIGHT_WAIT = 60  # a focused run waits this long (or KYRA_ADMISSION_WAIT if lower) for memory pressure to be normal
 
 
 def _run(command):
@@ -237,18 +239,36 @@ def is_light(args, numprocesses):
         re.search(r"(^|/)test_[^/]*\.py(::|$)", a) and not re.search(r"_browser\.py(::|$)", a) for a in targets)
 
 
+def light_refusal(probes):
+    """A light run ignores the load but not the memory pressure level: the one-file tests/test_listening_vad.py that grew
+    to 5.4 GB on 2026-10-29 started while pressure was already at warn (companion.mac_guard)."""
+    level = (probes.pressure() or "").strip()
+    if level in ("2", "4"):
+        return f"memory pressure is {'warn' if level == '2' else 'critical'} (needs normal), even for a focused run"
+    return None
+
+
+def train_refusal(probes):
+    """A train's serial preflight and merged-tree guards (KYRA_PREFLIGHT=1, no xdist) judge memory danger, not load
+    (owner, 2026-10-30): companion.mac_guard.memory_danger_refusal. The running-test ceilings still apply."""
+    from companion import mac_guard
+    return mac_guard.memory_danger_refusal(probes, None)
+
+
 def admit_pytest(data, args, numprocesses, *, probes=None, sleep=time.sleep, say=None, wait=None):
     """None to go ahead, else the refusal text. Travel mode refuses every local run at once; a heavy run waits up
-    to ``wait`` seconds for headroom, then refuses; a light run skips the headroom wait."""
+    to ``wait`` seconds for headroom, then refuses; a light run skips the load wait but waits up to LIGHT_WAIT seconds
+    for memory pressure to fall back to normal, then refuses."""
     probes = probes or Probes()
     refused = travel_refusal(data, probes)
     if refused:
         return refused
-    if is_light(args, numprocesses):
-        return None
-    wait = WAIT_SECONDS if wait is None else wait
+    light = is_light(args, numprocesses)
+    train = os.environ.get("KYRA_PREFLIGHT") == "1" and numprocesses in (None, 0, "0")
+    check = train_refusal if train else light_refusal if light else headroom_refusal
+    wait = (min(LIGHT_WAIT, WAIT_SECONDS) if light else WAIT_SECONDS) if wait is None else wait
     deadline = probes.clock() + wait
-    reason = headroom_refusal(probes)
+    reason = check(probes)
     told = capped = False
     while reason:
         if reason == UNREADABLE and not capped:
@@ -260,5 +280,5 @@ def admit_pytest(data, args, numprocesses, *, probes=None, sleep=time.sleep, say
             say(f"waiting for headroom (up to {wait}s): {reason}")
             told = True
         sleep(POLL_SECONDS)
-        reason = headroom_refusal(probes)
+        reason = check(probes)
     return None

@@ -41,7 +41,7 @@ python -m pip install -e '.[test,cad]'
 python -m pytest -q -n 2
 ```
 
-From a fresh clone and a new virtual environment (macOS, Python 3.12, with Git and Node on the path), the whole suite gave **2536 passed and 31 skipped**. Each part README has a narrower command that runs after this install.
+From a fresh clone and a new virtual environment (macOS, Python 3.12, with Git and Node on the path), the whole suite gave **2750 passed and 31 skipped**. Each part README has a narrower command that runs after this install.
 
 ## What is not here
 

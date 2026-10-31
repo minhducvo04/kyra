@@ -29,6 +29,8 @@ from __future__ import annotations
 
 import argparse
 import builtins
+import hashlib
+import io
 import json
 import logging
 import os
@@ -36,6 +38,8 @@ import re
 import shlex
 import subprocess
 import sys
+import tarfile
+import tempfile
 import time
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
@@ -43,7 +47,6 @@ from threading import Lock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-LOG_DIR = Path(os.environ.get("KYRA_TEST_LOG_DIR", "/tmp/kyra-remote-test"))
 BASE = "<user-home>/kyra-runner"  # on the runner; left unquoted in the shell so ~ expands there
 LOCAL_ONLY = ("tests/test_no_target_companies.py", "tests/test_no_personal_files.py", "tests/test_no_third_party_pii.py")
 EXIT_UNREACHABLE = 75  # unconfigured runner or unavailable transport; callers may fall back to running here
@@ -247,13 +250,17 @@ def local_phase_helpers(probes=None) -> dict[int, str]:
 
 def local_phase_refusal(probes=None):
     """Why the non-browser half must not run on this Mac now, or None: low_power's heavy-job and load checks
-    (its local-class defaults: another heavy process, or the 1-minute load above 0.9 x cores) and the owner headroom
+    (its local-class defaults: another heavy process, or the 1-minute load above 0.9 x cores), companion.mac_guard's
+    admission (pressure normal, load at or under 10), and the owner's headroom
     rules (memory pressure normal with 10% free, travel mode off). This train's own processes
     (KYRA_BROWSER_GATE_PID's family, which holds the M1 browser phase) and this process are not "another" job,
     and neither are helper test runs (local_phase_helpers), which the train pauses instead; another landing's
     family still is. KYRA_LOCAL_NON_BROWSER=0 turns the local half off."""
     if os.environ.get("KYRA_LOCAL_NON_BROWSER") == "0":
         return "KYRA_LOCAL_NON_BROWSER=0"
+    from companion import mac_guard
+    if busy := mac_guard.admit("non-browser phase on this Mac"):  # 2026-10-29 panic: the M1 takes it instead
+        return busy
     low_power = _low_power()
     probes = probes or low_power.Probes()
     args = low_power.parser().parse_args([])
@@ -406,6 +413,9 @@ def m1_browser_runner(runner, ref):
     M1 lock (today's order). Either half failing fails the gate. Scope selection belongs to workflow_land's outer
     browser_runner; the privacy guards still run on this Mac with real data, separately.
     """
+    preferred = os.environ.pop("KYRA_TRAIN_RUNNER", None)
+    if os.environ.get("KYRA_GATE") != "1":
+        preferred = None
     remote_lock = Lock()
     log = logging.getLogger("workflow_land")
     # train.py --where local: read once and taken out of this process's env, so no pytest started from here (either
@@ -419,6 +429,19 @@ def m1_browser_runner(runner, ref):
         if m1_only:
             raise _refused(f"--where m1: {phase} phase: M1 unreachable ({safe_log(detail)}); no local fallback")
 
+    def configured_phase(argv, *, local_only=False, **kwargs):
+        from companion import train_phase
+        try:
+            # The browser half uses the same M1 transport lock. Do not race
+            # our own phase for it; shards within this phase may run together.
+            with remote_lock:
+                return train_phase.gate_phase(
+                    argv, work=Path(kwargs["cwd"]), data=_data_dir(), ref=ref, preferred=preferred,
+                    local_phase=local_phase, local_refusal=local_phase_refusal,
+                    remote_script=Path(__file__), log=log.info, local_only=local_only)
+        except (ValueError, RuntimeError, OSError) as exc:
+            raise _refused(f"configured train phase refused: {safe_log(str(exc))}") from exc
+
     def execute(argv, **kwargs):
         browser = argv[1:5] == ["-m", "pytest", "-p", "no:xdist"]
         if where_local:  # both halves on this Mac under one gpu gate, never ssh
@@ -427,6 +450,8 @@ def m1_browser_runner(runner, ref):
                     log.info("browser phase: this Mac (--where local), ref=%s", ref)
                     return runner(argv, **kwargs)
             if len(argv) > 1 and Path(argv[1]).name == "remote_test.py":
+                if preferred:
+                    return configured_phase(argv, local_only=True, **kwargs)
                 with local_phase():
                     log.info("non-browser phase: this Mac (--where local), ref=%s", ref)
                     return _local_non_browser(runner, argv, ref, log, workers=where["KYRA_LOCAL_WORKERS"],
@@ -458,6 +483,8 @@ def m1_browser_runner(runner, ref):
                     log.info("browser phase evidence: %s", line)
             return result
         if len(argv) > 1 and Path(argv[1]).name == "remote_test.py":
+            if preferred and not m1_only:
+                return configured_phase(argv, **kwargs)
             if NON_BROWSER_GLOB in argv and all(runner_settings()) and not m1_only:
                 reason = local_phase_refusal()
                 if reason is None:
@@ -526,7 +553,20 @@ def _data_dir() -> Path:
     return Path(data_dir)
 
 
+LOG_DIR = Path(os.environ.get("KYRA_TEST_LOG_DIR") or _data_dir() / "train-logs")
+
+
 def runner_settings() -> tuple[str, str]:
+    machines_path = _data_dir() / 'config/runners.json'
+    if machines_path.exists():
+        from companion.runner_pool import load_registry
+
+        machines = load_registry(machines_path)
+        browser = next((r for r in machines if r.enabled and r.reach == 'ssh'
+                        and r.os == 'macos' and 'browser' in r.test_kinds), None)
+        if browser is None:
+            return '', ''
+        return browser.host, str(Path(browser.key).expanduser()) if browser.key else ''
     path = _data_dir() / "config/m1.json"
     try:
         config = json.loads(path.read_text())
@@ -594,7 +634,11 @@ def ssh_argv(command: str, host: str | None = None, key: str | None = None) -> l
     `set -- $oinfo` left start empty there, so a stale lock was never taken over and every run was refused)."""
     configured_host, configured_key = runner_settings()
     host, key = host or configured_host, key or configured_key
-    return ["ssh", "-i", key, "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, f"/bin/sh -c {shlex.quote(command)}"]
+    from companion import runner_pool, runner_probe
+    machines = runner_pool.load_registry(runner_pool.registry_path(_data_dir())) or []
+    wsl = any(r.os == 'wsl' and r.host == host for r in machines)
+    wrapped = runner_probe.wsl_command(command) if wsl else f"/bin/sh -c {shlex.quote(command)}"
+    return ["ssh", "-i", key, "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, wrapped]
 
 
 def _ssh(command: str, target: tuple[str, str] | None) -> list[str]:
@@ -874,6 +918,30 @@ def checked_archive(sha: str) -> tuple[bytes | None, str]:
     return done.stdout, ""
 
 
+def _transfer_receipt(tree: bytes, sha: str, run_name: str) -> Path:
+    """Persist identity of the exact bytes before SSH. List hash: sorted non-directory names, UTF-8 + NUL."""
+    with tarfile.open(fileobj=io.BytesIO(tree)) as tar:
+        names = sorted(m.name for m in tar.getmembers() if not m.isdir())
+    directory = _data_dir() / "train-logs"
+    directory.mkdir(parents=True, exist_ok=True)
+    row = {"status": "prepared", "at": time.time(), "sha": sha, "run": run_name,
+           "archive_sha256": hashlib.sha256(tree).hexdigest(), "file_count": len(names),
+           "file_list_sha256": hashlib.sha256("".join(n + "\0" for n in names).encode()).hexdigest()}
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", prefix="transfer-", suffix=".jsonl",
+                                     dir=directory, delete=False) as log:
+        log.write(json.dumps(row, sort_keys=True) + "\n")
+        log.flush()
+        os.fsync(log.fileno())
+        return Path(log.name)
+
+
+def _transfer_outcome(receipt: Path, status: str) -> None:
+    with receipt.open("a", encoding="utf-8") as log:
+        log.write(json.dumps({"status": status, "at": time.time()}) + "\n")
+        log.flush()
+        os.fsync(log.fileno())
+
+
 def _run_locked(sha: str, pytest_args: list[str], workers: int, target: tuple[str, str] | None = None,
                 run_name: str | None = None, exports: str = "", stopped=lambda: False) -> int:
     """Send the tree, run pytest there, report. ``target``/``run_name``/``exports`` are the --runner path's
@@ -884,6 +952,11 @@ def _run_locked(sha: str, pytest_args: list[str], workers: int, target: tuple[st
     if tree is None:
         _print(f"remote_test: {sha} not sent: {why}", file=sys.stderr)
         return EXIT_REFUSED if why.startswith("refused") else 1
+    try:
+        receipt = _transfer_receipt(tree, sha, run_name)
+    except OSError as exc:
+        _print(f"remote_test: transfer audit unavailable; archive not sent ({type(exc).__name__})", file=sys.stderr)
+        return EXIT_REFUSED
     try:
         unpack = subprocess.run(_ssh(f"rm -rf {BASE}/runs/{run_name} && mkdir -p {BASE}/runs/{run_name} "
                                      f"&& tar -x -C {BASE}/runs/{run_name}", target),
@@ -897,6 +970,11 @@ def _run_locked(sha: str, pytest_args: list[str], workers: int, target: tuple[st
     except OSError as exc:
         failure = str(exc)
         failure_code = EXIT_UNREACHABLE
+    try:
+        _transfer_outcome(receipt, "failed" if failure else "transferred")
+    except OSError:
+        _print("remote_test: transfer outcome could not be recorded; prepared receipt retained", file=sys.stderr)
+        return 1
     if failure:
         _print(f"remote_test: could not send {sha} to runner: {failure}", file=sys.stderr)
         return failure_code
@@ -939,7 +1017,8 @@ _RANK = {"pass": 0, "fail": 1, "error": 2}
 
 
 def registry_path() -> Path:
-    return _data_dir() / "team/runners.json"
+    from companion.runner_pool import registry_path as pool_registry_path
+    return pool_registry_path(_data_dir())
 
 
 def runner_target(runner) -> tuple[str, str]:
@@ -947,7 +1026,8 @@ def runner_target(runner) -> tuple[str, str]:
     the probe and the transport always reach the same machine. Both values are hidden in every printed line."""
     from companion import runner_probe
 
-    host, key = runner_probe.ssh_target(runner, m1_settings=runner_settings)
+    settings = (lambda: ('', '')) if (_data_dir() / 'config/runners.json').exists() else runner_settings
+    host, key = runner_probe.ssh_target(runner, m1_settings=settings)
     _REDACT.update(v for v in (host, host.rsplit("@", 1)[-1], key) if v)
     return host, key
 

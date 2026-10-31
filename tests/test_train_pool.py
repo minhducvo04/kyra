@@ -526,3 +526,11 @@ def test_run_pool_end_to_end_saves_measured_shard_speed(tmp_path, monkeypatch):
     assert set(data.get("_shards", {})) == {"mac", "m1"}, (sorted(k for k in data if k.startswith("_")), lines)
     assert runner_durations.load_store(store)
     assert set(tp.shard_efficiency(store)) == {"mac", "m1"}  # the next plan_pool reads these
+
+
+def test_wsl_workers_leave_headroom_for_inference_keeper():
+    from companion.runner_pool import Load, Runner
+    from companion.train_pool import worker_budget
+    runner = Runner(name='pc', os='wsl', cores=32, ram_gb=96, reach='ssh', host='runner@example.invalid')
+    assert worker_budget(runner, Load(load1=4)) == 8
+    assert worker_budget(runner, Load(load1=29)) == 3

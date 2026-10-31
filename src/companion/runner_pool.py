@@ -37,19 +37,18 @@ from pathlib import Path
 
 REACHES = ("local", "ssh")
 _FIELDS = {"name", "os", "cores", "ram_gb", "gpu_vram_gb", "browsers", "reach", "host", "key",
-           "may_see_real_data", "enabled", "speed", "skip"}
+           "may_see_real_data", "enabled", "speed", "skip", "max_parallel_trains", "test_kinds"}
 
 # Test files that read the repo's real data/ (or are the privacy guards); placed only where
 # may_see_real_data is true, whatever the caller flags. tests/test_runner_pool.py keeps this complete.
+# test_correct_repeaters, test_intern_promotion and test_m1_host_source left on 2026-10-30 (owner): they use synthetic
+# inputs only, and tests/test_hermetic_runner_tests.py fails if they open data/ or a non-temp KYRA_DATA_DIR.
 REAL_DATA_TESTS = frozenset({
     "tests/test_no_target_companies.py",  # REPO_ROOT / "data", skips where absent
     "tests/test_no_third_party_pii.py",  # privacy guard (remote_test LOCAL_ONLY)
     "tests/test_no_personal_files.py",  # privacy guard (remote_test LOCAL_ONLY)
-    "tests/test_correct_repeaters.py",  # main checkout data/ runner config
     "tests/test_home_router_holdout2.py",  # ROOT / "data" holdout files
     "tests/test_home_router_holdout3.py",  # KYRA_DATA_DIR default ROOT / "data"
-    "tests/test_intern_promotion.py",  # main checkout data/team/intern-shadow.jsonl
-    "tests/test_m1_host_source.py",  # ROOT / "data" / "config" / "m1.json"
     "tests/test_router_train_real.py",  # repo data/decisions/labels
 })
 
@@ -78,6 +77,8 @@ class Runner:
     host: str = field(default="", repr=False)  # ssh target and key path never appear in repr or logs
     key: str = field(default="", repr=False)
     skip: tuple[str, ...] = ()  # test files that never go to this runner
+    max_parallel_trains: int = 1
+    test_kinds: tuple[str, ...] = ("system",)
 
 
 @dataclass(frozen=True)
@@ -147,14 +148,30 @@ def parse_registry(document: object) -> list[Runner]:
         skip = item.get("skip", [])
         if not isinstance(skip, list) or not all(_valid_skip_path(entry) for entry in skip):
             raise ValueError(f"runner {name}: skip must be a list of tests/ paths ending in .py")
+        parallel = item.get("max_parallel_trains", 1)
+        if type(parallel) is not int or parallel < 1:
+            raise ValueError(f"runner {name}: max_parallel_trains must be a positive integer")
+        kinds = item.get("test_kinds", ["system", *(["browser"] if browsers else [])])
+        if (not isinstance(kinds, list) or not kinds
+                or any(k not in ("system", "browser", "apple") for k in kinds)):
+            raise ValueError(f"runner {name}: test_kinds must list system, browser or apple")
+        if "apple" in kinds and item.get("os") != "macos":
+            raise ValueError(f"runner {name}: apple tests require macos")
         runners.append(Runner(
             name=name, os=str(item.get("os", "")), cores=cores, ram_gb=float(item.get("ram_gb", 0)),
             reach=reach, gpu_vram_gb=float(item.get("gpu_vram_gb", 0)), browsers=tuple(browsers),
             may_see_real_data=item.get("may_see_real_data", False), enabled=item.get("enabled", True),
             speed=float(item.get("speed", 1.0)), host=str(item.get("host", "")), key=str(item.get("key", "")),
-            skip=tuple(skip)))
+            skip=tuple(skip), max_parallel_trains=parallel, test_kinds=tuple(kinds)))
     return runners
 
+
+
+def registry_path(data: str | Path) -> Path:
+    """One machines config for placement and execution; accept the legacy path until migrated."""
+    data = Path(data)
+    configured = data / 'config/runners.json'
+    return configured if configured.exists() else data / 'team/runners.json'
 
 def load_registry(path: str | Path) -> list[Runner] | None:
     """Read the registry file; None when it does not exist (the caller keeps today's path)."""

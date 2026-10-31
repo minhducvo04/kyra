@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.timing_sensitive
+
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("remote_test", ROOT / "scripts/remote_test.py")
 remote_test = importlib.util.module_from_spec(spec)
@@ -59,6 +61,8 @@ TREE = {
 @pytest.fixture(autouse=True)
 def _no_where_switches(monkeypatch):
     """train.py's --where switches never decide a test here unless the test sets them (o-rev91 env leak)."""
+    # Placement cases control busy probes instead of reading this Mac's live pressure.
+    monkeypatch.setenv("KYRA_MAC_GATE", "off")
     for key in remote_test.WHERE_ENV:
         monkeypatch.delenv(key, raising=False)
 
@@ -1322,7 +1326,7 @@ PS_HELPERS = (
     "92 2.0 python scripts/web_ui.py --port 8420\n"                          # the owner Kyra web UI and its browser
     "93 0.1 -zsh\n94 150.0 .venv/bin/python -m pytest tests/test_y.py\n"     # the owner own terminal pytest
     "95 30.0 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome\n"
-    "96 40.0 /Applications/Brave Browser.app/Contents/MacOS/Brave Browser\n"
+    "96 40.0 /Applications/Web Browser.app/Contents/MacOS/Web Browser\n"
     "97 90.0 /opt/homebrew/bin/codex exec\n")
 PARENTS_HELPERS = {40: 1, 50: 40, 70: 79, 71: 70, 72: 71, 73: 72, 79: 1, 80: 79, 81: 80, 82: 81, 83: 82, 90: 79,
                    91: 92, 92: 1, 93: 1, 94: 93, 95: 1, 96: 1, 97: 1}
@@ -2045,3 +2049,83 @@ def test_a_muse_workers_gate_pytest_is_a_helper_the_train_pauses(monkeypatch):
                               cores=lambda: 18, pid=lambda: 50, headroom=lambda: [])
     paused = remote_test.local_phase_helpers(probes)
     assert 92 in paused and 95 not in paused
+
+
+@pytest.mark.parametrize("target", [None, ("pc.example.test", "/fixture/pc-key")], ids=["m1", "pc"])
+def test_transfer_receipt_precedes_send_and_hashes_exact_archive(runner, monkeypatch, target):
+    import hashlib
+    import io
+    import tarfile
+
+    monkeypatch.setenv("KYRA_DATA_DIR", str(runner["tmp"]))
+    audit = runner["tmp"] / "train-logs"
+    original = subprocess.run
+    sent = []
+
+    def run(argv, **kwargs):
+        if "tar -x" in argv[-1]:
+            tree = kwargs["input"]
+            receipts = list(audit.glob("transfer-*.jsonl"))
+            assert len(receipts) == 1, "durable receipt must exist before archive leaves"
+            row = json.loads(receipts[0].read_text().splitlines()[0])
+            with tarfile.open(fileobj=io.BytesIO(tree)) as tar:
+                names = sorted(m.name for m in tar.getmembers() if not m.isdir())
+            assert row["archive_sha256"] == hashlib.sha256(tree).hexdigest()
+            assert row["file_count"] == len(names) == len(TREE)
+            assert row["file_list_sha256"] == hashlib.sha256("".join(n + "\0" for n in names).encode()).hexdigest()
+            assert row["status"] == "prepared"
+            sent.append(tree)
+        return original(argv, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    assert remote_test._run_locked("HEAD", ["tests/test_ok.py"], 1, target=target) == 0
+    assert len(sent) == 1
+    rows = [json.loads(line) for line in next(audit.glob("transfer-*.jsonl")).read_text().splitlines()]
+    assert [r["status"] for r in rows] == ["prepared", "transferred"]
+
+
+def test_transfer_audit_failure_prevents_send(runner, monkeypatch):
+    monkeypatch.setenv("KYRA_DATA_DIR", str(runner["tmp"]))
+    audit = runner["tmp"] / "train-logs"
+    audit.write_text("not a directory")
+    monkeypatch.setattr(remote_test, "_ssh", lambda *a: pytest.fail("must not send without receipt"))
+    assert remote_test._run_locked("HEAD", ["tests/test_ok.py"], 1) == remote_test.EXIT_REFUSED
+
+
+@pytest.mark.parametrize("failure", ["exit", "timeout"])
+def test_failed_transfer_keeps_audit_receipt(runner, monkeypatch, failure):
+    monkeypatch.setenv("KYRA_DATA_DIR", str(runner["tmp"]))
+    original = subprocess.run
+
+    def run(argv, **kwargs):
+        if "tar -x" in argv[-1]:
+            if failure == "timeout":
+                raise subprocess.TimeoutExpired(argv, 1)
+            return subprocess.CompletedProcess(argv, 255, stdout=b"", stderr=b"transport failed")
+        return original(argv, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    assert remote_test._run_locked("HEAD", ["tests/test_ok.py"], 1) == remote_test.EXIT_UNREACHABLE
+    receipt = next((runner["tmp"] / "train-logs").glob("transfer-*.jsonl"))
+    rows = [json.loads(line) for line in receipt.read_text().splitlines()]
+    assert [r["status"] for r in rows] == ["prepared", "failed"]
+    assert rows[0]["file_count"] == len(TREE)
+
+
+def test_wsl_registry_routes_archive_and_cleanup_through_same_wrapper(tmp_path, monkeypatch):
+    import json
+
+    from companion import runner_probe
+    cfg = tmp_path / 'config/runners.json'
+    cfg.parent.mkdir()
+    cfg.write_text(json.dumps({'runners': [{'name': 'pc', 'os': 'wsl', 'cores': 32,
+                                          'reach': 'ssh', 'host': 'runner@pc.example.invalid', 'key': '/test/key'}]}))
+    monkeypatch.setattr(remote_test, '_data_dir', lambda: tmp_path)
+    for command in ('tar -xf -', 'cat <user-home>/kyra-runner/runs/test/junit.xml', 'kill -TERM -- -123'):
+        argv = remote_test.ssh_argv(command, host='runner@pc.example.invalid', key='/test/key')
+        assert argv[-1] == runner_probe.wsl_command(command)
+
+
+def test_legacy_ssh_without_registry_still_wraps_posix(tmp_path, monkeypatch):
+    monkeypatch.setattr(remote_test, '_data_dir', lambda: tmp_path)
+    assert remote_test.ssh_argv('true', host='runner@example.invalid', key='/test/key')[-1] == "/bin/sh -c true"

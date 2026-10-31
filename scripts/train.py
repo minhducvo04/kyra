@@ -2,7 +2,7 @@
 Launch it directly (not under `gate_lock.py run --kind landing`, which would hold every area): after the merges it
 takes the gate lock `landing-<area>` for each area of its branches (a web train: landing-web only; areas from
 companion.landing_areas), so a loop train and a
-web train land side by side and local GPU jobs keep running. Area trains (the owner, 2026-10-15 ~18:00): a train with no
+web train land side by side and local GPU jobs keep running. Area trains (the owner, 2026-10-15): a train with no
 web branch lands with KYRA_LAND_NO_BROWSER=1 (no browser phase, no smoke nodes) when no browser page can execute
 any changed file (companion.test_impact.browser_reach: the transitive import closure of the browser files and the
 server), and with the 20 smoke nodes alone when one can; a train mixing web and non-web branches is refused unless
@@ -82,7 +82,7 @@ def where_local(load=None, cores=None, data=None):
 
 
 SUMMARY = re.compile(r"(^preflight:|^FAILED |^ERROR |\d+ (passed|failed|error)|^landed |^refused:|^suite passed|^checks passed"
-                     r"|^runner-pool: )")
+                     r"|^runner-pool: |^KYRA_MACHINE_USAGE=)")
 
 # Wall times for one train, in this order. _CLOCK is time.monotonic unless a test injects one.
 PHASE_NAMES = ("preflight", "merge", "ruff", "impacted_tests", "suite", "browser", "push")
@@ -282,6 +282,9 @@ def merged_tree_test_list(tree):
 HEADROOM_REFUSED = 75
 PREFLIGHT_ADMISSION_WAIT = 30
 PRECHECK_ADMISSION_WAIT = 60
+# The serial merged-tree guards get 300 s (was 90): on 2026-10-30 a green tree (101 passed in 27 s when
+# rerun) hit the 90 s limit while a 31B local model held the RAM. A slow Mac must not refuse a green tree.
+MERGED_GUARD_TIMEOUT = 300
 
 
 def _merged_tree_runner_env(main, tree, runner_state=None, where="auto"):
@@ -359,7 +362,7 @@ def precheck(main, base, branches, log, runner=subprocess.run, where="auto"):
                 for key, value in run_env.items():
                     if key in _PRECHECK_ENV_KEYS:
                         os.environ[key] = value
-                result = runner(argv, cwd=tree, capture_output=True, text=True, timeout=90, env=run_env)
+                result = runner(argv, cwd=tree, capture_output=True, text=True, timeout=MERGED_GUARD_TIMEOUT, env=run_env)
             except (OSError, subprocess.TimeoutExpired) as exc:
                 raise TrainError(f'merged-tree guards refused: {exc}', EXIT_CHECKS) from exc
             finally:

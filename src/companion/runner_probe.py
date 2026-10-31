@@ -2,7 +2,7 @@
 ``runner_pool.shard`` takes.
 
 Local runner (this Mac). ``load1`` is the 1-minute load average plus a reserve of 10% of the cores, so the pool never
-plans past 0.9 x cores (the owner headroom rule), and the free part is scaled by pmset's CPU_Speed_Limit when the Mac is
+plans past 0.9 x cores (the owner's headroom rule), and the free part is scaled by pmset's CPU_Speed_Limit when the Mac is
 thermally throttled. ``busy`` (no share) when the browser-phase lock or the gpu gate lock is live, the Mac draws from
 battery, travel mode is on (only when ``companion.headroom`` exists: feature-detected, never required), memory
 pressure is not normal or less than 10% is free. A memory reading that cannot be read counts as busy (fail closed).
@@ -16,11 +16,15 @@ a log line or an exception: transport failures are caught and logged by runner n
 """
 from __future__ import annotations
 
+import base64
 import importlib.util
+import json
 import logging
+import math
 import os
 import re
 import subprocess
+import zlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -167,6 +171,46 @@ def _ssh(argv: list[str], timeout: float) -> tuple[int, str]:
     return done.returncode, done.stdout or ""
 
 
+
+def wsl_command(command: str) -> str:
+    """Windows OpenSSH to POSIX without a PowerShell pipe corrupting archive stdin.
+
+    Only base64 is interpolated into cmd.exe's quoted argument. exec preserves
+    binary stdin/stdout and signal/exit handling for the existing transport.
+    Tests inherit CPU-only visibility; the keeper's environment is untouched.
+    """
+    # zlib before base64: cmd.exe caps a command line at 8191 chars and a 354-file pytest list is ~14k as plain base64.
+    encoded = base64.b64encode(zlib.compress(command.encode('utf-8'), 9)).decode('ascii')
+    script = ("import base64,os,zlib;os.environ['CUDA_VISIBLE_DEVICES']='-1';"
+              "os.environ['HIP_VISIBLE_DEVICES']='-1';"
+              "os.environ['OMP_NUM_THREADS']='1';"
+              "os.execl('/bin/sh','sh','-c',zlib.decompress(base64.b64decode('" + encoded + "')).decode('utf-8'))")
+    return 'wsl.exe --exec python3 -c "' + script + '"'
+
+
+def windows_probe_command() -> str:
+    """Read-only native Windows equivalent of uptime/memory and the transport lock."""
+    script = """$ErrorActionPreference = 'Stop'
+$cpu = (Get-CimInstance Win32_Processor | Measure-Object LoadPercentage -Average).Average
+$mem = Get-CimInstance Win32_OperatingSystem
+@{cpu_percent=$cpu; free_percent=(100.0 * $mem.FreePhysicalMemory / $mem.TotalVisibleMemorySize);
+  busy=(Test-Path -LiteralPath 'C:/kyra-work/runner/.lock')} | ConvertTo-Json -Compress
+"""
+    return 'powershell -NoProfile -NonInteractive -EncodedCommand ' + base64.b64encode(
+        script.encode('utf-16-le')).decode('ascii')
+
+
+def parse_windows(stdout: str, cores: int) -> Load | None:
+    try:
+        sample = json.loads(stdout)
+        cpu, free, busy = sample['cpu_percent'], sample['free_percent'], sample['busy']
+        if (type(busy) is not bool or any(type(v) not in (int, float) or not math.isfinite(v)
+                                        or not 0 <= v <= 100 for v in (cpu, free))):
+            return None
+        return Load(round(cores * (cpu / 100 + RESERVE), 3), busy or free < MIN_FREE_PERCENT)
+    except (ValueError, KeyError, TypeError):
+        return None
+
 def remote_load(runner: Runner, *, ssh: Callable[[list[str], float], tuple[int, str]] = _ssh,
                 m1_settings: Callable[[], tuple[str, str]] = _remote_test_settings,
                 timeout: float = SSH_TIMEOUT) -> Load | None:
@@ -179,7 +223,9 @@ def remote_load(runner: Runner, *, ssh: Callable[[list[str], float], tuple[int, 
         log.info("runner probe %s: offline (no host configured)", runner.name)
         return None
     try:
-        code, out = ssh(ssh_argv(host, key), timeout)
+        command = (windows_probe_command() if runner.os == "windows" else
+                   wsl_command(REMOTE_COMMAND) if runner.os == "wsl" else REMOTE_COMMAND)
+        code, out = ssh(ssh_argv(host, key, command), timeout)
     except subprocess.TimeoutExpired:
         log.info("runner probe %s: offline (timeout after %ss)", runner.name, timeout)
         return None
@@ -189,7 +235,9 @@ def remote_load(runner: Runner, *, ssh: Callable[[list[str], float], tuple[int, 
     if code != 0:
         log.info("runner probe %s: offline (ssh exit %s)", runner.name, code)
         return None
-    load = parse_remote(out)
+    load = parse_windows(out, runner.cores) if runner.os == "windows" else parse_remote(out)
+    if load is not None and runner.os == "wsl":
+        load = Load(load.load1 + runner.cores * RESERVE, load.busy)
     log.info("runner probe %s: %s", runner.name,
              "offline (unreadable reply)" if load is None else f"load {load.load1:.2f}, {'busy' if load.busy else 'free'}")
     return load
@@ -211,3 +259,4 @@ def make_probe(*, local: LocalSources | None = None, ssh: Callable[[list[str], f
         return remote_load(runner, ssh=ssh, m1_settings=m1_settings, timeout=timeout)
 
     return probe
+

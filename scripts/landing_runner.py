@@ -17,7 +17,8 @@ The forge- namespace belongs to Forge: this loop leaves those lines untouched.
 Rules kept from v5e: one train at a time (it never starts while any `scripts/train.py <name>` process runs; train.py
 takes its own landing-<area> locks on top), a single runner instance (flock), every branch gets current origin/master
 merged in first (clean merges only), every landing fast-forwards the main checkout, system trains get `--where local`
-while the 1-minute load is under 12, a refusal never stops the loop. It never pushes: train.py does, and refuses
+while the 1-minute load is under 12 and companion.mac_guard admits new work (else the M1 runs the suite; 2026-10-29),
+a refusal never stops the loop. It never pushes: train.py does, and refuses
 protected paths. While a legacy queue-runner<N>.sh shell loop is alive it waits, so two runners never race.
 
     scripts/landing_runner.py            run forever (launchd, deploy/com.kyra.landing-runner.plist)
@@ -42,6 +43,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 LOAD_LIMIT = 12.0
 # A train is a Python process whose argv is "scripts/train.py <name>"; anchored so a shell that only mentions it never counts.
 TRAIN_RE = re.compile(r'^/\S*[Pp]ython\S* (\S+ )*scripts/train\.py [A-Za-z0-9]')
@@ -56,12 +59,23 @@ ENV_RE = re.compile(r'^[A-Z_][A-Z0-9_]*=')
 # "origin/master moved while the suite ran" is the same kind: nothing was pushed, and the resume re-merges the new
 # origin/master and re-runs the checks before landing (train.py remerge_master).
 TRANSIENT_RE = re.compile(r'headroom refused|no headroom|runner held|another heavy job|1-minute load (is )?[\d.]+'
-                          r'|origin/master moved while the suite ran', re.I)
+                          r'|origin/master moved while the suite ran|no online runner can take', re.I)
+# Capacity is not a branch failure: no runner can take the work right now. The line stays queued as
+# capacity-pending, spends no retry budget and does not blame the author (A0.3 refusal-loop fix).
+CAPACITY_RE = re.compile(r'no online runner can take|no free capable machine', re.I)
 GUARDS_FAILED_RE = re.compile(r'merged-tree guards failed', re.I)
 FAILED_TEST_RE = re.compile(r'^(?:FAILED|ERROR) (\S+)', re.M)
 LOAD_GUARD_TEST = 'tests/test_correct_repeaters.py::test_load_allows_the_browser_phase'
 RETRY_FIRST_S, RETRY_MAX_S, RETRY_ALERT_AT, RETRY_CAP = 300, 1800, 3, 6
 LANDED_RE = re.compile(r'landed [0-9a-f]+\.\.([0-9a-f]+) on origin/master')
+
+
+def mac_busy_now():
+    """companion.mac_guard's admission (2026-10-29 panic): a train's suite runs on this Mac only while it admits new
+    work (memory pressure normal, 10% free, load at or under 10); otherwise the M1 runs it."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+    from companion import mac_guard
+    return mac_guard.admit('landing train on this Mac')
 
 
 def main_checkout():
@@ -81,6 +95,7 @@ class Config:
     load: callable = None   # () -> 1-minute load
     process: callable = None  # (cfg, entry) -> None; injectable for tests
     forge_authority: object = None  # explicit run_queued compatibility; never used by this polling loop
+    mac_busy: callable = None  # () -> companion.mac_guard's refusal or None; injectable for tests
 
     def __post_init__(self):
         self.landing = Path(self.landing or self.main / 'data/team/landing')
@@ -88,9 +103,13 @@ class Config:
         self.procs = self.procs or all_commands
         self.load = self.load or load_1min
         self.process = self.process or process_entry
+        self.mac_busy = self.mac_busy or mac_busy_now
 
     @property
     def queue(self): return self.landing / 'queue.txt'
+
+    @property
+    def parked(self): return self.landing / 'queue-parked.txt'
 
     @property
     def inbox(self): return self.main / 'data/team/board-inbox.jsonl'
@@ -255,6 +274,119 @@ def clear_retry(cfg, line):
         save_retry_state(cfg, data)
 
 
+def is_capacity(text):
+    """True when the refusal only says no runner can take the work now (capacity, not a branch failure)."""
+    return bool(CAPACITY_RE.search(text or ''))
+
+
+def pinned_key(entry):
+    """The pinned shas of an entry (raw token when it has no pin): the identity a refusal dedupes on."""
+    parts = []
+    for token in entry.branches:
+        m = PIN_RE.match(token)
+        parts.append(m['sha'] if m else token)
+    return ','.join(parts)
+
+
+def refusal_state(cfg):
+    try:
+        data = json.loads((cfg.landing / 'queue-refusals.json').read_text())
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def refusal_key(entry, reason_class):
+    return f'{entry.name}|{pinned_key(entry)}|{reason_class}'
+
+
+def refusal_seen(cfg, entry, reason_class):
+    return refusal_key(entry, reason_class) in refusal_state(cfg)
+
+
+def record_refusal(cfg, entry, reason_class, reason=''):
+    """Remember one refusal keyed by (name, pinned sha, reason class). Returns True the first time only."""
+    data = refusal_state(cfg)
+    key = refusal_key(entry, reason_class)
+    if key in data:
+        return False
+    data[key] = {'name': entry.name, 'pins': pinned_key(entry), 'class': reason_class,
+                 'reason': ' '.join(str(reason).split())[:200], 'line': entry.line}
+    tmp = cfg.landing / 'queue-refusals.tmp'
+    tmp.write_text(json.dumps(data))
+    tmp.replace(cfg.landing / 'queue-refusals.json')
+    return True
+
+
+def parked_lines(cfg):
+    try:
+        return [line.strip() for line in cfg.parked.read_text(errors='replace').splitlines()
+                if line.strip() and not line.startswith('#')]
+    except FileNotFoundError:
+        return []
+
+
+def is_parked(cfg, entry):
+    """True when an entry with the same name and pinned shas is already parked: not retried until its sha changes."""
+    for line in parked_lines(cfg):
+        try:
+            other = parse_line(line)
+        except ValueError:
+            continue
+        if other and other.name == entry.name and pinned_key(other) == pinned_key(entry):
+            return True
+    return False
+
+
+def park_entry(cfg, entry, reason, reason_class=None):
+    """Move the queue line to queue-parked.txt once (one-line reason) and out of the queue. Idempotent.
+
+    A repeat with an unchanged pinned sha adds no second parked row and no second log line.
+    """
+    reason = ' '.join(str(reason).split())[:200] or 'refused'
+    record_refusal(cfg, entry, reason_class or reason.split(':', 1)[0], reason)
+    with queue_locked(cfg):
+        already = is_parked(cfg, entry)
+        if not already:
+            with cfg.parked.open('a') as stream:
+                stream.write(f'# parked: {reason}\n{entry.line}\n')
+                stream.flush()
+                os.fsync(stream.fileno())
+        try:
+            lines = cfg.queue.read_text(errors='replace').splitlines()
+        except FileNotFoundError:
+            lines = []
+        if entry.line in lines:
+            lines.remove(entry.line)
+            write_queue(cfg, lines)
+    clear_retry(cfg, entry.line)
+    if not already:
+        log(cfg, f'{entry.name} PARKED: {reason}')
+    return 'parked'
+
+
+def rename_stale_entry(cfg, entry):
+    """Rename a stale-train entry once to <base>-n<k> (smallest free k), in the queue and on the entry itself."""
+    base = re.sub(r'-n\d+$', '', entry.name)
+    k = 1
+    while (cfg.main / '.claude' / 'worktrees' / f'{base}-n{k}').exists():
+        k += 1
+    new_name = f'{base}-n{k}'
+    new_line = new_name + entry.line[len(entry.name):]
+    with queue_locked(cfg):
+        try:
+            lines = cfg.queue.read_text(errors='replace').splitlines()
+        except FileNotFoundError:
+            lines = []
+        if entry.line in lines:
+            lines[lines.index(entry.line)] = new_line
+            write_queue(cfg, lines)
+    clear_retry(cfg, entry.line)
+    log(cfg, f'{entry.name}: stale train of the same name; renamed once to {new_name} and processing it')
+    entry.name, entry.line = new_name, new_line
+    return entry
+
+
 def log(cfg, msg):
     with open(cfg.landing / 'queue.log', 'a') as f:
         f.write(f'{time.strftime("%H:%M:%S")} {msg}\n')
@@ -362,6 +494,70 @@ def board(cfg, entry, pins):
     return kept
 
 
+
+def smart_batch(cfg, entries):
+    """Related reviewed pins share a bounded train; unrelated changes keep their own outcome."""
+    import yaml
+
+    from companion.train_placement import related_groups
+
+    first = entries[0]
+    if 'FULL=1' in first.envs:
+        return [first]
+    changes = {}
+    for entry in entries:
+        if 'FULL=1' in entry.envs:
+            continue
+        pins = check_pins(cfg, entry, quiet=True)
+        if not pins:
+            if entry == first:
+                return [first]  # process_entry owns the refusal and its evidence
+            continue
+        paths = set()
+        for _, sha in pins:
+            diff = git(cfg, 'diff', '--name-only', '--no-renames', f'origin/master...{sha}')
+            if diff.returncode:
+                return [first]
+            paths.update(diff.stdout.splitlines())
+        changes[entry.name] = paths
+    document = yaml.safe_load((cfg.main / 'docs/architecture/packages.yaml').read_text())
+    group = related_groups(changes, document['packages'])[0][:FULL_BATCH_MAX]
+    return [entry for entry in entries if entry.name in group]
+
+
+def configured_machine(cfg, entry):
+    """None for legacy configuration; a registry name or unavailable for the new config."""
+    path = cfg.main / 'data/config/runners.json'
+    if not path.exists():
+        return None
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+    import remote_test
+    from companion import runner_pool, runner_probe, train_placement
+    machines = runner_pool.load_registry(path)
+    # A configured native Windows host is not proof that this revision can run it.
+    if not hasattr(remote_test, 'remote_command_ps'):
+        machines = [r for r in machines if r.os != 'windows']
+    if 'WHERE=local' in entry.envs:
+        machines = [r for r in machines if r.reach == 'local']
+    probe = getattr(cfg, 'machine_probe', None) or runner_probe.make_probe(m1_settings=lambda: ('', ''))
+    loads = {r.name: probe(r) for r in machines}
+    busy_probe = getattr(cfg, 'mac_busy', None)
+    if busy_probe is None:
+        try:
+            from companion import mac_guard
+            busy = mac_guard.admit('landing train on this Mac')
+        except ImportError:
+            busy = 'Mac stability admission is not installed'
+    else:
+        busy = busy_probe()
+    # The browser is a separate macOS phase; the placement names the non-browser work.
+    request = train_placement.Request(entry.name, entry.priority)
+    selected = train_placement.plan([request], machines, loads, mac_admitted=not busy)
+    name = selected.get(entry.name)
+    if name is None:
+        return 'unavailable'
+    return name
+
 def placement(cfg, entry):
     """(train.py extra args, env assignments, place) from the queue line's tokens."""
     envs, kind, args = list(entry.envs), entry.kind, []
@@ -379,10 +575,24 @@ def placement(cfg, entry):
     envs = [e for e in envs if e.split('=', 1)[0] == 'KYRA_RUNNER_POOL']
     if force_full:
         envs.append('KYRA_LAND_FULL=1')
+    configured = configured_machine(cfg, entry)
+    if configured is not None:
+        if configured != 'unavailable':
+            from companion import runner_pool
+            machine = next(r for r in runner_pool.load_registry(cfg.main / 'data/config/runners.json')
+                           if r.name == configured)
+            if machine.reach == 'local':
+                args += ['--where', 'local']
+            envs = [e for e in envs if not e.startswith('KYRA_RUNNER_POOL=')]
+            envs.append('KYRA_TRAIN_RUNNER=' + configured)
+        return args, envs, configured
     place = 'pool' if pool else 'm1'
     if kind == 'system' and not pool and not (cfg.landing / 'no-where').exists() and cfg.load() < LOAD_LIMIT:
-        args += ['--where', 'local']
-        place = 'local'
+        if busy := cfg.mac_busy():
+            log(cfg, f'{entry.name}: tests go to the M1, not this Mac: {busy}')
+        else:
+            args += ['--where', 'local']
+            place = 'local'
     return args, envs, place
 
 
@@ -444,12 +654,15 @@ def check_pins(cfg, entry, *, quiet=False):
     for token in entry.branches:
         m = PIN_RE.match(token)
         if not m:
-            if not quiet:
+            first = quiet or entry.name.startswith('forge-') or record_refusal(cfg, entry, 'no-pin', f'{token[:80]} has no pin')
+            if not quiet and first:
                 alert(cfg, f'{entry.name} refused: {token[:80]} has no branch@<40-hex sha> pin; no train started', entry.line)
             return None
         head = git(cfg, 'rev-parse', '--verify', '-q', m['branch'] + '^{commit}').stdout.strip()
         if head != m['sha']:
-            if not quiet:
+            first = quiet or entry.name.startswith('forge-') or record_refusal(
+                cfg, entry, 'pin-mismatch', f'{m["branch"]} head differs from the reviewed pin')
+            if not quiet and first:
                 alert(cfg, f'{entry.name} refused: {m["branch"]} head {head[:12] or "missing"} differs from the reviewed '
                            f'pin {m["sha"][:12]}; no train started', entry.line)
             return None
@@ -459,9 +672,18 @@ def check_pins(cfg, entry, *, quiet=False):
 
 def process_entry(cfg, entry):
     name = entry.name
+    if not entry.batch and not name.startswith('forge-') and is_parked(cfg, entry):
+        return park_entry(cfg, entry, 'already parked: unchanged pinned sha', 'parked')
     pins = check_pins(cfg, entry)
     if pins is None:
-        return
+        if entry.batch:
+            return 'failed'
+        if name.startswith('forge-'):
+            return
+        reason_class = 'pin-mismatch' if all(PIN_RE.match(t) for t in entry.branches) else 'no-pin'
+        reason = ('pin-mismatch: head differs from the reviewed pin' if reason_class == 'pin-mismatch'
+                  else 'no-pin: branch token has no branch@sha pin')
+        return park_entry(cfg, entry, reason, reason_class)
     if all(on_master(cfg, sha) for _, sha in pins):
         log(cfg, f'{name} already on origin/master; skipped')
         return 'landed'
@@ -479,6 +701,9 @@ def process_entry(cfg, entry):
         return 'failed'
     (cfg.landing / f'{name}-branches.txt').write_text(''.join(b + '\n' for b in branches))
     args, envs, place = placement(cfg, entry)
+    if place == 'unavailable':
+        log(cfg, f'{name}: no free capable machine; retained without consuming refusal retries')
+        return 'capacity-pending'
     env = {**os.environ, 'KYRA_LAND_FULL': '0', **dict(e.split('=', 1) for e in envs),
            'KYRA_RUNNER_STATE': runner_state(cfg)}
     base = [cfg.python, 'scripts/train.py', name, '--base', 'origin/master']
@@ -486,9 +711,17 @@ def process_entry(cfg, entry):
     worktree = cfg.main / '.claude' / 'worktrees' / name
     resume = worktree.exists()  # a transient refusal after the train made its worktree: a fresh launch is refused as a duplicate
     if resume and stale_train(cfg, name, pins, branches):
-        alert(cfg, f'{name} refused: the existing train worktree rides branches that do not descend from the pinned '
-                   f'shas (a stale train of the same name); no train started', entry.line)
-        return
+        if entry.batch:
+            return 'failed'
+        if name.startswith('forge-'):
+            alert(cfg, f'{name} refused: the existing train worktree rides branches that do not descend from the pinned '
+                       f'shas (a stale train of the same name); no train started', entry.line)
+            return
+        rename_stale_entry(cfg, entry)
+        name = entry.name
+        resume = False
+        (cfg.landing / f'{name}-branches.txt').write_text(''.join(b + '\n' for b in branches))
+        base = [cfg.python, 'scripts/train.py', name, '--base', 'origin/master']
     resume_argv = [cfg.python, 'scripts/train.py', '--resume', name] + args
     pre = subprocess.run((resume_argv + ['--precheck-only']) if resume else base + args + ['--precheck-only'] + branches, cwd=cfg.main, env=env, stdin=subprocess.DEVNULL,
                          capture_output=True, text=True)
@@ -500,6 +733,9 @@ def process_entry(cfg, entry):
     if pre.returncode != 0:
         why = last_matching(cfg.landing / f'{name}-precheck.log', 'refused')
         log(cfg, f'{name} precheck refused: {why}')
+        if is_capacity(pre.stdout + pre.stderr):
+            log(cfg, f'{name} capacity-pending: no online runner can take it now; kept queued, no retry budget spent')
+            return 'capacity-pending'
         if retain_for_master(cfg, entry, pre.stdout + pre.stderr, cfg.landing / f'{name}-precheck.log'):
             return 'master-pending'
         if is_transient(pre.stdout + pre.stderr):
@@ -516,7 +752,11 @@ def process_entry(cfg, entry):
                                    stderr=subprocess.STDOUT)
     if name.startswith('forge-'):
         execution_fact(cfg, entry, 'run', completed.returncode)
-    if landed(cfg, run_log, branches):
+    verified_landed = landed(cfg, run_log, branches)
+    from companion.train_phase import usage_lines
+    for usage in usage_lines(run_log.read_text(errors='replace'), landed=verified_landed):
+        log(cfg, f'{usage} train={name}')
+    if verified_landed:
         log(cfg, f'{name} LANDED: {last_matching(run_log, "landed ")[:160]}')
         if name.startswith('master-fix-'):
             from master_keeper import track_landed
@@ -530,6 +770,9 @@ def process_entry(cfg, entry):
             tail = run_log.read_text()
         except OSError:
             tail = ''
+        if is_capacity(tail):
+            log(cfg, f'{name} capacity-pending: no online runner can take it now; kept queued, no retry budget spent')
+            return 'capacity-pending'
         if retain_for_master(cfg, entry, tail, run_log):
             return 'master-pending'
         if is_transient(tail if GUARDS_FAILED_RE.search(why) else why):  # the train's own load/headroom/runner-held refusal: keep the line, retry
@@ -780,11 +1023,21 @@ def _cycle(cfg, state):
                  and not (cfg.landing / (e.name + '-master-pending.json')).exists()]
         if not ready:
             return 'delayed'
+        # A capacity refusal is not a branch failure. Give other ready groups a
+        # turn before probing the same unavailable group again. Priority stays
+        # stable within each set and the queue/retry budget are unchanged.
+        pending = state.setdefault('capacity_pending', set())
+        pending.intersection_update(e.line for e in ready)
+        if all(e.line in pending for e in ready):
+            pending.clear()  # a new priority-ordered capacity sweep
+        ready.sort(key=lambda e: e.line in pending)
         entry = ready[0]
         selected = [entry]
         if len(ready) > 1:
             try:
-                if not needs_full(cfg, entry):
+                if (cfg.main / 'data/config/runners.json').exists():
+                    selected = smart_batch(cfg, ready)
+                elif not needs_full(cfg, entry):
                     selected += [e for e in ready[1:] if not needs_full(cfg, e)]
                 elif 'FULL=1' not in entry.envs and check_pins(cfg, entry, quiet=True):
                     # A full run costs the same for one branch or several: full entries share it, capped.
@@ -802,7 +1055,14 @@ def _cycle(cfg, state):
         except Exception as exc:  # a broken train must not stop the loop
             log(cfg, f'{entry.name} ERROR: {type(exc).__name__}: {str(exc)[:160]}')
         for member, result in outcomes:
-            if result == 'master-pending':
+            if result == 'capacity-pending':
+                pending.add(member.line)
+            else:
+                pending.discard(member.line)
+            if result in ('master-pending', 'capacity-pending', 'parked'):
+                continue
+            if result == 'failed':
+                park_entry(cfg, member, 'failed: train refused (see queue.log)', 'failed')
                 continue
             if result == 'retry' and note_retry(cfg, member):
                 continue

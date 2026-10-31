@@ -108,7 +108,7 @@ def split(files: Iterable[str], guards: Iterable[str]) -> tuple[list[str], list[
 def load_runners(main: Path, repo: Path, log: Callable[[str], None]) -> list[Runner]:
     """data/team/runners.json, or the example's local runner when absent. A malformed registry is a PoolError."""
     try:
-        runners = runner_pool.load_registry(Path(main) / "data/team/runners.json")
+        runners = runner_pool.load_registry(runner_pool.registry_path(Path(main) / 'data'))
         if runners is None:
             example = runner_pool.load_registry(Path(repo) / "deploy/runners.example.json") or []
             runners = [r for r in example if r.reach == "local"]
@@ -254,6 +254,9 @@ def worker_budget(runner: Runner, load: Load | None, headroom_probes=None) -> in
     for this Mac (reach local) capped by the owner headroom rule, ``headroom.worker_cap`` (projected load at most
     0.9 x cores) and one worker when memory is short (``headroom.memory_refusal``: under 10% free or pressure)."""
     workers = planned_workers(runner, load)
+    if runner.os == "wsl":
+        # Keep CPU/RAM headroom for the inference keeper on the shared PC.
+        return min(8, workers)
     if runner.reach != "local":
         return workers
     from companion import headroom

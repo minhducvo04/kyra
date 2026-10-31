@@ -14,6 +14,16 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
 testpaths = ["tests"]
+# Portability contract: no marker = hermetic, runs anywhere. Descriptions mirror
+# companion.test_markers.MARKERS; tests/test_test_markers.py keeps them in sync.
+markers = [
+    "needs_macos: needs a macOS-only tool or API (sandbox-exec, plutil, launchd)",
+    "needs_real_data: reads the repo's real data/ (owner Mac only)",
+    "needs_git_history: needs more git history than a one-commit archive",
+    "needs_network_loopback: binds or calls 127.0.0.1 / localhost",
+    "needs_gpu: needs GPU VRAM",
+    "timing_sensitive: asserts on wall-clock timing; place on a low-load runner",
+]
 
 [tool.setuptools.package-data]
 "companion.cad" = ["worked_examples.json"]

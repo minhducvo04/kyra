@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template, not installed: the owner's install command replaces __KYRA_ROOT__ with the main checkout path and loads it
+     as <user-home>/Library/LaunchAgents/com.kyra.mac-hard-kill.plist. A LaunchAgent runs as the owner, outside every agent
+     sandbox. KeepAlive restarts the loop if it ever exits; ProcessType Interactive keeps launchd from throttling it
+     under memory pressure, which is exactly when it must run. Install and uninstall commands: the docstring of
+     scripts/mac_hard_kill.py. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.kyra.mac-hard-kill</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__KYRA_ROOT__/.venv/bin/python</string>
+        <string>-I</string>
+        <string>__KYRA_ROOT__/scripts/mac_hard_kill.py</string>
+        <string>--data</string>
+        <string>__KYRA_ROOT__/data</string>
+    </array>
+    <key>WorkingDirectory</key><string>__KYRA_ROOT__</string>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>ThrottleInterval</key><integer>5</integer>
+    <key>ProcessType</key><string>Interactive</string>
+    <key>StandardOutPath</key><string>__KYRA_ROOT__/data/team/mac-hard-kill.stdout.log</string>
+    <key>StandardErrorPath</key><string>__KYRA_ROOT__/data/team/mac-hard-kill.stderr.log</string>
+    <key>Umask</key><integer>63</integer>
+    <key>EnvironmentVariables</key>
+    <dict><key>PATH</key><string>/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+</dict>
+</plist>
